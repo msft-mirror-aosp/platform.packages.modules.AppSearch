@@ -23,8 +23,7 @@ import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.AppSearchSessionShim;
-import android.app.appsearch.BatchResultCallback;
-import android.app.appsearch.Capabilities;
+import android.app.appsearch.Features;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetByDocumentIdRequest;
 import android.app.appsearch.GetSchemaResponse;
@@ -43,7 +42,7 @@ import android.os.UserHandle;
 
 import androidx.test.core.app.ApplicationProvider;
 
-import com.android.server.appsearch.external.localstorage.AlwaysSupportedCapabilities;
+import com.android.server.appsearch.external.localstorage.AlwaysSupportedFeatures;
 
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -200,8 +199,8 @@ public class AppSearchSessionShimImpl implements AppSearchSessionShim {
 
     @Override
     @NonNull
-    public Capabilities getCapabilities() {
-        return new AlwaysSupportedCapabilities();
+    public Features getFeatures() {
+        return new AlwaysSupportedFeatures();
     }
 
     @Override
@@ -215,24 +214,5 @@ public class AppSearchSessionShimImpl implements AppSearchSessionShim {
             throw new AppSearchException(result.getResultCode(), result.getErrorMessage());
         }
         return Futures.immediateFuture(result.getResultValue());
-    }
-
-    private static final class BatchResultCallbackAdapter<K, V>
-            implements BatchResultCallback<K, V> {
-        private final SettableFuture<AppSearchBatchResult<K, V>> mFuture;
-
-        BatchResultCallbackAdapter(SettableFuture<AppSearchBatchResult<K, V>> future) {
-            mFuture = future;
-        }
-
-        @Override
-        public void onResult(AppSearchBatchResult<K, V> result) {
-            mFuture.set(result);
-        }
-
-        @Override
-        public void onSystemError(Throwable t) {
-            mFuture.setException(t);
-        }
     }
 }

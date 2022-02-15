@@ -29,12 +29,16 @@ android_test {
     ],
     libs: [
         "android.test.runner",
+        "framework-appsearch.impl",
     ],
     // jni libs are not normally accessible from apps so they must be explicitly included.
     jni_libs: ["libicing"],
     // TODO(b/203690505): Move to general-tests when tests no longer need
     //  READ_DEVICE_CONFIG permission.
-    test_suites: ["device-tests"],
+    test_suites: [
+        "device-tests",
+        "mts-appsearch",
+    ],
     // TODO(b/203690505): Remove the platform certificate when tests no longer
     //  need READ_DEVICE_CONFIG permission.
     certificate: "platform",

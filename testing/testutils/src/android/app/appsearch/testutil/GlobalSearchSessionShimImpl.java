@@ -17,9 +17,13 @@
 package android.app.appsearch.testutil;
 
 import android.annotation.NonNull;
+import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
-import android.app.appsearch.Capabilities;
+import android.app.appsearch.Features;
+import android.app.appsearch.GetSchemaResponse;
+import android.app.appsearch.GenericDocument;
+import android.app.appsearch.GetByDocumentIdRequest;
 import android.app.appsearch.GlobalSearchSession;
 import android.app.appsearch.GlobalSearchSessionShim;
 import android.app.appsearch.ReportSystemUsageRequest;
@@ -27,17 +31,20 @@ import android.app.appsearch.SearchResults;
 import android.app.appsearch.SearchResultsShim;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.observer.AppSearchObserverCallback;
+import android.app.appsearch.observer.ObserverSpec;
 import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
 
-import com.android.server.appsearch.external.localstorage.AlwaysSupportedCapabilities;
+import com.android.server.appsearch.external.localstorage.AlwaysSupportedFeatures;
 
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 
 import java.util.Objects;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -77,6 +84,19 @@ public class GlobalSearchSessionShimImpl implements GlobalSearchSessionShim {
     }
 
     @NonNull
+    public ListenableFuture<AppSearchBatchResult<String, GenericDocument>> getByDocumentId(
+            @NonNull String packageName,
+            @NonNull String databaseName,
+            @NonNull GetByDocumentIdRequest request) {
+        SettableFuture<AppSearchBatchResult<String, GenericDocument>> future =
+                SettableFuture.create();
+        mGlobalSearchSession.getByDocumentId(
+                packageName, databaseName, request, mExecutor,
+                new BatchResultCallbackAdapter<>(future));
+        return future;
+    }
+
+    @NonNull
     @Override
     public SearchResultsShim search(
             @NonNull String queryExpression, @NonNull SearchSpec searchSpec) {
@@ -94,8 +114,33 @@ public class GlobalSearchSessionShimImpl implements GlobalSearchSessionShim {
 
     @NonNull
     @Override
-    public Capabilities getCapabilities() {
-        return new AlwaysSupportedCapabilities();
+    public ListenableFuture<GetSchemaResponse> getSchema(
+        @NonNull String packageName, @NonNull String databaseName) {
+      SettableFuture<AppSearchResult<GetSchemaResponse>> future = SettableFuture.create();
+      mGlobalSearchSession.getSchema(packageName, databaseName, mExecutor, future::set);
+      return Futures.transformAsync(future, this::transformResult, mExecutor);
+    }
+
+    @Override
+    public void addObserver(
+            @NonNull String observedPackage,
+            @NonNull ObserverSpec spec,
+            @NonNull Executor executor,
+            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
+        mGlobalSearchSession.addObserver(observedPackage, spec, mExecutor, observer);
+    }
+
+    @Override
+    public void removeObserver(
+            @NonNull String observedPackage, @NonNull AppSearchObserverCallback observer)
+            throws AppSearchException {
+        mGlobalSearchSession.removeObserver(observedPackage, observer);
+    }
+
+    @NonNull
+    @Override
+    public Features getFeatures() {
+        return new AlwaysSupportedFeatures();
     }
 
     @Override
@@ -111,3 +156,4 @@ public class GlobalSearchSessionShimImpl implements GlobalSearchSessionShim {
         return Futures.immediateFuture(result.getResultValue());
     }
 }
+
