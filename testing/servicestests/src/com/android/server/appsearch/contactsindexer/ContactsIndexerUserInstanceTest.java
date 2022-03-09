@@ -28,6 +28,7 @@ import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.SetSchemaResponse;
 import android.content.Context;
+import android.os.CancellationSignal;
 import android.test.ProviderTestCase2;
 
 import static org.junit.Assert.assertThrows;
@@ -52,7 +53,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 // TODO(b/203605504) this is a junit3 test(ProviderTestCase2) but we run it with junit4 to use
 //  some utilities like temporary folder. Right now I can't make ProviderTestRule work so we
@@ -62,6 +67,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
     @Rule
     public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
 
+    private File mContactsDir;
     private Path mDataFilePath;
     private SearchSpec mSpecForQueryAllContacts;
 
@@ -73,9 +79,10 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
     public void setUp() throws Exception {
         super.setUp();
 
-        // Setup the file path to the persisted data.
-        mDataFilePath = new File(mTemporaryFolder.newFolder(),
-                ContactsIndexerUserInstance.CONTACTS_INDEXER_STATE).toPath();
+        // Setup the file path to the persisted data
+        mContactsDir = mTemporaryFolder.newFolder("appsearch/contacts");
+        mDataFilePath = new File(mContactsDir, ContactsIndexerUserInstance.CONTACTS_INDEXER_STATE)
+                .toPath();
 
         Context appContext = ApplicationProvider.getApplicationContext();
         mContext = spy(appContext);
@@ -102,6 +109,24 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 new CompletableFuture<>();
         session.setSchema(setSchemaRequest, Runnable::run, Runnable::run,
                 futureSetSchema::complete);
+    }
+
+    @Test
+    public void testCreateInstance_dataDirectoryCreatedAsynchronously() throws Exception {
+        File dataDir = new File(mTemporaryFolder.newFolder("tmp"), "contacts");
+        ExecutorService singleThreadedExecutor = Executors.newSingleThreadExecutor();
+        AtomicBoolean isDataDirectoryCreatedAsynchronously = new AtomicBoolean(false);
+        singleThreadedExecutor.submit(() -> {
+            ContactsIndexerUserInstance unused =
+                    ContactsIndexerUserInstance.createInstance(mContext, dataDir,
+                            singleThreadedExecutor);
+            // Data directory shouldn't have been created synchronously in createInstance()
+            isDataDirectoryCreatedAsynchronously.set(!dataDir.exists());
+        }).get();
+        assertTrue(isDataDirectoryCreatedAsynchronously.get());
+        singleThreadedExecutor.submit(
+                () -> isDataDirectoryCreatedAsynchronously.set(dataDir.exists())).get();
+        assertTrue(isDataDirectoryCreatedAsynchronously.get());
     }
 
     @Test
@@ -236,6 +261,19 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 expectedNewLastUpdatedTimestamp);
         assertThat(loadedData.mLastDeltaDeleteTimestampMillis).isEqualTo(
                 expectedNewLastDeletedTimestamp);
+    }
+
+    @Test
+    public void testFullUpdate() throws Exception {
+        ContactsIndexerUserInstance instance = ContactsIndexerUserInstance.createInstance(mContext,
+                mDataFilePath.getParent().toFile());
+
+        instance.doFullUpdateInternalAsync(new CancellationSignal()).get();
+
+        AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
+                Executors.newSingleThreadExecutor());
+        List<String> contactIds = searchHelper.getAllContactIdsAsync().get();
+        assertThat(contactIds.size()).isEqualTo(FakeContactsProvider.NUM_EXISTED_CONTACTS);
     }
 
     private void clearAndWriteDataToTempFile(String data, Path dataFilePath) throws IOException {
