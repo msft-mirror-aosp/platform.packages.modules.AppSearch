@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Android Open Source Project
+// Copyright (C) 2022 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,24 +17,29 @@ package {
 }
 
 android_test {
-    name: "AppSearchCoreTests",
+    name: "ContactsIndexerTests",
     srcs: ["src/**/*.java"],
     static_libs: [
-        "AppSearchTestUtils",
         "androidx.test.ext.junit",
         "androidx.test.rules",
-        "junit",
-        "testng",
+        "compatibility-device-util-axt",
+        "service-appsearch",
         "truth-prebuilt",
     ],
     libs: [
         "android.test.runner",
         "framework-appsearch.impl",
+        "android.test.mock",
+        "android.test.base",
     ],
-    sdk_version: "module_current",
+    // TODO(b/203690505): Move to general-tests when tests no longer need
+    //  READ_DEVICE_CONFIG permission.
     test_suites: [
-        "general-tests",
+        "device-tests",
         "mts-appsearch",
     ],
     compile_multilib: "both",
+    // TODO(b/203690505): Remove the platform certificate when tests no longer
+    //  need READ_DEVICE_CONFIG permission.
+    certificate: "platform",
 }
