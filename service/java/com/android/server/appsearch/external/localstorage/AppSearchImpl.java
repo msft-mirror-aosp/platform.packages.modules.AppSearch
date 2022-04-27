@@ -41,7 +41,7 @@ import android.app.appsearch.SetSchemaResponse;
 import android.app.appsearch.StorageInfo;
 import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.exceptions.AppSearchException;
-import android.app.appsearch.observer.AppSearchObserverCallback;
+import android.app.appsearch.observer.ObserverCallback;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.util.LogUtil;
 import android.os.Bundle;
@@ -557,6 +557,18 @@ public final class AppSearchImpl implements Closeable {
                         version,
                         setSchemaStatsBuilder);
 
+        // This check is needed wherever setSchema is called to detect soft errors which do not
+        // throw an exception but also prevent the schema from actually being applied.
+        // TODO(b/229874420): Improve the usability of doSetSchemaNoChangeNotificationLocked() by
+        //  adding documentation that the return value must be checked for these conditions, and by
+        //  making it easier to check for these conditions via one of the ways documented in the
+        //  bug.
+        if (!forceOverride
+                && (!setSchemaResponse.getDeletedTypes().isEmpty()
+                        || !setSchemaResponse.getIncompatibleTypes().isEmpty())) {
+            return setSchemaResponse;
+        }
+
         // Cache some lookup tables to help us work with the new schema
         Map<String, AppSearchSchema> newSchemaNameToType = new ArrayMap<>(schemas.size());
         // Maps unprefixed schema name to the set of listening packages that have visibility into
@@ -903,12 +915,15 @@ public final class AppSearchImpl implements Closeable {
      * @param packageName The package name that owns this document.
      * @param databaseName The databaseName this document resides in.
      * @param document The document to index.
+     * @param sendChangeNotifications Whether to dispatch {@link
+     *     android.app.appsearch.observer.DocumentChangeInfo} messages to observers for this change.
      * @throws AppSearchException on IcingSearchEngine error.
      */
     public void putDocument(
             @NonNull String packageName,
             @NonNull String databaseName,
             @NonNull GenericDocument document,
+            boolean sendChangeNotifications,
             @Nullable AppSearchLogger logger)
             throws AppSearchException {
         PutDocumentStats.Builder pStatsBuilder = null;
@@ -967,14 +982,16 @@ public final class AppSearchImpl implements Closeable {
             checkSuccess(putResultProto.getStatus());
 
             // Prepare notifications
-            mObserverManager.onDocumentChange(
-                    packageName,
-                    databaseName,
-                    document.getNamespace(),
-                    document.getSchemaType(),
-                    document.getId(),
-                    mVisibilityStoreLocked,
-                    mVisibilityCheckerLocked);
+            if (sendChangeNotifications) {
+                mObserverManager.onDocumentChange(
+                        packageName,
+                        databaseName,
+                        document.getNamespace(),
+                        document.getSchemaType(),
+                        document.getId(),
+                        mVisibilityStoreLocked,
+                        mVisibilityCheckerLocked);
+            }
         } finally {
             mReadWriteLock.writeLock().unlock();
 
@@ -2371,8 +2388,8 @@ public final class AppSearchImpl implements Closeable {
     }
 
     /**
-     * Adds an {@link AppSearchObserverCallback} to monitor changes within the databases owned by
-     * {@code targetPackageName} if they match the given {@link
+     * Adds an {@link ObserverCallback} to monitor changes within the databases owned by {@code
+     * targetPackageName} if they match the given {@link
      * android.app.appsearch.observer.ObserverSpec}.
      *
      * <p>If the data owned by {@code targetPackageName} is not visible to you, the registration
@@ -2396,34 +2413,34 @@ public final class AppSearchImpl implements Closeable {
      *     notifications.
      * @param observer The callback to trigger on notifications.
      */
-    public void addObserver(
+    public void registerObserverCallback(
             @NonNull CallerAccess listeningPackageAccess,
             @NonNull String targetPackageName,
             @NonNull ObserverSpec spec,
             @NonNull Executor executor,
-            @NonNull AppSearchObserverCallback observer) {
+            @NonNull ObserverCallback observer) {
         // This method doesn't consult mSchemaMap or mNamespaceMap, and it will register
         // observers for types that don't exist. This is intentional because we notify for types
         // being created or removed. If we only registered observer for existing types, it would
         // be impossible to ever dispatch a notification of a type being added.
-        mObserverManager.addObserver(
+        mObserverManager.registerObserverCallback(
                 listeningPackageAccess, targetPackageName, spec, executor, observer);
     }
 
     /**
-     * Removes an {@link AppSearchObserverCallback} from watching the databases owned by {@code
+     * Removes an {@link ObserverCallback} from watching the databases owned by {@code
      * targetPackageName}.
      *
      * <p>All observers which compare equal to the given observer via {@link
-     * AppSearchObserverCallback#equals} are removed. This may be 0, 1, or many observers.
+     * ObserverCallback#equals} are removed. This may be 0, 1, or many observers.
      *
      * <p>Note that this method does not take the standard read/write lock that guards I/O, so it
      * will not queue behind I/O. Therefore it is safe to call from any thread including UI or
      * binder threads.
      */
-    public void removeObserver(
-            @NonNull String targetPackageName, @NonNull AppSearchObserverCallback observer) {
-        mObserverManager.removeObserver(targetPackageName, observer);
+    public void unregisterObserverCallback(
+            @NonNull String targetPackageName, @NonNull ObserverCallback observer) {
+        mObserverManager.unregisterObserverCallback(targetPackageName, observer);
     }
 
     /**

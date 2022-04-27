@@ -24,6 +24,8 @@ import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.BatchResultCallback;
+import android.app.appsearch.GenericDocument;
+import android.app.appsearch.GetByDocumentIdRequest;
 import android.app.appsearch.PutDocumentsRequest;
 import android.app.appsearch.RemoveByDocumentIdRequest;
 import android.app.appsearch.SearchResult;
@@ -34,6 +36,7 @@ import android.app.appsearch.exceptions.AppSearchException;
 import android.content.Context;
 import android.util.AndroidRuntimeException;
 import android.util.Log;
+import android.util.Pair;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.ContactPoint;
@@ -43,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -52,6 +56,11 @@ import java.util.concurrent.Executor;
  * Helper class to manage the Person corpus in AppSearch.
  *
  * <p>It wraps AppSearch API calls using {@link CompletableFuture}, which is easier to use.
+ *
+ * <p>Note that, most of those methods are async. And some of them, like {@link
+ * #indexContactsAsync(Collection, ContactsUpdateStats)}, accepts a collection of contacts. The
+ * caller can modify the collection after the async method returns. There is no need for the
+ * CompletableFuture that's returned to be completed.
  *
  * <p>This class is thread-safe.
  *
@@ -186,15 +195,19 @@ public class AppSearchHelper {
     /**
      * Indexes contacts into AppSearch
      *
-     * @param contacts a collection of contacts. AppSearch batch put will be used to send the
-     *                 documents over in one call. So the size of this collection can't be too
-     *                 big, otherwise binder {@link android.os.TransactionTooLargeException} will
-     *                 be thrown.
+     * @param contacts    a collection of contacts. AppSearch batch put will be used to send the
+     *                    documents over in one call. So the size of this collection can't be too
+     *                    big, otherwise binder {@link android.os.TransactionTooLargeException} will
+     *                    be thrown.
+     * @param updateStats to hold the counters for the update.
      */
     @NonNull
-    public CompletableFuture<Void> indexContactsAsync(@NonNull Collection<Person> contacts) {
+    public CompletableFuture<Void> indexContactsAsync(@NonNull Collection<Person> contacts,
+            @NonNull ContactsUpdateStats updateStats) {
         Objects.requireNonNull(contacts);
+        Objects.requireNonNull(updateStats);
 
+        Log.v(TAG, "Indexing " + contacts.size() + " contacts into AppSearch");
         PutDocumentsRequest request = new PutDocumentsRequest.Builder()
                 .addGenericDocuments(contacts)
                 .build();
@@ -203,22 +216,32 @@ public class AppSearchHelper {
             appSearchSession.put(request, mExecutor, new BatchResultCallback<String, Void>() {
                 @Override
                 public void onResult(AppSearchBatchResult<String, Void> result) {
+                    int numDocsSucceeded = result.getSuccesses().size();
+                    int numDocsFailed = result.getFailures().size();
+                    updateStats.mContactsUpdateSucceededCount += numDocsSucceeded;
+                    updateStats.mContactsUpdateFailedCount += numDocsFailed;
                     if (result.isSuccess()) {
-                        int numDocs = result.getSuccesses().size();
-                        Log.v(TAG, numDocs + " documents successfully added in AppSearch.");
+                        Log.v(TAG,
+                                numDocsSucceeded + " documents successfully added in AppSearch.");
                         future.complete(null);
                     } else {
-                        // TODO(b/203605504) we can only have 20,000(default) contacts stored.
-                        //  In order to save the latest contacts, we need to remove the oldest ones
-                        //  in this ELSE. RESULT_OUT_OF_SPACE is the error code for this case.
+                        Map<String, AppSearchResult<Void>> failures = result.getFailures();
+                        AppSearchResult<Void> firstFailure = null;
+                        for (AppSearchResult<Void> failure : failures.values()) {
+                            if (firstFailure == null) {
+                                firstFailure = failure;
+                            }
+                            updateStats.mUpdateStatuses.add(failure.getResultCode());
+                        }
+                        Log.w(TAG, numDocsFailed + " documents failed to be added in AppSearch.");
                         future.completeExceptionally(new AppSearchException(
-                                AppSearchResult.RESULT_INTERNAL_ERROR,
-                                "Not all documented are added: " + result.toString()));
+                                firstFailure.getResultCode(), firstFailure.getErrorMessage()));
                     }
                 }
 
                 @Override
                 public void onSystemError(Throwable throwable) {
+                    updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_UNKNOWN_ERROR);
                     future.completeExceptionally(throwable);
                 }
             });
@@ -229,15 +252,19 @@ public class AppSearchHelper {
     /**
      * Remove contacts from AppSearch
      *
-     * @param ids a collection of contact ids. AppSearch batch remove will be used to send the
-     *            ids over in one call. So the size of this collection can't be too
-     *            big, otherwise binder {@link android.os.TransactionTooLargeException} will
-     *            be thrown.
+     * @param ids         a collection of contact ids. AppSearch batch remove will be used to send
+     *                    the ids over in one call. So the size of this collection can't be too
+     *                    big, otherwise binder {@link android.os.TransactionTooLargeException}
+     *                    will be thrown.
+     * @param updateStats to hold the counters for the update.
      */
     @NonNull
-    public CompletableFuture<Void> removeContactsByIdAsync(@NonNull Collection<String> ids) {
+    public CompletableFuture<Void> removeContactsByIdAsync(@NonNull Collection<String> ids,
+            @NonNull ContactsUpdateStats updateStats) {
         Objects.requireNonNull(ids);
+        Objects.requireNonNull(updateStats);
 
+        Log.v(TAG, "Removing " + ids.size() + " contacts from AppSearch");
         RemoveByDocumentIdRequest request = new RemoveByDocumentIdRequest.Builder(NAMESPACE_NAME)
                 .addIds(ids)
                 .build();
@@ -246,22 +273,64 @@ public class AppSearchHelper {
             appSearchSession.remove(request, mExecutor, new BatchResultCallback<String, Void>() {
                 @Override
                 public void onResult(AppSearchBatchResult<String, Void> result) {
-                    if (result.isSuccess()) {
-                        int numDocs = result.getSuccesses().size();
-                        Log.v(TAG, numDocs + " documents successfully deleted from AppSearch.");
-                        future.complete(null);
-                    } else {
-                        future.completeExceptionally(new AppSearchException(
-                                AppSearchResult.RESULT_INTERNAL_ERROR,
-                                "Not all documents are deleted: " + result.toString()));
+                    int numSuccesses = result.getSuccesses().size();
+                    int numFailures = 0;
+                    AppSearchResult<Void> firstFailure = null;
+                    for (AppSearchResult<Void> failedResult : result.getFailures().values()) {
+                        // Ignore document not found errors.
+                        int errorCode = failedResult.getResultCode();
+                        if (errorCode != AppSearchResult.RESULT_NOT_FOUND) {
+                            numFailures++;
+                            updateStats.mDeleteStatuses.add(errorCode);
+                            if (firstFailure == null) {
+                                firstFailure = failedResult;
+                            }
+                        }
                     }
+                    updateStats.mContactsDeleteSucceededCount += numSuccesses;
+                    updateStats.mContactsDeleteFailedCount += numFailures;
+                    if (firstFailure != null) {
+                        Log.w(TAG, "Failed to delete "
+                                + numFailures + " contacts from AppSearch");
+                        future.completeExceptionally(new AppSearchException(
+                                firstFailure.getResultCode(), firstFailure.getErrorMessage()));
+                        return;
+                    }
+                    if (numSuccesses > 0) {
+                        Log.v(TAG,
+                                numSuccesses + " documents successfully deleted from AppSearch.");
+                    }
+                    future.complete(null);
                 }
 
                 @Override
                 public void onSystemError(Throwable throwable) {
+                    updateStats.mDeleteStatuses.add(AppSearchResult.RESULT_UNKNOWN_ERROR);
                     future.completeExceptionally(throwable);
                 }
             });
+            return future;
+        });
+    }
+
+    @NonNull
+    private CompletableFuture<AppSearchBatchResult> getContactsByIdAsync(
+            @NonNull GetByDocumentIdRequest request) {
+        Objects.requireNonNull(request);
+        return mAppSearchSessionFuture.thenCompose(appSearchSession -> {
+            CompletableFuture<AppSearchBatchResult> future = new CompletableFuture<>();
+            appSearchSession.getByDocumentId(request, mExecutor,
+                    new BatchResultCallback<String, GenericDocument>() {
+                        @Override
+                        public void onResult(AppSearchBatchResult<String, GenericDocument> result) {
+                            future.complete(result);
+                        }
+
+                        @Override
+                        public void onSystemError(Throwable throwable) {
+                            future.completeExceptionally(throwable);
+                        }
+                    });
             return future;
         });
     }
@@ -290,6 +359,35 @@ public class AppSearchHelper {
                         return CompletableFuture.supplyAsync(() -> allContactIds);
                     });
         });
+    }
+
+    /**
+     * Gets {@link GenericDocument}s with only fingerprints projected for the requested contact ids.
+     *
+     * @return A list containing the corresponding {@link GenericDocument} for the requested contact
+     * ids in order. The entry is {@code null} if the requested contact id is not found in
+     * AppSearch.
+     */
+    @NonNull
+    public CompletableFuture<List<GenericDocument>> getContactsWithFingerprintsAsync(
+            @NonNull List<String> ids) {
+        Objects.requireNonNull(ids);
+        GetByDocumentIdRequest request = new GetByDocumentIdRequest.Builder(
+                AppSearchHelper.NAMESPACE_NAME)
+                .addProjection(Person.SCHEMA_TYPE,
+                        Collections.singletonList(Person.PERSON_PROPERTY_FINGERPRINT))
+                .addIds(ids)
+                .build();
+        return getContactsByIdAsync(request).thenCompose(
+                appSearchBatchResult -> {
+                    Map<String, GenericDocument> contactsExistInAppSearch =
+                            appSearchBatchResult.getSuccesses();
+                    List<GenericDocument> docsWithFingerprints = new ArrayList<>(ids.size());
+                    for (int i = 0; i < ids.size(); ++i) {
+                        docsWithFingerprints.add(contactsExistInAppSearch.get(ids.get(i)));
+                    }
+                    return CompletableFuture.completedFuture(docsWithFingerprints);
+                });
     }
 
     /**
