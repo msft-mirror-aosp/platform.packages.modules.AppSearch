@@ -40,6 +40,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverSpec;
 import android.content.AttributionSource;
@@ -218,7 +219,7 @@ public class AppSearchManagerService extends SystemService {
                         mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                 userContext,
                                 userHandle,
-                                AppSearchConfig.getInstance(SHARED_EXECUTOR));
+                                FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
                 instance.getAppSearchImpl().clearPackageData(packageName);
                 dispatchChangeNotifications(instance);
                 instance.getLogger().removeCachedUidForPackage(packageName);
@@ -242,7 +243,7 @@ public class AppSearchManagerService extends SystemService {
                             mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                     userContext,
                                     userHandle,
-                                    AppSearchConfig.getInstance(SHARED_EXECUTOR));
+                                    FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
                     List<PackageInfo> installedPackageInfos = userContext
                             .getPackageManager()
                             .getInstalledPackages(/*flags=*/0);
@@ -445,13 +446,13 @@ public class AppSearchManagerService extends SystemService {
         public void putDocuments(
                 @NonNull AttributionSource callerAttributionSource,
                 @NonNull String databaseName,
-                @NonNull List<Bundle> documentBundles,
+                @NonNull DocumentsParcel documentsParcel,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchBatchResultCallback callback) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(documentBundles);
+            Objects.requireNonNull(documentsParcel);
             Objects.requireNonNull(userHandle);
             Objects.requireNonNull(callback);
 
@@ -470,13 +471,15 @@ public class AppSearchManagerService extends SystemService {
                     AppSearchBatchResult.Builder<String, Void> resultBuilder =
                             new AppSearchBatchResult.Builder<>();
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-                    for (int i = 0; i < documentBundles.size(); i++) {
-                        GenericDocument document = new GenericDocument(documentBundles.get(i));
+                    List<GenericDocument> documents = documentsParcel.getDocuments();
+                    for (int i = 0; i < documents.size(); i++) {
+                        GenericDocument document = documents.get(i);
                         try {
                             instance.getAppSearchImpl().putDocument(
                                     callerAttributionSource.getPackageName(),
                                     databaseName,
                                     document,
+                                    /*sendChangeNotifications=*/ true,
                                     instance.getLogger());
                             resultBuilder.setSuccess(document.getId(), /*value=*/ null);
                             ++operationSuccessCount;
@@ -501,7 +504,7 @@ public class AppSearchManagerService extends SystemService {
                     // The existing documents with same ID will be deleted, so there may be some
                     // resources that could be released after optimize().
                     checkForOptimize(
-                            targetUser, instance, /*mutateBatchSize=*/ documentBundles.size());
+                            targetUser, instance, /*mutateBatchSize=*/ documents.size());
                 } catch (Throwable t) {
                     ++operationFailureCount;
                     statusCode = throwableToFailedResult(t).getResultCode();
@@ -919,10 +922,13 @@ public class AppSearchManagerService extends SystemService {
                                 break;
                             }
                             try {
+                                // Per this method's documentation, individual document change
+                                // notifications are not dispatched.
                                 instance.getAppSearchImpl().putDocument(
                                         callerAttributionSource.getPackageName(),
                                         databaseName,
                                         document,
+                                        /*sendChangeNotifications=*/ false,
                                         /*logger=*/ null);
                             } catch (Throwable t) {
                                 migrationFailureBundles.add(new SetSchemaResponse.MigrationFailure(
@@ -1265,6 +1271,18 @@ public class AppSearchManagerService extends SystemService {
                 try {
                     AppSearchUserInstance instance =
                             mAppSearchUserInstanceManager.getUserInstance(targetUser);
+
+                    // Prepare a new ObserverProxy linked to this binder.
+                    AppSearchObserverProxy observerProxy =
+                            new AppSearchObserverProxy(observerProxyStub);
+
+                    // Watch for client disconnection, unregistering the observer if it happens.
+                    observerProxyStub.asBinder().linkToDeath(
+                            () -> instance.getAppSearchImpl()
+                                    .unregisterObserverCallback(targetPackageName, observerProxy),
+                            /*flags=*/ 0);
+
+                    // Register the observer.
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callerAttributionSource.getPackageName());
                     instance.getAppSearchImpl().registerObserverCallback(
@@ -1274,6 +1292,7 @@ public class AppSearchManagerService extends SystemService {
                             new ObserverSpec(observerSpecBundle),
                             mExecutorManager.getOrCreateUserExecutor(targetUser),
                             new AppSearchObserverProxy(observerProxyStub));
+
                     return new AppSearchResultParcel<>(AppSearchResult.newSuccessfulResult(null));
                 } finally {
                     Binder.restoreCallingIdentity(callingIdentity);
@@ -1342,7 +1361,7 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getOrCreateUserInstance(
                             targetUserContext,
                             targetUser,
-                            AppSearchConfig.getInstance(SHARED_EXECUTOR));
+                            FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
                     ++operationSuccessCount;
                     invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
                 } catch (Throwable t) {
