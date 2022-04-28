@@ -24,9 +24,7 @@ import android.annotation.NonNull;
  * <p>Features do not depend on any runtime state, and features will never be removed. Once {@link
  * #isFeatureSupported} returns {@code true} for a certain feature, it is safe to assume that the
  * feature will be available forever on that AppSearch storage implementation, at that Android API
- * level, on that device form factor.
- *
- * @hide
+ * level, on that device.
  */
 public interface Features {
 
@@ -38,9 +36,11 @@ public interface Features {
 
     /**
      * Feature for {@link #isFeatureSupported(String)}. This feature covers {@link
-     * GlobalSearchSession#addObserver} and {@link GlobalSearchSession#removeObserver}.
+     * GlobalSearchSession#registerObserverCallback} and {@link
+     * GlobalSearchSession#unregisterObserverCallback}.
      */
-    String GLOBAL_SEARCH_SESSION_ADD_REMOVE_OBSERVER = "GLOBAL_SEARCH_SESSION_ADD_REMOVE_OBSERVER";
+    String GLOBAL_SEARCH_SESSION_REGISTER_OBSERVER_CALLBACK =
+            "GLOBAL_SEARCH_SESSION_REGISTER_OBSERVER_CALLBACK";
 
     /**
      * Feature for {@link #isFeatureSupported(String)}. This feature covers {@link
@@ -49,14 +49,22 @@ public interface Features {
     String GLOBAL_SEARCH_SESSION_GET_SCHEMA = "GLOBAL_SEARCH_SESSION_GET_SCHEMA";
 
     /**
-     * Feature for {@link #isFeatureSupported(String)}. This feature covers {@code
-     * SetSchemaRequest.Builder#addAllowedRoleForSchemaTypeVisibility}, {@code
+     * Feature for {@link #isFeatureSupported(String)}. This feature covers {@link
+     * GlobalSearchSession#getByDocumentId}.
+     */
+    String GLOBAL_SEARCH_SESSION_GET_BY_ID = "GLOBAL_SEARCH_SESSION_GET_BY_ID";
+
+    /**
+     * Feature for {@link #isFeatureSupported(String)}. This feature covers {@link
+     * SetSchemaRequest.Builder#addAllowedRoleForSchemaTypeVisibility}, {@link
      * SetSchemaRequest.Builder#clearAllowedRolesForSchemaTypeVisibility}, {@link
      * GetSchemaResponse#getSchemaTypesNotDisplayedBySystem()}, {@link
-     * GetSchemaResponse#getSchemaTypesVisibleToPackages()}, {@code
-     * GetSchemaResponse#getAllowedRolesForSchemaTypeVisibility()}.
+     * GetSchemaResponse#getSchemaTypesVisibleToPackages()}, {@link
+     * GetSchemaResponse#getRequiredPermissionsForSchemaTypeVisibility()}, {@link
+     * SetSchemaRequest.Builder#addRequiredPermissionsForSchemaTypeVisibility} and {@link
+     * SetSchemaRequest.Builder#clearRequiredPermissionsForSchemaTypeVisibility}
      */
-    String ROLE_AND_PERMISSION_WITH_GET_VISIBILITY = "ROLE_AND_PERMISSION_WITH_GET_VISIBILITY";
+    String ADD_PERMISSIONS_AND_GET_VISIBILITY = "ADD_PERMISSIONS_AND_GET_VISIBILITY";
 
     /**
      * Returns whether a feature is supported at run-time. Feature support depends on the feature in
