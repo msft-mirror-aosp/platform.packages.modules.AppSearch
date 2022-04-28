@@ -16,124 +16,202 @@
 
 package com.android.server.appsearch.contactsindexer;
 
+import static android.os.Process.INVALID_UID;
+
 import android.annotation.NonNull;
+import android.annotation.UserIdInt;
+import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.os.Handler;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
+import android.os.CancellationSignal;
+import android.os.PatternMatcher;
 import android.os.UserHandle;
 import android.provider.ContactsContract;
-import android.util.ArrayMap;
 import android.util.Log;
+import android.util.SparseArray;
 
-import com.android.internal.annotations.GuardedBy;
+import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.LocalManagerRegistry;
+import com.android.server.SystemService;
+import com.android.server.appsearch.AppSearchModule;
 
-import java.util.Map;
+import java.io.File;
+import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Service to sync contacts data from CP2 to Person corpus in AppSearch.
+ * Manages the per device-user ContactsIndexer instance to index CP2 contacts into AppSearch.
  *
- * <p>It manages one {@link ContactsPerUserIndexer} for each user to sync the data.
+ * <p>This class is thread-safe.
+ *
+ * @hide
  */
-public final class ContactsIndexerManagerService {
+public final class ContactsIndexerManagerService extends SystemService {
     static final String TAG = "ContactsIndexerManagerService";
 
-    /**
-     * Executor to dispatch the contact change notifications to different {@link
-     * ContactsPerUserIndexer}.
-     */
-    private final ThreadPoolExecutor mSingleThreadExecutor;
+    private static final String DEFAULT_CONTACTS_PROVIDER_PACKAGE_NAME =
+            "com.android.providers.contacts";
 
     private final Context mContext;
-    private final ContactsContentObserver mContactsContentObserver;
-    private final Object mLock = new Object();
-    @GuardedBy("mLock")
-    private final Map<UserHandle, ContactsPerUserIndexer> mContactsIndexersLocked =
-            new ArrayMap<>();
+    private final ContactsIndexerConfig mContactsIndexerConfig;
+    private final LocalService mLocalService;
+    // Sparse array of ContactsIndexerUserInstance indexed by the device-user ID.
+    private final SparseArray<ContactsIndexerUserInstance> mContactsIndexersLocked =
+            new SparseArray<>();
 
-    /** Whether {@link ContactsContentObserver} is registered. */
-    @GuardedBy("mLock")
-    private boolean mObserverRegisteredLocked = false;
+    private String mContactsProviderPackageName;
 
     /** Constructs a {@link ContactsIndexerManagerService}. */
-    public ContactsIndexerManagerService(@NonNull Context context) {
+    public ContactsIndexerManagerService(@NonNull Context context,
+            @NonNull ContactsIndexerConfig contactsIndexerConfig) {
+        super(context);
         mContext = Objects.requireNonNull(context);
-        Handler handler = new Handler(mContext.getMainLooper());
-        mContactsContentObserver = new ContactsContentObserver(handler, this);
-
-        // Set the executor. It has maximum one thread in the pool.
-        mSingleThreadExecutor = new ThreadPoolExecutor(/*corePoolSize=*/1,
-                /*maximumPoolSize=*/ 1,
-                /*keepAliveTime=*/ 60L,
-                TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>());
-        mSingleThreadExecutor.allowCoreThreadTimeOut(true);
+        mContactsIndexerConfig = Objects.requireNonNull(contactsIndexerConfig);
+        mLocalService = new LocalService();
     }
 
-    /** Registers the service to get notified for contact changes from CP2. */
-    public void registerContactsContentObserver() {
-        synchronized (mLock) {
-            if (mObserverRegisteredLocked) {
-                return;
-            }
-            // Starts the observation to get notifications from CP2
-            mContext.getContentResolver().registerContentObserverAsUser(
-                    ContactsContract.Contacts.CONTENT_URI,
-                    /*notifyForDescendants=*/ true,
-                    mContactsContentObserver,
-                    UserHandle.ALL);
-            mObserverRegisteredLocked = true;
-        }
+    @Override
+    public void onStart() {
+        mContactsProviderPackageName = getContactsProviderPackageName();
+        registerReceivers();
+        LocalManagerRegistry.addManager(LocalService.class, mLocalService);
     }
 
-    /** Unregisters the {@link ContactsContentObserver}. */
-    public void unregisterContactsContentObserver() {
-        synchronized (mLock) {
-            if (mObserverRegisteredLocked) {
-                mContext.getContentResolver().unregisterContentObserver(mContactsContentObserver);
-                mObserverRegisteredLocked = false;
-            }
-        }
-    }
-
-    /** Does the delta/instant update once getting notified from CP2. */
-    void handleContactChange(@NonNull UserHandle userHandle) {
-        Objects.requireNonNull(userHandle);
-
-        mSingleThreadExecutor.execute(() -> {
-            try {
-                // TODO(b/203605504) make those delay value configurable.
-                int delaySeconds = 2;
-
-                // TODO(b/203605504) we can, and probably should wait longer if there is an
-                //  active sync running
-                // if (!ContentResolver.getCurrentSyncs().isEmpty()) {
-                //     delaySeconds = 30;
-                // }
-
-                // Create context as the user for which the notification is targeted
+    @Override
+    public void onUserUnlocking(@NonNull TargetUser user) {
+        Objects.requireNonNull(user);
+        UserHandle userHandle = user.getUserHandle();
+        synchronized (mContactsIndexersLocked) {
+            int userId = userHandle.getIdentifier();
+            ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
+            if (instance == null) {
                 Context userContext = mContext.createContextAsUser(userHandle, /*flags=*/ 0);
-                ContactsPerUserIndexer indexer = null;
-                synchronized (mLock) {
-                    indexer = mContactsIndexersLocked.get(userContext.getUser());
-                    if (indexer == null) {
-                        indexer = new ContactsPerUserIndexer(userContext);
-                        indexer.initialize();
-                        mContactsIndexersLocked.put(userContext.getUser(), indexer);
-                        Log.d(TAG, "Create a new ContactIndexerPerUser for user "
-                                + userContext.getUser().toString());
-                    }
+                File appSearchDir = AppSearchModule.getAppSearchDir(userHandle);
+                File contactsDir = new File(appSearchDir, "contacts");
+                try {
+                    instance = ContactsIndexerUserInstance.createInstance(userContext, contactsDir,
+                            mContactsIndexerConfig);
+                    Log.d(TAG, "Created Contacts Indexer instance for user " + userHandle);
+                } catch (Throwable t) {
+                    Log.e(TAG, "Failed to create Contacts Indexer instance for user "
+                            + userHandle, t);
+                    return;
                 }
-                // Async call. The update will be scheduled on the SINGLE_SCHEDULED_EXECUTOR in
-                // each per-user indexer.
-                indexer.doDeltaUpdate(delaySeconds);
-            } catch (Exception e) {
-                Log.e(TAG,
-                        "Failed to setup Delta Update for user " + userHandle.toString(),
-                        e);
+                mContactsIndexersLocked.put(userId, instance);
             }
-        });
+            instance.startAsync();
+        }
+    }
+
+    @Override
+    public void onUserStopping(@NonNull TargetUser user) {
+        Objects.requireNonNull(user);
+        UserHandle userHandle = user.getUserHandle();
+        synchronized (mContactsIndexersLocked) {
+            int userId = userHandle.getIdentifier();
+            ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
+            if (instance != null) {
+                mContactsIndexersLocked.delete(userId);
+                try {
+                    instance.shutdown();
+                } catch (InterruptedException e) {
+                    Log.w(TAG, "Failed to shutdown contacts indexer for " + userHandle, e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the package name where the Contacts Provider is hosted.
+     */
+    private String getContactsProviderPackageName() {
+        PackageManager pm = mContext.getPackageManager();
+        List<ProviderInfo> providers = pm.queryContentProviders(/*processName=*/ null, /*uid=*/ 0,
+                PackageManager.ComponentInfoFlags.of(0));
+        for (int i = 0; i < providers.size(); i++) {
+            ProviderInfo providerInfo = providers.get(i);
+            if (ContactsContract.AUTHORITY.equals(providerInfo.authority)) {
+                return  providerInfo.packageName;
+            }
+        }
+        return DEFAULT_CONTACTS_PROVIDER_PACKAGE_NAME;
+    }
+
+    /**
+     * Registers a broadcast receiver to get package changed (disabled/enabled) and package data
+     * cleared events for CP2.
+     */
+    private void registerReceivers() {
+        IntentFilter contactsProviderChangedFilter = new IntentFilter();
+        contactsProviderChangedFilter.addAction(Intent.ACTION_PACKAGE_CHANGED);
+        contactsProviderChangedFilter.addAction(Intent.ACTION_PACKAGE_DATA_CLEARED);
+        contactsProviderChangedFilter.addDataScheme("package");
+        contactsProviderChangedFilter.addDataSchemeSpecificPart(mContactsProviderPackageName,
+                PatternMatcher.PATTERN_LITERAL);
+        mContext.registerReceiverForAllUsers(
+                new ContactsProviderChangedReceiver(),
+                contactsProviderChangedFilter,
+                /*broadcastPermission=*/ null,
+                /*scheduler=*/ null);
+        Log.v(TAG, "Registered receiver for CP2 (package: " + mContactsProviderPackageName + ")"
+                + " data cleared events");
+    }
+
+    /**
+     * Broadcast receiver to handle CP2 changed (disabled/enabled) and package data cleared events.
+     *
+     * <p>Contacts indexer syncs on-device contacts from ContactsProvider (CP2) denoted by {@link
+     * android.provider.ContactsContract.Contacts#AUTHORITY} into the AppSearch "builtin:Person"
+     * corpus under the "android" package name. The default package which hosts CP2 is
+     * "com.android.providers.contacts" but it could be different on OEM devices. Since the Android
+     * package that hosts CP2 is different from the package name that "owns" the builtin:Person
+     * corpus in AppSearch, clearing the CP2 package data doesn't automatically clear the
+     * builtin:Person corpus in AppSearch.
+     *
+     * <p>This broadcast receiver allows contacts indexer to listen to events which indicate that
+     * CP2 data was cleared and force a full sync of CP2 contacts into AppSearch.
+     */
+    private class ContactsProviderChangedReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(@NonNull Context context, @NonNull Intent intent) {
+            Objects.requireNonNull(context);
+            Objects.requireNonNull(intent);
+
+            switch (intent.getAction()) {
+                case Intent.ACTION_PACKAGE_CHANGED:
+                case Intent.ACTION_PACKAGE_DATA_CLEARED:
+                    String packageName = intent.getData().getSchemeSpecificPart();
+                    Log.v(TAG, "Received package data cleared event for " + packageName);
+                    if (!mContactsProviderPackageName.equals(packageName)) {
+                        return;
+                    }
+                    int uid = intent.getIntExtra(Intent.EXTRA_UID, INVALID_UID);
+                    if (uid == INVALID_UID) {
+                        Log.w(TAG, "uid is missing in the intent: " + intent);
+                        return;
+                    }
+                    int userId = UserHandle.getUserHandleForUid(uid).getIdentifier();
+                    mLocalService.doFullUpdateForUser(userId,  new CancellationSignal());
+                    break;
+                default:
+                    Log.w(TAG, "Received unknown intent: " + intent);
+            }
+        }
+    }
+
+    class LocalService {
+        void doFullUpdateForUser(@UserIdInt int userId, @NonNull CancellationSignal signal) {
+            Objects.requireNonNull(signal);
+            synchronized (mContactsIndexersLocked) {
+                ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
+                if (instance != null) {
+                    instance.doFullUpdateAsync(signal);
+                }
+            }
+        }
     }
 }
