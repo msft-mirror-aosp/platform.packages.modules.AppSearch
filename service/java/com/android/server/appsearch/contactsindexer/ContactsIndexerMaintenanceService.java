@@ -25,6 +25,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.CancellationSignal;
+import android.os.PersistableBundle;
 import android.util.Log;
 
 import com.android.server.LocalManagerRegistry;
@@ -37,8 +38,15 @@ import java.util.concurrent.TimeUnit;
 public class ContactsIndexerMaintenanceService extends JobService {
     private static final String TAG = "ContactsIndexerMaintenanceService";
 
-    /** This job ID must be unique within the system server. */
-    private static final int FULL_UPDATE_JOB_ID = 0x1B7DED30; // 461237552
+    /**
+     * Generate job ids in the range (MIN_INDEXER_JOB_ID, MAX_INDEXER_JOB_ID) to avoid conflicts
+     * with other jobs scheduled by the system service. The range corresponds to 21475 job ids,
+     * which is the maximum number of user ids in the system.
+     *
+     * @see UserManagerService.MAX_USER_ID
+     */
+    public static final int MIN_INDEXER_JOB_ID = 16942831; // corresponds to ag/16942831
+    private static final int MAX_INDEXER_JOB_ID = 16964306; // 16942831 + 21475
 
     private static final String EXTRA_USER_ID = "user_id";
 
@@ -50,31 +58,49 @@ public class ContactsIndexerMaintenanceService extends JobService {
 
     /**
      * Schedules a full update job for the given device-user.
+     *
+     * @param userId Device user id for whom the full update job should be scheduled.
+     * @param periodic True to indicate that the job should be repeated.
+     * @param intervalMillis Millisecond interval for which this job should repeat.
      */
-    static void scheduleFullUpdateJob(Context context, @UserIdInt int userId) {
+    static void scheduleFullUpdateJob(Context context, @UserIdInt int userId,
+            boolean periodic, long intervalMillis) {
+        int jobId = MIN_INDEXER_JOB_ID + userId;
         JobScheduler jobScheduler = context.getSystemService(JobScheduler.class);
         ComponentName component =
                 new ComponentName(context, ContactsIndexerMaintenanceService.class);
-        final Bundle extras = new Bundle();
+        final PersistableBundle extras = new PersistableBundle();
         extras.putInt(EXTRA_USER_ID, userId);
-        JobInfo jobInfo =
-                new JobInfo.Builder(FULL_UPDATE_JOB_ID, component)
-                        .setTransientExtras(extras)
+        JobInfo.Builder jobInfoBuilder =
+                new JobInfo.Builder(jobId, component)
+                        .setExtras(extras)
                         .setRequiresBatteryNotLow(true)
                         .setRequiresDeviceIdle(true)
-                        .build();
+                        .setPersisted(true);
+
+        if (periodic) {
+            jobInfoBuilder.setPeriodic(intervalMillis);
+        }
+        JobInfo jobInfo = jobInfoBuilder.build();
         jobScheduler.schedule(jobInfo);
-        Log.v(TAG, "Scheduled full update job for " + userId);
+        Log.v(TAG, "Scheduled full update job " + jobId + " for user " + userId);
+    }
+
+    static void cancelFullUpdateJob(Context context, @UserIdInt int userId) {
+        int jobId = MIN_INDEXER_JOB_ID + userId;
+        JobScheduler jobScheduler = context.getSystemService(JobScheduler.class);
+        jobScheduler.cancel(jobId);
+        Log.v(TAG, "Canceled full update job " + jobId + " for user " + userId);
     }
 
     @Override
     public boolean onStartJob(JobParameters params) {
-        int userId = params.getTransientExtras().getInt(EXTRA_USER_ID, /*defaultValue=*/ -1);
+        int userId = params.getExtras().getInt(EXTRA_USER_ID, /*defaultValue=*/ -1);
         if (userId == -1) {
             return false;
         }
 
-        Log.v(TAG, "Full update job started for " + userId);
+        Log.v(TAG, "Full update job started for user " + userId);
         mSignal = new CancellationSignal();
         EXECUTOR.execute(() -> {
             ContactsIndexerManagerService.LocalService service =
