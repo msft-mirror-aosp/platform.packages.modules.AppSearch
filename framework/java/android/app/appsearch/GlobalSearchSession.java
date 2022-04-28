@@ -25,8 +25,11 @@ import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.AppSearchObserverCallback;
 import android.app.appsearch.observer.DocumentChangeInfo;
+import android.app.appsearch.observer.ObserverCallback;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.observer.SchemaChangeInfo;
+import android.compat.annotation.UnsupportedAppUsage;
+import android.content.AttributionSource;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -39,9 +42,9 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.Preconditions;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.ArrayList;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -57,13 +60,13 @@ import java.util.function.Consumer;
 public class GlobalSearchSession implements Closeable {
     private static final String TAG = "AppSearchGlobalSearchSe";
 
-    private final String mPackageName;
     private final UserHandle mUserHandle;
     private final IAppSearchManager mService;
+    private final AttributionSource mCallerAttributionSource;
 
     // Management of observer callbacks. Key is observed package.
     @GuardedBy("mObserverCallbacksLocked")
-    private final Map<String, Map<AppSearchObserverCallback, IAppSearchObserverProxy>>
+    private final Map<String, Map<ObserverCallback, IAppSearchObserverProxy>>
             mObserverCallbacksLocked = new ArrayMap<>();
 
     private boolean mIsMutated = false;
@@ -76,11 +79,11 @@ public class GlobalSearchSession implements Closeable {
     static void createGlobalSearchSession(
             @NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
-            @NonNull String packageName,
+            @NonNull AttributionSource attributionSource,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<GlobalSearchSession>> callback) {
         GlobalSearchSession globalSearchSession = new GlobalSearchSession(service, userHandle,
-                packageName);
+                attributionSource);
         globalSearchSession.initialize(executor, callback);
     }
 
@@ -91,7 +94,7 @@ public class GlobalSearchSession implements Closeable {
             @NonNull Consumer<AppSearchResult<GlobalSearchSession>> callback) {
         try {
             mService.initialize(
-                    mPackageName,
+                    mCallerAttributionSource,
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
@@ -115,17 +118,20 @@ public class GlobalSearchSession implements Closeable {
     }
 
     private GlobalSearchSession(@NonNull IAppSearchManager service, @NonNull UserHandle userHandle,
-            @NonNull String packageName) {
+            @NonNull AttributionSource callerAttributionSource) {
         mService = service;
         mUserHandle = userHandle;
-        mPackageName = packageName;
+        mCallerAttributionSource = callerAttributionSource;
     }
 
     /**
-     * Gets {@link GenericDocument} objects by document IDs in a namespace in a database in a
-     * package from the {@link GlobalSearchSession} database. If the package or database doesn't
-     * exist or if the calling package doesn't have access, the gets will be handled as
-     * failures in an {@link AppSearchBatchResult} object in the callback.
+     * Retrieves {@link GenericDocument} documents, belonging to the specified package name and
+     * database name and identified by the namespace and ids in the request, from the
+     * {@link GlobalSearchSession} database.
+     *
+     * <p>If the package or database doesn't exist or if the calling package doesn't have access,
+     * the gets will be handled as failures in an {@link AppSearchBatchResult} object in the
+     * callback.
      *
      * @param packageName the name of the package to get from
      * @param databaseName the name of the database to get from
@@ -155,7 +161,7 @@ public class GlobalSearchSession implements Closeable {
 
         try {
             mService.getDocuments(
-                    /*callerPackageName=*/mPackageName,
+                    mCallerAttributionSource,
                     /*targetPackageName=*/packageName,
                     databaseName,
                     request.getNamespace(),
@@ -163,7 +169,6 @@ public class GlobalSearchSession implements Closeable {
                     request.getProjectionsInternal(),
                     mUserHandle,
                     SystemClock.elapsedRealtime(),
-                    /*global=*/true,
                     SearchSessionUtil.createGetDocumentCallback(executor, callback));
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -194,8 +199,8 @@ public class GlobalSearchSession implements Closeable {
         Objects.requireNonNull(queryExpression);
         Objects.requireNonNull(searchSpec);
         Preconditions.checkState(!mIsClosed, "GlobalSearchSession has already been closed");
-        return new SearchResults(mService, mPackageName, /*databaseName=*/null, queryExpression,
-                searchSpec, mUserHandle);
+        return new SearchResults(mService, mCallerAttributionSource, /*databaseName=*/null,
+                queryExpression, searchSpec, mUserHandle);
     }
 
     /**
@@ -227,6 +232,7 @@ public class GlobalSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "GlobalSearchSession has already been closed");
         try {
             mService.reportUsage(
+                    mCallerAttributionSource,
                     request.getPackageName(),
                     request.getDatabaseName(),
                     request.getNamespace(),
@@ -273,55 +279,59 @@ public class GlobalSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "GlobalSearchSession has already been closed");
         try {
             mService.getSchema(
-                mPackageName,
-                packageName,
-                databaseName,
-                mUserHandle,
-                new IAppSearchResultCallback.Stub() {
-                    @Override
-                    public void onResult(AppSearchResultParcel resultParcel) {
-                        executor.execute(() -> {
-                            AppSearchResult<Bundle> result = resultParcel.getResult();
-                            if (result.isSuccess()) {
-                                GetSchemaResponse response =
-                                        new GetSchemaResponse(result.getResultValue());
-                                callback.accept(AppSearchResult.newSuccessfulResult(response));
-                            } else {
-                                callback.accept(AppSearchResult.newFailedResult(result));
-                            }
-                        });
-                    }
-                });
+                    mCallerAttributionSource,
+                    packageName,
+                    databaseName,
+                    mUserHandle,
+                    new IAppSearchResultCallback.Stub() {
+                        @Override
+                        public void onResult(AppSearchResultParcel resultParcel) {
+                            executor.execute(() -> {
+                                AppSearchResult<Bundle> result = resultParcel.getResult();
+                                if (result.isSuccess()) {
+                                    GetSchemaResponse response =
+                                            new GetSchemaResponse(result.getResultValue());
+                                    callback.accept(AppSearchResult.newSuccessfulResult(response));
+                                } else {
+                                    callback.accept(AppSearchResult.newFailedResult(result));
+                                }
+                            });
+                        }
+                    });
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
     }
 
     /**
-     * Adds an {@link AppSearchObserverCallback} to monitor changes within the
-     * databases owned by {@code observedPackage} if they match the given
+     * Adds an {@link ObserverCallback} to monitor changes within the databases owned by
+     * {@code targetPackageName} if they match the given
      * {@link android.app.appsearch.observer.ObserverSpec}.
      *
-     * <p>If the data owned by {@code observedPackage} is not visible to you, the registration call
-     * will succeed but no notifications will be dispatched. Notifications could start flowing later
-     * if {@code observedPackage} changes its schema visibility settings.
+     * <p>The observer callback is only triggered for data that changes after it is registered. No
+     * notification about existing data is sent as a result of registering an observer. To find out
+     * about existing data, you must use the {@link GlobalSearchSession#search} API.
      *
-     * <p>If no package matching {@code observedPackage} exists on the system, the registration call
-     * will succeed but no notifications will be dispatched. Notifications could start flowing later
-     * if {@code observedPackage} is installed and starts indexing data.
+     * <p>If the data owned by {@code targetPackageName} is not visible to you, the registration
+     * call will succeed but no notifications will be dispatched. Notifications could start flowing
+     * later if {@code targetPackageName} changes its schema visibility settings.
      *
-     * @param observedPackage Package whose changes to monitor
+     * <p>If no package matching {@code targetPackageName} exists on the system, the registration
+     * call will succeed but no notifications will be dispatched. Notifications could start flowing
+     * later if {@code targetPackageName} is installed and starts indexing data.
+     *
+     * @param targetPackageName Package whose changes to monitor
      * @param spec            Specification of what types of changes to listen for
      * @param executor        Executor on which to call the {@code observer} callback methods.
      * @param observer        Callback to trigger when a schema or document changes
      * @throws AppSearchException If an unexpected error occurs when trying to register an observer.
      */
-    public void addObserver(
-            @NonNull String observedPackage,
+    public void registerObserverCallback(
+            @NonNull String targetPackageName,
             @NonNull ObserverSpec spec,
             @NonNull Executor executor,
-            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
-        Objects.requireNonNull(observedPackage);
+            @NonNull ObserverCallback observer) throws AppSearchException {
+        Objects.requireNonNull(targetPackageName);
         Objects.requireNonNull(spec);
         Objects.requireNonNull(executor);
         Objects.requireNonNull(observer);
@@ -329,8 +339,8 @@ public class GlobalSearchSession implements Closeable {
 
         synchronized (mObserverCallbacksLocked) {
             IAppSearchObserverProxy stub = null;
-            Map<AppSearchObserverCallback, IAppSearchObserverProxy> observersForPackage =
-                    mObserverCallbacksLocked.get(observedPackage);
+            Map<ObserverCallback, IAppSearchObserverProxy> observersForPackage =
+                    mObserverCallbacksLocked.get(targetPackageName);
             if (observersForPackage != null) {
                 stub = observersForPackage.get(observer);
             }
@@ -373,8 +383,12 @@ public class GlobalSearchSession implements Closeable {
             // because the user might be supplying a different spec.
             AppSearchResultParcel<Void> resultParcel;
             try {
-                resultParcel = mService.addObserver(
-                        mPackageName, observedPackage, spec.getBundle(), mUserHandle, stub);
+                resultParcel = mService.registerObserverCallback(
+                        mCallerAttributionSource,
+                        targetPackageName,
+                        spec.getBundle(),
+                        mUserHandle,
+                        stub);
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();
             }
@@ -386,40 +400,58 @@ public class GlobalSearchSession implements Closeable {
             }
 
             // Now that registration has succeeded, save this stub into our in-memory cache. This
-            // isn't done when errors occur because the user may not call removeObserver if
-            // addObserver threw.
+            // isn't done when errors occur because the user may not call unregisterObserverCallback
+            // if registerObserverCallback threw.
             if (observersForPackage == null) {
                 observersForPackage = new ArrayMap<>();
-                mObserverCallbacksLocked.put(observedPackage, observersForPackage);
+                mObserverCallbacksLocked.put(targetPackageName, observersForPackage);
             }
             observersForPackage.put(observer, stub);
         }
     }
 
     /**
-     * Removes previously registered {@link AppSearchObserverCallback} instances from the system.
+     * @deprecated use #registerObserverCallback.
+     * @hide
+     */
+    @UnsupportedAppUsage
+    @Deprecated
+    public void addObserver(
+            @NonNull String observedPackage,
+            @NonNull ObserverSpec spec,
+            @NonNull Executor executor,
+            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
+        registerObserverCallback(observedPackage, spec, executor, observer);
+    }
+
+    /**
+     * Removes previously registered {@link ObserverCallback} instances from the system.
      *
-     * <p>All instances of {@link AppSearchObserverCallback} which are registered to observe
-     * {@code observedPackage} and compare equal to the provided callback using
-     * {@code AppSearchObserverCallback#equals} will be removed.
+     * <p>All instances of {@link ObserverCallback} which are registered to observe
+     * {@code targetPackageName} and compare equal to the provided callback using the provided
+     * argument's {@code ObserverCallback#equals} will be removed.
      *
      * <p>If no matching observers have been registered, this method has no effect. If multiple
      * matching observers have been registered, all will be removed.
      *
-     * @param observedPackage Package in which the observers to be removed are registered
-     * @param observer        Callback to unregister
+     * @param targetPackageName Package which the observers to be removed are listening to.
+     * @param observer          Callback to unregister.
+     * @throws AppSearchException if an error occurs trying to remove the observer, such as a
+     *                            failure to communicate with the system service. Note that no error
+     *                            will be thrown if the provided observer doesn't match any
+     *                            registered observer.
      */
-    public void removeObserver(
-            @NonNull String observedPackage,
-            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
-        Objects.requireNonNull(observedPackage);
+    public void unregisterObserverCallback(
+            @NonNull String targetPackageName,
+            @NonNull ObserverCallback observer) throws AppSearchException {
+        Objects.requireNonNull(targetPackageName);
         Objects.requireNonNull(observer);
         Preconditions.checkState(!mIsClosed, "GlobalSearchSession has already been closed");
 
         IAppSearchObserverProxy stub;
         synchronized (mObserverCallbacksLocked) {
-            Map<AppSearchObserverCallback, IAppSearchObserverProxy> observersForPackage =
-                    mObserverCallbacksLocked.get(observedPackage);
+            Map<ObserverCallback, IAppSearchObserverProxy> observersForPackage =
+                    mObserverCallbacksLocked.get(targetPackageName);
             if (observersForPackage == null) {
                 return;  // No observers registered for this package. Nothing to do.
             }
@@ -430,8 +462,8 @@ public class GlobalSearchSession implements Closeable {
 
             AppSearchResultParcel<Void> resultParcel;
             try {
-                resultParcel = mService.removeObserver(
-                        mPackageName, observedPackage, mUserHandle, stub);
+                resultParcel = mService.unregisterObserverCallback(
+                        mCallerAttributionSource, targetPackageName, mUserHandle, stub);
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();
             }
@@ -444,9 +476,22 @@ public class GlobalSearchSession implements Closeable {
             // Only remove from the in-memory map once removal from the service side succeeds
             observersForPackage.remove(observer);
             if (observersForPackage.isEmpty()) {
-                mObserverCallbacksLocked.remove(observedPackage);
+                mObserverCallbacksLocked.remove(targetPackageName);
             }
         }
+    }
+
+
+    /**
+     * @deprecated use #unregisterObserverCallback.
+     * @hide
+     */
+    @UnsupportedAppUsage
+    @Deprecated
+    public void removeObserver(
+            @NonNull String targetPackageName,
+            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
+        unregisterObserverCallback(targetPackageName, observer);
     }
 
     /**
@@ -458,7 +503,7 @@ public class GlobalSearchSession implements Closeable {
         if (mIsMutated && !mIsClosed) {
             try {
                 mService.persistToDisk(
-                        mPackageName,
+                        mCallerAttributionSource,
                         mUserHandle,
                         /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime());
                 mIsClosed = true;
