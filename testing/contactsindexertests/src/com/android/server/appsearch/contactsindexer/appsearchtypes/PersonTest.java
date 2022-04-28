@@ -29,19 +29,23 @@ import java.util.List;
 public class PersonTest {
     @Test
     public void testBuilder() {
+        long creationTimestamp = 12345L;
         String namespace = "namespace";
         String id = "id";
+        int score = 3;
         String name = "name";
         String givenName = "givenName";
         String middleName = "middleName";
         String lastName = "lastName";
         Uri externalUri = Uri.parse("http://external.com");
         Uri imageUri = Uri.parse("http://image.com");
+        byte[] fingerprint = "Hello world!".getBytes();
         List<String> affiliations = ImmutableList.of("Org1", "Org2", "Org3");
         List<String> relations = ImmutableList.of("relation1", "relation2");
         boolean isImportant = true;
         boolean isBot = true;
-        String note = "note";
+        String note1 = "note";
+        String note2 = "note2";
         ContactPoint contact1 = new ContactPoint.Builder(namespace, id + "1", "Home")
                 .addAddress("addr1")
                 .addPhone("phone1")
@@ -54,12 +58,20 @@ public class PersonTest {
                 .addEmail("email2")
                 .addAppId("appId2")
                 .build();
+        ContactPoint contact3 = new ContactPoint.Builder(namespace, id + "3", "Other")
+                .addAddress("addr3")
+                .addPhone("phone3")
+                .addEmail("email3")
+                .addAppId("appId3")
+                .build();
         List<String> additionalNames = ImmutableList.of("nickname", "phoneticName");
         @Person.NameType
         List<Long> additionalNameTypes = ImmutableList.of((long) Person.TYPE_NICKNAME,
                 (long) Person.TYPE_PHONETIC_NAME);
 
         Person person = new Person.Builder(namespace, id, name)
+                .setCreationTimestampMillis(creationTimestamp)
+                .setScore(score)
                 .setGivenName(givenName)
                 .setMiddleName(middleName)
                 .setFamilyName(lastName)
@@ -74,23 +86,33 @@ public class PersonTest {
                 .addRelation(relations.get(1))
                 .setIsImportant(isImportant)
                 .setIsBot(isBot)
-                .setNote(note)
+                .addNote(note1)
+                .addNote(note2)
+                .setFingerprint(fingerprint)
                 .addContactPoint(contact1)
                 .addContactPoint(contact2)
+                .addContactPoint(contact3)
                 .build();
 
-        // Additional names would also include nicknames and phoneticNames for the contacts indexer.
+        assertThat(person.getCreationTimestampMillis()).isEqualTo(creationTimestamp);
+        assertThat(person.getScore()).isEqualTo(score);
+        assertThat(person.getNamespace()).isEqualTo(namespace);
+        assertThat(person.getId()).isEqualTo(id);
         assertThat(person.getName()).isEqualTo(name);
         assertThat(person.getGivenName()).isEqualTo(givenName);
         assertThat(person.getMiddleName()).isEqualTo(middleName);
         assertThat(person.getFamilyName()).isEqualTo(lastName);
         assertThat(person.getExternalUri().toString()).isEqualTo(externalUri.toString());
         assertThat(person.getImageUri().toString()).isEqualTo(imageUri.toString());
-        assertThat(person.getNote()).isEqualTo(note);
+        assertThat(person.getNotes()).asList().containsExactly(note1, note2);
+        assertThat(person.isBot()).isEqualTo(isBot);
+        assertThat(person.isImportant()).isEqualTo(isImportant);
+        assertThat(person.getFingerprint()).isEqualTo(fingerprint);
         assertThat(person.getAdditionalNames()).asList().isEqualTo(additionalNames);
         assertThat(person.getAdditionalNameTypes()).asList().isEqualTo(additionalNameTypes);
         assertThat(person.getAffiliations()).asList().isEqualTo(affiliations);
         assertThat(person.getRelations()).asList().isEqualTo(relations);
-        assertThat(person.getContactPoints()).asList().containsExactly(contact1, contact2);
+        assertThat(person.getContactPoints()).asList().containsExactly(contact1, contact2,
+                contact3);
     }
 }
