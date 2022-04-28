@@ -24,6 +24,8 @@ import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.BatchResultCallback;
+import android.app.appsearch.GenericDocument;
+import android.app.appsearch.GetByDocumentIdRequest;
 import android.app.appsearch.PutDocumentsRequest;
 import android.app.appsearch.RemoveByDocumentIdRequest;
 import android.app.appsearch.SearchResult;
@@ -34,6 +36,7 @@ import android.app.appsearch.exceptions.AppSearchException;
 import android.content.Context;
 import android.util.AndroidRuntimeException;
 import android.util.Log;
+import android.util.Pair;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.ContactPoint;
@@ -215,7 +218,7 @@ public class AppSearchHelper {
                 public void onResult(AppSearchBatchResult<String, Void> result) {
                     int numDocsSucceeded = result.getSuccesses().size();
                     int numDocsFailed = result.getFailures().size();
-                    updateStats.mContactsUpdateCount += numDocsSucceeded;
+                    updateStats.mContactsUpdateSucceededCount += numDocsSucceeded;
                     updateStats.mContactsUpdateFailedCount += numDocsFailed;
                     if (result.isSuccess()) {
                         Log.v(TAG,
@@ -231,9 +234,6 @@ public class AppSearchHelper {
                             updateStats.mUpdateStatuses.add(failure.getResultCode());
                         }
                         Log.w(TAG, numDocsFailed + " documents failed to be added in AppSearch.");
-                        // TODO(b/222187514) we can only have 20,000(default) contacts stored.
-                        //  In order to save the latest contacts, we need to remove the oldest ones
-                        //  in this ELSE. RESULT_OUT_OF_SPACE is the error code for this case.
                         future.completeExceptionally(new AppSearchException(
                                 firstFailure.getResultCode(), firstFailure.getErrorMessage()));
                     }
@@ -287,7 +287,7 @@ public class AppSearchHelper {
                             }
                         }
                     }
-                    updateStats.mContactsDeleteCount += numSuccesses;
+                    updateStats.mContactsDeleteSucceededCount += numSuccesses;
                     updateStats.mContactsDeleteFailedCount += numFailures;
                     if (firstFailure != null) {
                         Log.w(TAG, "Failed to delete "
@@ -309,6 +309,28 @@ public class AppSearchHelper {
                     future.completeExceptionally(throwable);
                 }
             });
+            return future;
+        });
+    }
+
+    @NonNull
+    private CompletableFuture<AppSearchBatchResult> getContactsByIdAsync(
+            @NonNull GetByDocumentIdRequest request) {
+        Objects.requireNonNull(request);
+        return mAppSearchSessionFuture.thenCompose(appSearchSession -> {
+            CompletableFuture<AppSearchBatchResult> future = new CompletableFuture<>();
+            appSearchSession.getByDocumentId(request, mExecutor,
+                    new BatchResultCallback<String, GenericDocument>() {
+                        @Override
+                        public void onResult(AppSearchBatchResult<String, GenericDocument> result) {
+                            future.complete(result);
+                        }
+
+                        @Override
+                        public void onSystemError(Throwable throwable) {
+                            future.completeExceptionally(throwable);
+                        }
+                    });
             return future;
         });
     }
@@ -337,6 +359,35 @@ public class AppSearchHelper {
                         return CompletableFuture.supplyAsync(() -> allContactIds);
                     });
         });
+    }
+
+    /**
+     * Gets {@link GenericDocument}s with only fingerprints projected for the requested contact ids.
+     *
+     * @return A list containing the corresponding {@link GenericDocument} for the requested contact
+     * ids in order. The entry is {@code null} if the requested contact id is not found in
+     * AppSearch.
+     */
+    @NonNull
+    public CompletableFuture<List<GenericDocument>> getContactsWithFingerprintsAsync(
+            @NonNull List<String> ids) {
+        Objects.requireNonNull(ids);
+        GetByDocumentIdRequest request = new GetByDocumentIdRequest.Builder(
+                AppSearchHelper.NAMESPACE_NAME)
+                .addProjection(Person.SCHEMA_TYPE,
+                        Collections.singletonList(Person.PERSON_PROPERTY_FINGERPRINT))
+                .addIds(ids)
+                .build();
+        return getContactsByIdAsync(request).thenCompose(
+                appSearchBatchResult -> {
+                    Map<String, GenericDocument> contactsExistInAppSearch =
+                            appSearchBatchResult.getSuccesses();
+                    List<GenericDocument> docsWithFingerprints = new ArrayList<>(ids.size());
+                    for (int i = 0; i < ids.size(); ++i) {
+                        docsWithFingerprints.add(contactsExistInAppSearch.get(ids.get(i)));
+                    }
+                    return CompletableFuture.completedFuture(docsWithFingerprints);
+                });
     }
 
     /**
