@@ -63,7 +63,7 @@ public class VisibilityStore {
      */
     public static final String VISIBILITY_PACKAGE_NAME = "VS#Pkg";
 
-    static final String VISIBILITY_DATABASE_NAME = "VS#Db";
+    public static final String VISIBILITY_DATABASE_NAME = "VS#Db";
 
     /**
      * Map of PrefixedSchemaType and VisibilityDocument stores visibility information for each
@@ -159,6 +159,7 @@ public class VisibilityStore {
                     VISIBILITY_PACKAGE_NAME,
                     VISIBILITY_DATABASE_NAME,
                     prefixedVisibilityDocument,
+                    /*sendChangeNotifications=*/ false,
                     /*logger=*/ null);
             mVisibilityDocumentMap.put(
                     prefixedVisibilityDocument.getId(), prefixedVisibilityDocument);
@@ -174,7 +175,7 @@ public class VisibilityStore {
     public void removeVisibility(@NonNull Set<String> prefixedSchemaTypes)
             throws AppSearchException {
         for (String prefixedSchemaType : prefixedSchemaTypes) {
-            if (mVisibilityDocumentMap.remove(prefixedSchemaType) == null) {
+            if (mVisibilityDocumentMap.remove(prefixedSchemaType) != null) {
                 // The deleted schema is not all-default setting, we need to remove its
                 // VisibilityDocument from Icing.
                 try {
@@ -265,6 +266,7 @@ public class VisibilityStore {
                     VISIBILITY_PACKAGE_NAME,
                     VISIBILITY_DATABASE_NAME,
                     migratedDocument,
+                    /*sendChangeNotifications=*/ false,
                     /*logger=*/ null);
         }
     }
