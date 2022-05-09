@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.android.server.appsearch.external.localstorage;
 
 import android.annotation.NonNull;
@@ -32,13 +33,16 @@ public class AlwaysSupportedFeatures implements Features {
         if (Features.SEARCH_RESULT_MATCH_INFO_SUBMATCH.equals(feature)) {
             return true;
         }
-        if (Features.GLOBAL_SEARCH_SESSION_ADD_REMOVE_OBSERVER.equals(feature)) {
+        if (Features.GLOBAL_SEARCH_SESSION_REGISTER_OBSERVER_CALLBACK.equals(feature)) {
             return true;
         }
         if (Features.GLOBAL_SEARCH_SESSION_GET_SCHEMA.equals(feature)) {
             return true;
         }
-        if (Features.ROLE_AND_PERMISSION_WITH_GET_VISIBILITY.equals(feature)) {
+        if (Features.GLOBAL_SEARCH_SESSION_GET_BY_ID.equals(feature)) {
+            return true;
+        }
+        if (Features.ADD_PERMISSIONS_AND_GET_VISIBILITY.equals(feature)) {
             return true;
         }
         return false;
