@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchBatchResult;
+import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.BatchResultCallback;
 import android.app.appsearch.GenericDocument;
@@ -42,6 +43,98 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 
 class TestUtils {
+    // Schema
+    static final AppSearchSchema CONTACT_POINT_SCHEMA_WITH_APP_IDS_OPTIONAL =
+            new AppSearchSchema.Builder(
+                    ContactPoint.SCHEMA_TYPE)
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_LABEL)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                            .setIndexingType(
+                                    AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                            .setTokenizerType(
+                                    AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                            .build())
+                    // This is repeated in the official builtin:ContactPoint.
+                    // appIds
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_APP_ID)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                            .build())
+                    // address
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_ADDRESS)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                            .setIndexingType(
+                                    AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                            .setTokenizerType(
+                                    AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                            .build())
+                    // email
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_EMAIL)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                            .setIndexingType(
+                                    AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                            .setTokenizerType(
+                                    AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                            .build())
+                    // telephone
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_TELEPHONE)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                            .setIndexingType(
+                                    AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                            .setTokenizerType(
+                                    AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                            .build())
+                    .build();
+
+    static final AppSearchSchema CONTACT_POINT_SCHEMA_WITH_LABEL_REPEATED =
+            new AppSearchSchema.Builder(
+                    ContactPoint.SCHEMA_TYPE)
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_LABEL)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                            .setIndexingType(
+                                    AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                            .setTokenizerType(
+                                    AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                            .build())
+                    // appIds
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_APP_ID)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                            .build())
+                    // address
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_ADDRESS)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                            .setIndexingType(
+                                    AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                            .setTokenizerType(
+                                    AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                            .build())
+                    // email
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_EMAIL)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                            .setIndexingType(
+                                    AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                            .setTokenizerType(
+                                    AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                            .build())
+                    // telephone
+                    .addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
+                            ContactPoint.CONTACT_POINT_PROPERTY_TELEPHONE)
+                            .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                            .setIndexingType(
+                                    AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                            .setTokenizerType(
+                                    AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                            .build())
+                    .build();
+
     @NonNull
     public static CompletableFuture<AppSearchBatchResult> getDocsByIdAsync(
             @NonNull AppSearchSession session, @NonNull Collection<String> ids,
@@ -117,58 +210,5 @@ class TestUtils {
         }
 
         return allIds;
-    }
-
-    static void assertEquals(@NonNull ContactPoint actual,
-            @NonNull ContactPoint expected) {
-        Objects.requireNonNull(actual);
-        Objects.requireNonNull(expected);
-
-        if (actual == expected) {
-            return;
-        }
-
-        // TODO(b/203605504) use toBuilder to reset creationTimestamp so we can directly compare
-        //  two GenericDocuments. This way, we won't miss adding any new properties in the future.
-        assertThat(actual.getId()).isEqualTo(expected.getId());
-        assertThat(actual.getLabel()).isEqualTo(expected.getLabel());
-        assertThat(actual.getAppIds()).isEqualTo(expected.getAppIds());
-        assertThat(actual.getEmails()).isEqualTo(expected.getEmails());
-        assertThat(actual.getAddresses()).isEqualTo(expected.getAddresses());
-        assertThat(actual.getPhones()).isEqualTo(expected.getPhones());
-    }
-
-    static void assertEquals(@NonNull Person actual, @NonNull Person expected) {
-        Objects.requireNonNull(actual);
-        Objects.requireNonNull(expected);
-
-        if (actual == expected) {
-            return;
-        }
-
-        assertThat(actual.getId()).isEqualTo(expected.getId());
-        assertThat(actual.getName()).isEqualTo(expected.getName());
-        assertThat(actual.getGivenName()).isEqualTo(expected.getGivenName());
-        assertThat(actual.getMiddleName()).isEqualTo(expected.getMiddleName());
-        assertThat(actual.getFamilyName()).isEqualTo(expected.getFamilyName());
-        assertThat(actual.getExternalUri()).isEqualTo(expected.getExternalUri());
-        assertThat(actual.getImageUri()).isEqualTo(expected.getImageUri());
-        assertThat(actual.isImportant()).isEqualTo(expected.isImportant());
-        assertThat(actual.isBot()).isEqualTo(expected.isBot());
-        assertThat(actual.getNote()).isEqualTo(expected.getNote());
-        assertThat(actual.getAdditionalNames()).isEqualTo(expected.getAdditionalNames());
-        assertThat(actual.getAffiliations()).isEqualTo(expected.getAffiliations());
-        assertThat(actual.getRelations()).isEqualTo(expected.getRelations());
-        // TODO(b/203605504) use toBuilder to reset creationTimestamp so we can directly compare
-        //  two GenericDocuments. This way, we won't miss adding any new properties in the future.
-        // Compare two contact point arrays. We can't directly use assert(genericDoc1).isEqualTo
-        // (genericDoc2) since the creationTimestamps are different, and they can't easily be
-        // reset to 0.
-        ContactPoint[] contactPointsActual = actual.getContactPoints();
-        ContactPoint[] contactPointsExpected = expected.getContactPoints();
-        assertThat(contactPointsActual.length).isEqualTo(contactPointsExpected.length);
-        for (int i = 0; i < contactPointsActual.length; ++i) {
-            assertEquals(contactPointsActual[i], contactPointsExpected[i]);
-        }
     }
 }

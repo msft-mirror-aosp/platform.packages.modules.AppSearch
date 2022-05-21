@@ -29,6 +29,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.net.Uri;
+import android.provider.ContactsContract;
 import android.provider.ContactsContract.CommonDataKinds.Email;
 import android.provider.ContactsContract.CommonDataKinds.Nickname;
 import android.provider.ContactsContract.CommonDataKinds.Phone;
@@ -41,6 +42,8 @@ import android.util.Log;
 
 import androidx.test.core.app.ApplicationProvider;
 
+import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,7 +53,7 @@ import java.util.List;
  * Fake Contacts Provider that provides basic insert, delete, and query functionality.
  */
 public class FakeContactsProvider extends ContentProvider {
-    private static final String TAG = "ContactsIndexerFakeContactsProvider";
+    private static final String TAG = "ContactsIndexerFakeCont";
     public static final String AUTHORITY = "com.android.contacts";
 
     private static final String DATABASE_NAME = "contacts.db";
@@ -161,7 +164,6 @@ public class FakeContactsProvider extends ContentProvider {
     private static void addNickname(long contactId, ContentValues values) {
         values.put(Data.MIMETYPE, Nickname.CONTENT_ITEM_TYPE);
         values.put(Nickname.NAME, String.format("nicknameName%d", contactId));
-        values.put(Nickname.NAME, String.format("nicknameName%d", contactId));
     }
 
     // Add fake phone information into the ContentValues.
@@ -240,7 +242,7 @@ public class FakeContactsProvider extends ContentProvider {
     }
 
     private void addNicknameToBuilder(PersonBuilderHelper builderHelper, long contactId) {
-        builderHelper.getPersonBuilder().addAdditionalName(
+        builderHelper.getPersonBuilder().addAdditionalName(Person.TYPE_NICKNAME,
                 String.format("nicknameName%d", contactId));
     }
 
@@ -425,8 +427,9 @@ public class FakeContactsProvider extends ContentProvider {
                 throw new UnsupportedOperationException();
         }
 
+        String limit = uri.getQueryParameter(ContactsContract.LIMIT_PARAM_KEY);
         Cursor cursor = qb.query(db, projection, selection, selectionArgs, /*groupBy=*/ null,
-                /*having=*/null, orderBy);
+                /*having=*/null, orderBy, limit);
         if (cursor == null) {
             Log.w(TAG, "query failed");
             return null;

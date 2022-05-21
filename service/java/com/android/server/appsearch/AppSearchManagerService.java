@@ -219,7 +219,7 @@ public class AppSearchManagerService extends SystemService {
                         mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                 userContext,
                                 userHandle,
-                                AppSearchConfig.getInstance(SHARED_EXECUTOR));
+                                FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
                 instance.getAppSearchImpl().clearPackageData(packageName);
                 dispatchChangeNotifications(instance);
                 instance.getLogger().removeCachedUidForPackage(packageName);
@@ -243,7 +243,7 @@ public class AppSearchManagerService extends SystemService {
                             mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                     userContext,
                                     userHandle,
-                                    AppSearchConfig.getInstance(SHARED_EXECUTOR));
+                                    FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
                     List<PackageInfo> installedPackageInfos = userContext
                             .getPackageManager()
                             .getInstalledPackages(/*flags=*/0);
@@ -479,6 +479,7 @@ public class AppSearchManagerService extends SystemService {
                                     callerAttributionSource.getPackageName(),
                                     databaseName,
                                     document,
+                                    /*sendChangeNotifications=*/ true,
                                     instance.getLogger());
                             resultBuilder.setSuccess(document.getId(), /*value=*/ null);
                             ++operationSuccessCount;
@@ -921,10 +922,13 @@ public class AppSearchManagerService extends SystemService {
                                 break;
                             }
                             try {
+                                // Per this method's documentation, individual document change
+                                // notifications are not dispatched.
                                 instance.getAppSearchImpl().putDocument(
                                         callerAttributionSource.getPackageName(),
                                         databaseName,
                                         document,
+                                        /*sendChangeNotifications=*/ false,
                                         /*logger=*/ null);
                             } catch (Throwable t) {
                                 migrationFailureBundles.add(new SetSchemaResponse.MigrationFailure(
@@ -1267,6 +1271,18 @@ public class AppSearchManagerService extends SystemService {
                 try {
                     AppSearchUserInstance instance =
                             mAppSearchUserInstanceManager.getUserInstance(targetUser);
+
+                    // Prepare a new ObserverProxy linked to this binder.
+                    AppSearchObserverProxy observerProxy =
+                            new AppSearchObserverProxy(observerProxyStub);
+
+                    // Watch for client disconnection, unregistering the observer if it happens.
+                    observerProxyStub.asBinder().linkToDeath(
+                            () -> instance.getAppSearchImpl()
+                                    .unregisterObserverCallback(targetPackageName, observerProxy),
+                            /*flags=*/ 0);
+
+                    // Register the observer.
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callerAttributionSource.getPackageName());
                     instance.getAppSearchImpl().registerObserverCallback(
@@ -1276,6 +1292,7 @@ public class AppSearchManagerService extends SystemService {
                             new ObserverSpec(observerSpecBundle),
                             mExecutorManager.getOrCreateUserExecutor(targetUser),
                             new AppSearchObserverProxy(observerProxyStub));
+
                     return new AppSearchResultParcel<>(AppSearchResult.newSuccessfulResult(null));
                 } finally {
                     Binder.restoreCallingIdentity(callingIdentity);
@@ -1344,7 +1361,7 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getOrCreateUserInstance(
                             targetUserContext,
                             targetUser,
-                            AppSearchConfig.getInstance(SHARED_EXECUTOR));
+                            FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
                     ++operationSuccessCount;
                     invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
                 } catch (Throwable t) {
@@ -1509,7 +1526,7 @@ public class AppSearchManagerService extends SystemService {
             OptimizeStats.Builder builder = new OptimizeStats.Builder();
             try {
                 instance.getAppSearchImpl().checkForOptimize(mutateBatchSize, builder);
-            } catch (AppSearchException e) {
+            } catch (Exception e) {
                 Log.w(TAG, "Error occurred when check for optimize", e);
             } finally {
                 OptimizeStats oStats = builder
@@ -1537,7 +1554,7 @@ public class AppSearchManagerService extends SystemService {
             OptimizeStats.Builder builder = new OptimizeStats.Builder();
             try {
                 instance.getAppSearchImpl().checkForOptimize(builder);
-            } catch (AppSearchException e) {
+            } catch (Exception e) {
                 Log.w(TAG, "Error occurred when check for optimize", e);
             } finally {
                 OptimizeStats oStats = builder
