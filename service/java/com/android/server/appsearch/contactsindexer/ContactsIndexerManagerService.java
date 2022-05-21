@@ -20,6 +20,7 @@ import static android.os.Process.INVALID_UID;
 
 import android.annotation.NonNull;
 import android.annotation.UserIdInt;
+import android.app.appsearch.util.LogUtil;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -49,12 +50,13 @@ import java.util.Objects;
  * @hide
  */
 public final class ContactsIndexerManagerService extends SystemService {
-    static final String TAG = "ContactsIndexerManagerService";
+    static final String TAG = "ContactsIndexerManagerS";
 
     private static final String DEFAULT_CONTACTS_PROVIDER_PACKAGE_NAME =
             "com.android.providers.contacts";
 
     private final Context mContext;
+    private final ContactsIndexerConfig mContactsIndexerConfig;
     private final LocalService mLocalService;
     // Sparse array of ContactsIndexerUserInstance indexed by the device-user ID.
     private final SparseArray<ContactsIndexerUserInstance> mContactsIndexersLocked =
@@ -63,9 +65,11 @@ public final class ContactsIndexerManagerService extends SystemService {
     private String mContactsProviderPackageName;
 
     /** Constructs a {@link ContactsIndexerManagerService}. */
-    public ContactsIndexerManagerService(@NonNull Context context) {
+    public ContactsIndexerManagerService(@NonNull Context context,
+            @NonNull ContactsIndexerConfig contactsIndexerConfig) {
         super(context);
         mContext = Objects.requireNonNull(context);
+        mContactsIndexerConfig = Objects.requireNonNull(contactsIndexerConfig);
         mLocalService = new LocalService();
     }
 
@@ -88,8 +92,11 @@ public final class ContactsIndexerManagerService extends SystemService {
                 File appSearchDir = AppSearchModule.getAppSearchDir(userHandle);
                 File contactsDir = new File(appSearchDir, "contacts");
                 try {
-                    instance = ContactsIndexerUserInstance.createInstance(userContext, contactsDir);
-                    Log.d(TAG, "Created Contacts Indexer instance for user " + userHandle);
+                    instance = ContactsIndexerUserInstance.createInstance(userContext, contactsDir,
+                            mContactsIndexerConfig);
+                    if (LogUtil.DEBUG) {
+                        Log.d(TAG, "Created Contacts Indexer instance for user " + userHandle);
+                    }
                 } catch (Throwable t) {
                     Log.e(TAG, "Failed to create Contacts Indexer instance for user "
                             + userHandle, t);
@@ -151,8 +158,10 @@ public final class ContactsIndexerManagerService extends SystemService {
                 contactsProviderChangedFilter,
                 /*broadcastPermission=*/ null,
                 /*scheduler=*/ null);
-        Log.v(TAG, "Registered receiver for CP2 (package: " + mContactsProviderPackageName + ")"
-                + " data cleared events");
+        if (LogUtil.DEBUG) {
+            Log.v(TAG, "Registered receiver for CP2 (package: " + mContactsProviderPackageName + ")"
+                    + " data cleared events");
+        }
     }
 
     /**
@@ -180,7 +189,9 @@ public final class ContactsIndexerManagerService extends SystemService {
                 case Intent.ACTION_PACKAGE_CHANGED:
                 case Intent.ACTION_PACKAGE_DATA_CLEARED:
                     String packageName = intent.getData().getSchemeSpecificPart();
-                    Log.v(TAG, "Received package data cleared event for " + packageName);
+                    if (LogUtil.DEBUG) {
+                        Log.v(TAG, "Received package data cleared event for " + packageName);
+                    }
                     if (!mContactsProviderPackageName.equals(packageName)) {
                         return;
                     }
@@ -199,7 +210,8 @@ public final class ContactsIndexerManagerService extends SystemService {
     }
 
     class LocalService {
-        void doFullUpdateForUser(@UserIdInt int userId, CancellationSignal signal) {
+        void doFullUpdateForUser(@UserIdInt int userId, @NonNull CancellationSignal signal) {
+            Objects.requireNonNull(signal);
             synchronized (mContactsIndexersLocked) {
                 ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
                 if (instance != null) {

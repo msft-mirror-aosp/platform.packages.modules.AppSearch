@@ -24,6 +24,8 @@ import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.BatchResultCallback;
+import android.app.appsearch.GenericDocument;
+import android.app.appsearch.GetByDocumentIdRequest;
 import android.app.appsearch.PutDocumentsRequest;
 import android.app.appsearch.RemoveByDocumentIdRequest;
 import android.app.appsearch.SearchResult;
@@ -31,6 +33,7 @@ import android.app.appsearch.SearchResults;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.util.LogUtil;
 import android.content.Context;
 import android.util.AndroidRuntimeException;
 import android.util.Log;
@@ -64,7 +67,7 @@ import java.util.concurrent.Executor;
  * @hide
  */
 public class AppSearchHelper {
-    static final String TAG = "ContactsIndexerAppSearchHelper";
+    static final String TAG = "ContactsIndexerAppSearc";
 
     public static final String DATABASE_NAME = "contacts";
     // Namespace needed to be used for ContactsIndexer to index the contacts
@@ -77,6 +80,8 @@ public class AppSearchHelper {
     // Holds the result of an asynchronous operation to create an AppSearchSession
     // and set the builtin:Person schema in it.
     private volatile CompletableFuture<AppSearchSession> mAppSearchSessionFuture;
+    private final CompletableFuture<Boolean> mDataLikelyWipedDuringInitFuture =
+            new CompletableFuture<>();
 
     /**
      * Creates an initialized {@link AppSearchHelper}.
@@ -84,7 +89,8 @@ public class AppSearchHelper {
      * @param executor Executor used to handle result callbacks from AppSearch.
      */
     @NonNull
-    public static AppSearchHelper createAppSearchHelper(@NonNull Context context,
+    public static AppSearchHelper createAppSearchHelper(
+            @NonNull Context context,
             @NonNull Executor executor) {
         AppSearchHelper appSearchHelper = new AppSearchHelper(Objects.requireNonNull(context),
                 Objects.requireNonNull(executor));
@@ -98,7 +104,8 @@ public class AppSearchHelper {
         mExecutor = Objects.requireNonNull(executor);
     }
 
-    /** Initializes {@link AppSearchHelper} asynchronously.
+    /**
+     * Initializes {@link AppSearchHelper} asynchronously.
      *
      * <p>Chains {@link CompletableFuture}s to create an {@link AppSearchSession} and
      * set builtin:Person schema.
@@ -113,11 +120,28 @@ public class AppSearchHelper {
         CompletableFuture<AppSearchSession> createSessionFuture =
                 createAppSearchSessionAsync(appSearchManager);
         mAppSearchSessionFuture = createSessionFuture.thenCompose(appSearchSession -> {
-            // Always force set the schema. We are at the 1st version, so it should be fine for
-            // doing it.
-            // For future schema changes, we could also force set it, and rely on a full update
-            // to bring back wiped data.
-            return setPersonSchemaAsync(appSearchSession, /*forceOverride=*/ true);
+            // set the schema with forceOverride false first. And if it fails, we will set the
+            // schema with forceOverride true. This way, we know when the data is wiped due to an
+            // incompatible schema change, which is the main cause for the 1st setSchema to fail.
+            return setPersonSchemaAsync(appSearchSession, /*forceOverride=*/ false)
+                    .handle((x, e) -> {
+                        boolean firstSetSchemaFailed = false;
+                        if (e != null) {
+                            Log.w(TAG, "Error while setting schema with forceOverride false.", e);
+                            firstSetSchemaFailed = true;
+                        }
+                        return firstSetSchemaFailed;
+                    }).thenCompose(firstSetSchemaFailed -> {
+                        mDataLikelyWipedDuringInitFuture.complete(firstSetSchemaFailed);
+                        if (firstSetSchemaFailed) {
+                            // Try setSchema with forceOverride true.
+                            // If it succeeds, we know the data is likely to be wiped due to an
+                            // incompatible schema change.
+                            // If if fails, we don't know the state of that corpus in AppSearch.
+                            return setPersonSchemaAsync(appSearchSession, /*forceOverride=*/ true);
+                        }
+                        return CompletableFuture.completedFuture(appSearchSession);
+                    });
         });
     }
 
@@ -190,6 +214,24 @@ public class AppSearchHelper {
     }
 
     /**
+     * Returns if the data is likely being wiped during initialization of this {@link
+     * AppSearchHelper}.
+     *
+     * <p>The Person corpus in AppSearch can be wiped during setSchema, and this indicates if it
+     * happens:
+     * <li>If the value is {@code false}, we are sure there is NO data loss.
+     * <li>If the value is {@code true}, it is very likely the data loss happens, or the whole
+     * initialization fails and the data state is unknown. Callers need to query AppSearch to
+     * confirm.
+     */
+    @NonNull
+    public CompletableFuture<Boolean> isDataLikelyWipedDuringInitAsync() {
+        // Internally, it indicates whether the first setSchema with forceOverride false fails or
+        // not.
+        return mDataLikelyWipedDuringInitFuture;
+    }
+
+    /**
      * Indexes contacts into AppSearch
      *
      * @param contacts    a collection of contacts. AppSearch batch put will be used to send the
@@ -204,7 +246,9 @@ public class AppSearchHelper {
         Objects.requireNonNull(contacts);
         Objects.requireNonNull(updateStats);
 
-        Log.v(TAG, "Indexing " + contacts.size() + " contacts into AppSearch");
+        if (LogUtil.DEBUG) {
+            Log.v(TAG, "Indexing " + contacts.size() + " contacts into AppSearch");
+        }
         PutDocumentsRequest request = new PutDocumentsRequest.Builder()
                 .addGenericDocuments(contacts)
                 .build();
@@ -215,11 +259,14 @@ public class AppSearchHelper {
                 public void onResult(AppSearchBatchResult<String, Void> result) {
                     int numDocsSucceeded = result.getSuccesses().size();
                     int numDocsFailed = result.getFailures().size();
-                    updateStats.mContactsUpdateCount += numDocsSucceeded;
+                    updateStats.mContactsUpdateSucceededCount += numDocsSucceeded;
                     updateStats.mContactsUpdateFailedCount += numDocsFailed;
                     if (result.isSuccess()) {
-                        Log.v(TAG,
-                                numDocsSucceeded + " documents successfully added in AppSearch.");
+                        if (LogUtil.DEBUG) {
+                            Log.v(TAG,
+                                    numDocsSucceeded
+                                            + " documents successfully added in AppSearch.");
+                        }
                         future.complete(null);
                     } else {
                         Map<String, AppSearchResult<Void>> failures = result.getFailures();
@@ -231,9 +278,6 @@ public class AppSearchHelper {
                             updateStats.mUpdateStatuses.add(failure.getResultCode());
                         }
                         Log.w(TAG, numDocsFailed + " documents failed to be added in AppSearch.");
-                        // TODO(b/222187514) we can only have 20,000(default) contacts stored.
-                        //  In order to save the latest contacts, we need to remove the oldest ones
-                        //  in this ELSE. RESULT_OUT_OF_SPACE is the error code for this case.
                         future.completeExceptionally(new AppSearchException(
                                 firstFailure.getResultCode(), firstFailure.getErrorMessage()));
                     }
@@ -264,7 +308,9 @@ public class AppSearchHelper {
         Objects.requireNonNull(ids);
         Objects.requireNonNull(updateStats);
 
-        Log.v(TAG, "Removing " + ids.size() + " contacts from AppSearch");
+        if (LogUtil.DEBUG) {
+            Log.v(TAG, "Removing " + ids.size() + " contacts from AppSearch");
+        }
         RemoveByDocumentIdRequest request = new RemoveByDocumentIdRequest.Builder(NAMESPACE_NAME)
                 .addIds(ids)
                 .build();
@@ -287,7 +333,7 @@ public class AppSearchHelper {
                             }
                         }
                     }
-                    updateStats.mContactsDeleteCount += numSuccesses;
+                    updateStats.mContactsDeleteSucceededCount += numSuccesses;
                     updateStats.mContactsDeleteFailedCount += numFailures;
                     if (firstFailure != null) {
                         Log.w(TAG, "Failed to delete "
@@ -296,7 +342,7 @@ public class AppSearchHelper {
                                 firstFailure.getResultCode(), firstFailure.getErrorMessage()));
                         return;
                     }
-                    if (numSuccesses > 0) {
+                    if (LogUtil.DEBUG && numSuccesses > 0) {
                         Log.v(TAG,
                                 numSuccesses + " documents successfully deleted from AppSearch.");
                     }
@@ -309,6 +355,28 @@ public class AppSearchHelper {
                     future.completeExceptionally(throwable);
                 }
             });
+            return future;
+        });
+    }
+
+    @NonNull
+    private CompletableFuture<AppSearchBatchResult> getContactsByIdAsync(
+            @NonNull GetByDocumentIdRequest request) {
+        Objects.requireNonNull(request);
+        return mAppSearchSessionFuture.thenCompose(appSearchSession -> {
+            CompletableFuture<AppSearchBatchResult> future = new CompletableFuture<>();
+            appSearchSession.getByDocumentId(request, mExecutor,
+                    new BatchResultCallback<String, GenericDocument>() {
+                        @Override
+                        public void onResult(AppSearchBatchResult<String, GenericDocument> result) {
+                            future.complete(result);
+                        }
+
+                        @Override
+                        public void onSystemError(Throwable throwable) {
+                            future.completeExceptionally(throwable);
+                        }
+                    });
             return future;
         });
     }
@@ -337,6 +405,35 @@ public class AppSearchHelper {
                         return CompletableFuture.supplyAsync(() -> allContactIds);
                     });
         });
+    }
+
+    /**
+     * Gets {@link GenericDocument}s with only fingerprints projected for the requested contact ids.
+     *
+     * @return A list containing the corresponding {@link GenericDocument} for the requested contact
+     * ids in order. The entry is {@code null} if the requested contact id is not found in
+     * AppSearch.
+     */
+    @NonNull
+    public CompletableFuture<List<GenericDocument>> getContactsWithFingerprintsAsync(
+            @NonNull List<String> ids) {
+        Objects.requireNonNull(ids);
+        GetByDocumentIdRequest request = new GetByDocumentIdRequest.Builder(
+                AppSearchHelper.NAMESPACE_NAME)
+                .addProjection(Person.SCHEMA_TYPE,
+                        Collections.singletonList(Person.PERSON_PROPERTY_FINGERPRINT))
+                .addIds(ids)
+                .build();
+        return getContactsByIdAsync(request).thenCompose(
+                appSearchBatchResult -> {
+                    Map<String, GenericDocument> contactsExistInAppSearch =
+                            appSearchBatchResult.getSuccesses();
+                    List<GenericDocument> docsWithFingerprints = new ArrayList<>(ids.size());
+                    for (int i = 0; i < ids.size(); ++i) {
+                        docsWithFingerprints.add(contactsExistInAppSearch.get(ids.get(i)));
+                    }
+                    return CompletableFuture.completedFuture(docsWithFingerprints);
+                });
     }
 
     /**
