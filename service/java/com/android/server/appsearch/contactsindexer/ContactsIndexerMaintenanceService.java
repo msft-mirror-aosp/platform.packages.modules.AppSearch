@@ -17,17 +17,19 @@
 package com.android.server.appsearch.contactsindexer;
 
 import android.annotation.UserIdInt;
+import android.app.appsearch.util.LogUtil;
 import android.app.job.JobInfo;
 import android.app.job.JobParameters;
 import android.app.job.JobScheduler;
 import android.app.job.JobService;
 import android.content.ComponentName;
 import android.content.Context;
-import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.PersistableBundle;
 import android.util.Log;
+import android.util.SparseArray;
 
+import com.android.internal.annotations.GuardedBy;
 import com.android.server.LocalManagerRegistry;
 
 import java.util.concurrent.Executor;
@@ -36,14 +38,14 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 public class ContactsIndexerMaintenanceService extends JobService {
-    private static final String TAG = "ContactsIndexerMaintenanceService";
+    private static final String TAG = "ContactsIndexerMaintena";
 
     /**
      * Generate job ids in the range (MIN_INDEXER_JOB_ID, MAX_INDEXER_JOB_ID) to avoid conflicts
      * with other jobs scheduled by the system service. The range corresponds to 21475 job ids,
      * which is the maximum number of user ids in the system.
      *
-     * @see UserManagerService.MAX_USER_ID
+     * @see com.android.server.pm.UserManagerService#MAX_USER_ID
      */
     public static final int MIN_INDEXER_JOB_ID = 16942831; // corresponds to ag/16942831
     private static final int MAX_INDEXER_JOB_ID = 16964306; // 16942831 + 21475
@@ -54,7 +56,14 @@ public class ContactsIndexerMaintenanceService extends JobService {
             /*maximumPoolSize=*/ 1, /*keepAliveTime=*/ 60L, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>());
 
-    private CancellationSignal mSignal;
+    /**
+     * A mapping of userId-to-CancellationSignal. Since we schedule a separate job for each user,
+     * this JobService might be executing simultaneously for the various users, so we need to keep
+     * track of the cancellation signal for each user update so we stop the appropriate update
+     * when necessary.
+     */
+    @GuardedBy("mSignals")
+    private final SparseArray<CancellationSignal> mSignals = new SparseArray<>();
 
     /**
      * Schedules a full update job for the given device-user.
@@ -92,14 +101,18 @@ public class ContactsIndexerMaintenanceService extends JobService {
             return;
         }
         jobScheduler.schedule(jobInfo);
-        Log.v(TAG, "Scheduled full update job " + jobId + " for user " + userId);
+        if (LogUtil.DEBUG) {
+            Log.v(TAG, "Scheduled full update job " + jobId + " for user " + userId);
+        }
     }
 
     static void cancelFullUpdateJob(Context context, @UserIdInt int userId) {
         int jobId = MIN_INDEXER_JOB_ID + userId;
         JobScheduler jobScheduler = context.getSystemService(JobScheduler.class);
         jobScheduler.cancel(jobId);
-        Log.v(TAG, "Canceled full update job " + jobId + " for user " + userId);
+        if (LogUtil.DEBUG) {
+            Log.v(TAG, "Canceled full update job " + jobId + " for user " + userId);
+        }
     }
 
     @Override
@@ -109,23 +122,60 @@ public class ContactsIndexerMaintenanceService extends JobService {
             return false;
         }
 
-        Log.v(TAG, "Full update job started for user " + userId);
-        mSignal = new CancellationSignal();
+        if (LogUtil.DEBUG) {
+            Log.v(TAG, "Full update job started for user " + userId);
+        }
+        final CancellationSignal oldSignal;
+        synchronized (mSignals) {
+            oldSignal = mSignals.get(userId);
+        }
+        if (oldSignal != null) {
+            // This could happen if we attempt to schedule a new job for the user while there's
+            // one already running.
+            Log.w(TAG, "Old update job still running for user " + userId);
+            oldSignal.cancel();
+        }
+        final CancellationSignal signal = new CancellationSignal();
+        synchronized (mSignals) {
+            mSignals.put(userId, signal);
+        }
         EXECUTOR.execute(() -> {
             ContactsIndexerManagerService.LocalService service =
                     LocalManagerRegistry.getManager(
                             ContactsIndexerManagerService.LocalService.class);
-            service.doFullUpdateForUser(userId, mSignal);
-            jobFinished(params, mSignal.isCanceled());
+            service.doFullUpdateForUser(userId, signal);
+            jobFinished(params, signal.isCanceled());
+            synchronized (mSignals) {
+                if (signal == mSignals.get(userId)) {
+                    mSignals.remove(userId);
+                }
+            }
         });
         return true;
     }
 
     @Override
     public boolean onStopJob(JobParameters params) {
-        if (mSignal != null) {
-            mSignal.cancel();
+        final int userId = params.getExtras().getInt(EXTRA_USER_ID, /* defaultValue */ -1);
+        if (userId == -1) {
+            return false;
         }
+        // This will only run on S+ builds, so no need to do a version check.
+        if (LogUtil.DEBUG) {
+            Log.d(TAG,
+                    "Stopping update job for user " + userId + " because "
+                            + params.getStopReason());
+        }
+        synchronized (mSignals) {
+            final CancellationSignal signal = mSignals.get(userId);
+            if (signal != null) {
+                signal.cancel();
+                mSignals.remove(userId);
+                // We had to stop the job early. Request reschedule.
+                return true;
+            }
+        }
+        Log.e(TAG, "JobScheduler stopped an update that wasn't happening...");
         return false;
     }
 }
