@@ -35,19 +35,20 @@ import java.util.Collections;
 import java.util.Map;
 
 public class SnippetTest {
-    private static final String SCHEMA_TYPE = "schema1";
     private static final String PACKAGE_NAME = "packageName";
     private static final String DATABASE_NAME = "databaseName";
     private static final String PREFIX = PrefixUtil.createPrefix(PACKAGE_NAME, DATABASE_NAME);
+    private static final String PREFIXED_SCHEMA_TYPE = PREFIX + "schema1";
+    private static final String PREFIXED_NAMESPACE = PREFIX + "";
     private static final SchemaTypeConfigProto SCHEMA_TYPE_CONFIG_PROTO =
-            SchemaTypeConfigProto.newBuilder().setSchemaType(PREFIX + SCHEMA_TYPE).build();
+            SchemaTypeConfigProto.newBuilder().setSchemaType(PREFIXED_SCHEMA_TYPE).build();
     private static final Map<String, Map<String, SchemaTypeConfigProto>> SCHEMA_MAP =
             Collections.singletonMap(
                     PREFIX,
-                    Collections.singletonMap(PREFIX + SCHEMA_TYPE, SCHEMA_TYPE_CONFIG_PROTO));
+                    Collections.singletonMap(PREFIXED_SCHEMA_TYPE, SCHEMA_TYPE_CONFIG_PROTO));
 
     @Test
-    public void testSingleStringSnippet() {
+    public void testSingleStringSnippet() throws Exception {
         final String propertyKeyString = "content";
         final String propertyValueString =
                 "A commonly used fake word is foo.\n"
@@ -61,7 +62,8 @@ public class SnippetTest {
         DocumentProto documentProto =
                 DocumentProto.newBuilder()
                         .setUri(id)
-                        .setSchema(SCHEMA_TYPE)
+                        .setNamespace(PREFIXED_NAMESPACE)
+                        .setSchema(PREFIXED_SCHEMA_TYPE)
                         .addProperties(
                                 PropertyProto.newBuilder()
                                         .setName(propertyKeyString)
@@ -78,6 +80,8 @@ public class SnippetTest {
                                                         .setExactMatchByteLength(3)
                                                         .setExactMatchUtf16Position(29)
                                                         .setExactMatchUtf16Length(3)
+                                                        .setSubmatchByteLength(3)
+                                                        .setSubmatchUtf16Length(3)
                                                         .setWindowBytePosition(26)
                                                         .setWindowByteLength(6)
                                                         .setWindowUtf16Position(26)
@@ -93,17 +97,16 @@ public class SnippetTest {
 
         // Making ResultReader and getting Snippet values.
         SearchResultPage searchResultPage =
-                SearchResultToProtoConverter.toSearchResultPage(
-                        searchResultProto,
-                        Collections.singletonList(PACKAGE_NAME),
-                        Collections.singletonList(DATABASE_NAME),
-                        SCHEMA_MAP);
+                SearchResultToProtoConverter.toSearchResultPage(searchResultProto, SCHEMA_MAP);
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match.getPropertyPath()).isEqualTo(propertyKeyString);
         assertThat(match.getFullText()).isEqualTo(propertyValueString);
         assertThat(match.getExactMatch()).isEqualTo(exactMatch);
         assertThat(match.getExactMatchRange())
+                .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 29, /*upper=*/ 32));
+        assertThat(match.getSubmatch()).isEqualTo("foo");
+        assertThat(match.getSubmatchRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 29, /*upper=*/ 32));
         assertThat(match.getFullText()).isEqualTo(propertyValueString);
         assertThat(match.getSnippetRange())
@@ -112,7 +115,7 @@ public class SnippetTest {
     }
 
     @Test
-    public void testNoSnippets() {
+    public void testNoSnippets() throws Exception {
         final String propertyKeyString = "content";
         final String propertyValueString =
                 "A commonly used fake word is foo.\n"
@@ -124,7 +127,8 @@ public class SnippetTest {
         DocumentProto documentProto =
                 DocumentProto.newBuilder()
                         .setUri(id)
-                        .setSchema(SCHEMA_TYPE)
+                        .setNamespace(PREFIXED_NAMESPACE)
+                        .setSchema(PREFIXED_SCHEMA_TYPE)
                         .addProperties(
                                 PropertyProto.newBuilder()
                                         .setName(propertyKeyString)
@@ -138,22 +142,19 @@ public class SnippetTest {
                         .build();
 
         SearchResultPage searchResultPage =
-                SearchResultToProtoConverter.toSearchResultPage(
-                        searchResultProto,
-                        Collections.singletonList(PACKAGE_NAME),
-                        Collections.singletonList(DATABASE_NAME),
-                        SCHEMA_MAP);
+                SearchResultToProtoConverter.toSearchResultPage(searchResultProto, SCHEMA_MAP);
         assertThat(searchResultPage.getResults()).hasSize(1);
         assertThat(searchResultPage.getResults().get(0).getMatchInfos()).isEmpty();
     }
 
     @Test
-    public void testMultipleStringSnippet() {
+    public void testMultipleStringSnippet() throws Exception {
         // Building the SearchResult received from query.
         DocumentProto documentProto =
                 DocumentProto.newBuilder()
                         .setUri("uri1")
-                        .setSchema(SCHEMA_TYPE)
+                        .setNamespace(PREFIXED_NAMESPACE)
+                        .setSchema(PREFIXED_SCHEMA_TYPE)
                         .addProperties(
                                 PropertyProto.newBuilder()
                                         .setName("senderName")
@@ -174,6 +175,8 @@ public class SnippetTest {
                                                         .setExactMatchByteLength(4)
                                                         .setExactMatchUtf16Position(0)
                                                         .setExactMatchUtf16Length(4)
+                                                        .setSubmatchByteLength(4)
+                                                        .setSubmatchUtf16Length(4)
                                                         .setWindowBytePosition(0)
                                                         .setWindowByteLength(9)
                                                         .setWindowUtf16Position(0)
@@ -187,6 +190,8 @@ public class SnippetTest {
                                                         .setExactMatchByteLength(20)
                                                         .setExactMatchUtf16Position(0)
                                                         .setExactMatchUtf16Length(20)
+                                                        .setSubmatchByteLength(4)
+                                                        .setSubmatchUtf16Length(4)
                                                         .setWindowBytePosition(0)
                                                         .setWindowByteLength(20)
                                                         .setWindowUtf16Position(0)
@@ -202,11 +207,7 @@ public class SnippetTest {
 
         // Making ResultReader and getting Snippet values.
         SearchResultPage searchResultPage =
-                SearchResultToProtoConverter.toSearchResultPage(
-                        searchResultProto,
-                        Collections.singletonList(PACKAGE_NAME),
-                        Collections.singletonList(DATABASE_NAME),
-                        SCHEMA_MAP);
+                SearchResultToProtoConverter.toSearchResultPage(searchResultProto, SCHEMA_MAP);
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match1 = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match1.getPropertyPath()).isEqualTo("senderName");
@@ -214,6 +215,9 @@ public class SnippetTest {
         assertThat(match1.getExactMatchRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 4));
         assertThat(match1.getExactMatch()).isEqualTo("Test");
+        assertThat(match1.getSubmatchRange())
+                .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 4));
+        assertThat(match1.getSubmatch()).isEqualTo("Test");
         assertThat(match1.getSnippetRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 9));
         assertThat(match1.getSnippet()).isEqualTo("Test Name");
@@ -224,23 +228,29 @@ public class SnippetTest {
         assertThat(match2.getExactMatchRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 20));
         assertThat(match2.getExactMatch()).isEqualTo("TestNameJr@gmail.com");
+        assertThat(match2.getSubmatchRange())
+                .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 4));
+        assertThat(match2.getSubmatch()).isEqualTo("Test");
         assertThat(match2.getSnippetRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 20));
         assertThat(match2.getSnippet()).isEqualTo("TestNameJr@gmail.com");
     }
 
     @Test
-    public void testNestedDocumentSnippet() {
+    public void testNestedDocumentSnippet() throws Exception {
         // Building the SearchResult received from query.
         DocumentProto documentProto =
                 DocumentProto.newBuilder()
                         .setUri("id1")
-                        .setSchema(SCHEMA_TYPE)
+                        .setNamespace(PREFIXED_NAMESPACE)
+                        .setSchema(PREFIXED_SCHEMA_TYPE)
                         .addProperties(
                                 PropertyProto.newBuilder()
                                         .setName("sender")
                                         .addDocumentValues(
                                                 DocumentProto.newBuilder()
+                                                        .setNamespace(PREFIXED_NAMESPACE)
+                                                        .setSchema(PREFIXED_SCHEMA_TYPE)
                                                         .addProperties(
                                                                 PropertyProto.newBuilder()
                                                                         .setName("name")
@@ -265,6 +275,8 @@ public class SnippetTest {
                                                         .setExactMatchByteLength(4)
                                                         .setExactMatchUtf16Position(0)
                                                         .setExactMatchUtf16Length(4)
+                                                        .setSubmatchByteLength(4)
+                                                        .setSubmatchUtf16Length(4)
                                                         .setWindowBytePosition(0)
                                                         .setWindowByteLength(9)
                                                         .setWindowUtf16Position(0)
@@ -278,6 +290,8 @@ public class SnippetTest {
                                                         .setExactMatchByteLength(21)
                                                         .setExactMatchUtf16Position(0)
                                                         .setExactMatchUtf16Length(21)
+                                                        .setSubmatchByteLength(4)
+                                                        .setSubmatchUtf16Length(4)
                                                         .setWindowBytePosition(0)
                                                         .setWindowByteLength(21)
                                                         .setWindowUtf16Position(0)
@@ -293,11 +307,7 @@ public class SnippetTest {
 
         // Making ResultReader and getting Snippet values.
         SearchResultPage searchResultPage =
-                SearchResultToProtoConverter.toSearchResultPage(
-                        searchResultProto,
-                        Collections.singletonList(PACKAGE_NAME),
-                        Collections.singletonList(DATABASE_NAME),
-                        SCHEMA_MAP);
+                SearchResultToProtoConverter.toSearchResultPage(searchResultProto, SCHEMA_MAP);
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match1 = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match1.getPropertyPath()).isEqualTo("sender.name");
@@ -305,6 +315,9 @@ public class SnippetTest {
         assertThat(match1.getExactMatchRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 4));
         assertThat(match1.getExactMatch()).isEqualTo("Test");
+        assertThat(match1.getSubmatchRange())
+                .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 4));
+        assertThat(match1.getSubmatch()).isEqualTo("Test");
         assertThat(match1.getSnippetRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 9));
         assertThat(match1.getSnippet()).isEqualTo("Test Name");
@@ -315,6 +328,9 @@ public class SnippetTest {
         assertThat(match2.getExactMatchRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 21));
         assertThat(match2.getExactMatch()).isEqualTo("TestNameJr2@gmail.com");
+        assertThat(match2.getSubmatchRange())
+                .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 4));
+        assertThat(match2.getSubmatch()).isEqualTo("Test");
         assertThat(match2.getSnippetRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 21));
         assertThat(match2.getSnippet()).isEqualTo("TestNameJr2@gmail.com");
