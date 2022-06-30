@@ -19,19 +19,37 @@ package com.android.server.appsearch;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
-import android.provider.DeviceConfig;
+import android.os.Environment;
+import android.os.UserHandle;
 import android.util.Log;
 
 import com.android.server.SystemService;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerConfig;
+import com.android.server.appsearch.contactsindexer.FrameworkContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerManagerService;
+
+import java.io.File;
 
 public class AppSearchModule {
     private static final String TAG = "AppSearchModule";
 
+    /**
+     * Returns AppSearch directory in the credential encrypted system directory for the given user.
+     *
+     * <p>This folder should only be accessed after unlock.
+     */
+    public static File getAppSearchDir(@NonNull UserHandle userHandle) {
+        // Duplicates the implementation of Environment#getDataSystemCeDirectory
+        // TODO(b/191059409): Unhide Environment#getDataSystemCeDirectory and switch to it.
+        File systemCeDir = new File(Environment.getDataDirectory(), "system_ce");
+        File systemCeUserDir = new File(systemCeDir, String.valueOf(userHandle.getIdentifier()));
+        return new File(systemCeUserDir, "appsearch");
+    }
+
     public static final class Lifecycle extends SystemService {
         private AppSearchManagerService mAppSearchManagerService;
-        @Nullable private ContactsIndexerManagerService mContactsIndexerManagerService;
+        @Nullable
+        private ContactsIndexerManagerService mContactsIndexerManagerService;
 
         public Lifecycle(Context context) {
             super(context);
@@ -50,25 +68,27 @@ public class AppSearchModule {
                 return;
             }
 
-            if (DeviceConfig.getBoolean(
-                    DeviceConfig.NAMESPACE_APPSEARCH,
-                    ContactsIndexerConfig.CONTACTS_INDEXER_ENABLED,
-                    /*defaultValue=*/ false)) {
-                mContactsIndexerManagerService = new ContactsIndexerManagerService(getContext());
+            // It is safe to check DeviceConfig here, since SettingsProvider, which DeviceConfig
+            // uses, starts before AppSearch.
+            ContactsIndexerConfig contactsIndexerConfig = new FrameworkContactsIndexerConfig();
+            if (contactsIndexerConfig.isContactsIndexerEnabled()) {
+                mContactsIndexerManagerService = new ContactsIndexerManagerService(getContext(),
+                        contactsIndexerConfig);
                 try {
                     mContactsIndexerManagerService.onStart();
-                } catch (Exception e) {
-                    Log.e(TAG, "Failed to start Contacts Indexer service", e);
+                } catch (Throwable t) {
+                    Log.e(TAG, "Failed to start ContactsIndexer service", t);
                     // Release the Contacts Indexer instance as it won't be started until the next
                     // system_server restart on a device reboot.
                     mContactsIndexerManagerService = null;
                 }
+            } else {
+                Log.i(TAG, "ContactsIndexer service is disabled.");
             }
         }
 
         @Override
         public void onBootPhase(int phase) {
-            super.onBootPhase(phase);
             mAppSearchManagerService.onBootPhase(phase);
         }
 
