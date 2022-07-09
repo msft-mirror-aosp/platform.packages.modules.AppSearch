@@ -126,8 +126,8 @@ public class SearchResults implements Closeable {
                             wrapCallback(executor, callback));
                 }
             } else {
-                mService.getNextPage(mAttributionSource, mNextPageToken, mUserHandle,
-                        wrapCallback(executor, callback));
+                mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken,
+                        mUserHandle, wrapCallback(executor, callback));
             }
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
