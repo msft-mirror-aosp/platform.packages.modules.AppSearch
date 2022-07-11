@@ -194,11 +194,13 @@ public final class AppSearchSession implements Closeable {
             @NonNull Consumer<AppSearchResult<GetSchemaResponse>> callback) {
         Objects.requireNonNull(executor);
         Objects.requireNonNull(callback);
+        String targetPackageName =
+            Objects.requireNonNull(mCallerAttributionSource.getPackageName());
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.getSchema(
                     mCallerAttributionSource,
-                    /*targetPackageName=*/mCallerAttributionSource.getPackageName(),
+                    targetPackageName,
                     mDatabaseName,
                     mUserHandle,
                     new IAppSearchResultCallback.Stub() {
@@ -207,8 +209,8 @@ public final class AppSearchSession implements Closeable {
                             safeExecute(executor, callback, () -> {
                                 AppSearchResult<Bundle> result = resultParcel.getResult();
                                 if (result.isSuccess()) {
-                                    GetSchemaResponse response =
-                                            new GetSchemaResponse(result.getResultValue());
+                                    GetSchemaResponse response = new GetSchemaResponse(
+                                        Objects.requireNonNull(result.getResultValue()));
                                     callback.accept(AppSearchResult.newSuccessfulResult(response));
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
@@ -336,11 +338,13 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(request);
         Objects.requireNonNull(executor);
         Objects.requireNonNull(callback);
+        String targetPackageName =
+            Objects.requireNonNull(mCallerAttributionSource.getPackageName());
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.getDocuments(
                     mCallerAttributionSource,
-                    /*targetPackageName=*/mCallerAttributionSource.getPackageName(),
+                    targetPackageName,
                     mDatabaseName,
                     request.getNamespace(),
                     new ArrayList<>(request.getIds()),
@@ -445,11 +449,13 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(request);
         Objects.requireNonNull(executor);
         Objects.requireNonNull(callback);
+        String targetPackageName =
+            Objects.requireNonNull(mCallerAttributionSource.getPackageName());
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.reportUsage(
                     mCallerAttributionSource,
-                    mCallerAttributionSource.getPackageName(),
+                    targetPackageName,
                     mDatabaseName,
                     request.getNamespace(),
                     request.getDocumentId(),
@@ -611,7 +617,8 @@ public final class AppSearchSession implements Closeable {
                             safeExecute(executor, callback, () -> {
                                 AppSearchResult<Bundle> result = resultParcel.getResult();
                                 if (result.isSuccess()) {
-                                    StorageInfo response = new StorageInfo(result.getResultValue());
+                                    StorageInfo response = new StorageInfo(
+                                        Objects.requireNonNull(result.getResultValue()));
                                     callback.accept(AppSearchResult.newSuccessfulResult(response));
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
@@ -672,8 +679,8 @@ public final class AppSearchSession implements Closeable {
                                 AppSearchResult<Bundle> result = resultParcel.getResult();
                                 if (result.isSuccess()) {
                                     try {
-                                        SetSchemaResponse setSchemaResponse =
-                                                new SetSchemaResponse(result.getResultValue());
+                                        SetSchemaResponse setSchemaResponse = new SetSchemaResponse(
+                                            Objects.requireNonNull(result.getResultValue()));
                                         if (!request.isForceOverride()) {
                                             // Throw exception if there is any deleted types or
                                             // incompatible types. That's the only case we swallowed
@@ -728,7 +735,8 @@ public final class AppSearchSession implements Closeable {
                                     AppSearchResult.newFailedResult(getSchemaResult)));
                     return;
                 }
-                GetSchemaResponse getSchemaResponse = getSchemaResult.getResultValue();
+                GetSchemaResponse getSchemaResponse =
+                    Objects.requireNonNull(getSchemaResult.getResultValue());
                 int currentVersion = getSchemaResponse.getVersion();
                 int finalVersion = request.getVersion();
                 Map<String, Migrator> activeMigrators = SchemaMigrationUtil.getActiveMigrators(
@@ -770,8 +778,8 @@ public final class AppSearchSession implements Closeable {
                                     AppSearchResult.newFailedResult(setSchemaResult)));
                     return;
                 }
-                SetSchemaResponse setSchemaResponse =
-                        new SetSchemaResponse(setSchemaResult.getResultValue());
+                SetSchemaResponse setSchemaResponse = new SetSchemaResponse(
+                    Objects.requireNonNull(setSchemaResult.getResultValue()));
 
                 // 3. If forceOverride is false, check that all incompatible types will be migrated.
                 // If some aren't we must throw an error, rather than proceeding and deleting those
