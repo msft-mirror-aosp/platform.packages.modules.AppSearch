@@ -204,6 +204,8 @@ interface IAppSearchManager {
      *
      * @param callerAttributionSource The permission identity of the package to persist to disk
      *     for.
+     * @param databaseName The nullable databaseName this query for. The databaseName will be null
+                           if the query is a global search.
      * @param nextPageToken The token of pre-loaded results of previously executed query.
      * @param userHandle Handle of the calling user
      * @param callback {@link AppSearchResult}&lt;{@link Bundle}&gt; of performing this
@@ -211,6 +213,7 @@ interface IAppSearchManager {
      */
     void getNextPage(
         in AttributionSource callerAttributionSource,
+        in String databaseName,
         in long nextPageToken,
         in UserHandle userHandle,
         in IAppSearchResultCallback callback);
