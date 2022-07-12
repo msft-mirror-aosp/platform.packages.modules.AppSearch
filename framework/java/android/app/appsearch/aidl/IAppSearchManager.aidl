@@ -204,6 +204,8 @@ interface IAppSearchManager {
      *
      * @param callerAttributionSource The permission identity of the package to persist to disk
      *     for.
+     * @param databaseName The nullable databaseName this query for. The databaseName will be null
+                           if the query is a global search.
      * @param nextPageToken The token of pre-loaded results of previously executed query.
      * @param userHandle Handle of the calling user
      * @param callback {@link AppSearchResult}&lt;{@link Bundle}&gt; of performing this
@@ -211,6 +213,7 @@ interface IAppSearchManager {
      */
     void getNextPage(
         in AttributionSource callerAttributionSource,
+        in String databaseName,
         in long nextPageToken,
         in UserHandle userHandle,
         in IAppSearchResultCallback callback);
@@ -274,6 +277,27 @@ interface IAppSearchManager {
         in ParcelFileDescriptor fileDescriptor,
         in UserHandle userHandle,
         in IAppSearchResultCallback callback);
+
+    /**
+     * Retrieves suggested Strings that could be used as {@code queryExpression} in search API.
+     *
+     * @param callerAttributionSource The permission identity of the package to suggest over.
+     * @param databaseName The databaseName this suggest is for.
+     * @param suggestionQueryExpression the non empty query string to search suggestions
+     * @param searchSuggestionSpecBundle SearchSuggestionSpec bundle
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param callback {@link AppSearchResult}&lt;List&lt;{@link Bundle}&gt; of performing this
+     *   operation. List contains SearchSuggestionResult bundles.
+     */
+    void searchSuggestion(
+            in AttributionSource callerAttributionSource,
+            in String databaseName,
+            in String suggestionQueryExpression,
+            in Bundle searchSuggestionSpecBundle,
+            in UserHandle userHandle,
+            in long binderCallStartTimeMillis,
+            in IAppSearchResultCallback callback);
 
     /**
      * Reports usage of a particular document by namespace and id.

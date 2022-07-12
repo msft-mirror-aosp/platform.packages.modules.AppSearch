@@ -28,6 +28,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
+import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.VisibilityDocument;
 
@@ -112,16 +113,18 @@ public class VisibilityStoreMigrationHelperFromV0Test {
 
         // Set some client schemas into AppSearchImpl with empty VisibilityDocument since we need to
         // directly put old version of VisibilityDocument.
-        appSearchImplInV0.setSchema(
-                "package",
-                "database",
-                ImmutableList.of(
-                        new AppSearchSchema.Builder("schema1").build(),
-                        new AppSearchSchema.Builder("schema2").build()),
-                /*prefixedVisibilityBundles=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*schemaVersion=*/ 0,
-                /*setSchemaStatsBuilder=*/ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                appSearchImplInV0.setSchema(
+                        "package",
+                        "database",
+                        ImmutableList.of(
+                                new AppSearchSchema.Builder("schema1").build(),
+                                new AppSearchSchema.Builder("schema2").build()),
+                        /*prefixedVisibilityBundles=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*schemaVersion=*/ 0,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
 
         // Put deprecated visibility documents in version 0 to AppSearchImpl
         appSearchImplInV0.putDocument(
@@ -221,14 +224,16 @@ public class VisibilityStoreMigrationHelperFromV0Test {
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
-        appSearchImpl.setSchema(
-                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                ImmutableList.of(visibilityDocumentSchemaV0, visibilityToPackagesSchemaV0),
-                /*prefixedVisibilityBundles=*/ Collections.emptyList(),
-                /*forceOverride=*/ true, // force push the old version into disk
-                /*version=*/ 0,
-                /*setSchemaStatsBuilder=*/ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                appSearchImpl.setSchema(
+                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                        ImmutableList.of(visibilityDocumentSchemaV0, visibilityToPackagesSchemaV0),
+                        /*prefixedVisibilityBundles=*/ Collections.emptyList(),
+                        /*forceOverride=*/ true, // force push the old version into disk
+                        /*version=*/ 0,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         return appSearchImpl;
     }
 }
