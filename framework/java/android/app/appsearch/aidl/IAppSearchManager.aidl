@@ -279,6 +279,27 @@ interface IAppSearchManager {
         in IAppSearchResultCallback callback);
 
     /**
+     * Retrieves suggested Strings that could be used as {@code queryExpression} in search API.
+     *
+     * @param callerAttributionSource The permission identity of the package to suggest over.
+     * @param databaseName The databaseName this suggest is for.
+     * @param suggestionQueryExpression the non empty query string to search suggestions
+     * @param searchSuggestionSpecBundle SearchSuggestionSpec bundle
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param callback {@link AppSearchResult}&lt;List&lt;{@link Bundle}&gt; of performing this
+     *   operation. List contains SearchSuggestionResult bundles.
+     */
+    void searchSuggestion(
+            in AttributionSource callerAttributionSource,
+            in String databaseName,
+            in String suggestionQueryExpression,
+            in Bundle searchSuggestionSpecBundle,
+            in UserHandle userHandle,
+            in long binderCallStartTimeMillis,
+            in IAppSearchResultCallback callback);
+
+    /**
      * Reports usage of a particular document by namespace and id.
      *
      * <p>A usage report represents an event in which a user interacted with or viewed a document.
