@@ -41,6 +41,7 @@ public interface AppSearchConfig extends AutoCloseable {
 
     int DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES = 512 * 1024; // 512KiB
     int DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT = 20_000;
+    int DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT = 20_000;
     int DEFAULT_BYTES_OPTIMIZE_THRESHOLD = 1 * 1024 * 1024; // 1 MiB
     int DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS = Integer.MAX_VALUE;
     int DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD = 10_000;
@@ -103,6 +104,9 @@ public interface AppSearchConfig extends AutoCloseable {
 
     /** Returns the maximum number of active docs allowed per package. */
     int getCachedLimitConfigMaxDocumentCount();
+
+    /** Returns the maximum number of suggestions allowed in a single query. */
+    int getCachedLimitConfigMaxSuggestionCount();
 
     /**
      * Returns the cached optimize byte size threshold.
