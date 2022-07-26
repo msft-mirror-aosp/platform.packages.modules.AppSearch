@@ -18,11 +18,14 @@ package com.android.server.appsearch;
 import static android.app.appsearch.AppSearchResult.throwableToFailedResult;
 import static android.os.Process.INVALID_UID;
 
+import static com.android.server.appsearch.external.localstorage.stats.SearchStats.VISIBILITY_SCOPE_GLOBAL;
+import static com.android.server.appsearch.external.localstorage.stats.SearchStats.VISIBILITY_SCOPE_LOCAL;
 import static com.android.server.appsearch.util.ServiceImplHelper.invokeCallbackOnError;
 import static com.android.server.appsearch.util.ServiceImplHelper.invokeCallbackOnResult;
 
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.annotation.WorkerThread;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchMigrationHelper;
@@ -30,17 +33,20 @@ import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
+import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.SearchSpec;
+import android.app.appsearch.SearchSuggestionResult;
+import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.SetSchemaResponse;
 import android.app.appsearch.StorageInfo;
 import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.aidl.AppSearchResultParcel;
+import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
-import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverSpec;
 import android.content.AttributionSource;
@@ -63,6 +69,7 @@ import com.android.server.LocalManagerRegistry;
 import com.android.server.SystemService;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
+import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
@@ -322,17 +329,19 @@ public class AppSearchManagerService extends SystemService {
                     }
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     // TODO(b/173532925): Implement logging for statsBuilder
-                    SetSchemaResponse setSchemaResponse = instance.getAppSearchImpl().setSchema(
-                            callerAttributionSource.getPackageName(),
-                            databaseName,
-                            schemas,
-                            visibilityDocuments,
-                            forceOverride,
-                            schemaVersion,
-                            /*setSchemaStatsBuilder=*/ null);
+                    InternalSetSchemaResponse internalSetSchemaResponse =
+                            instance.getAppSearchImpl().setSchema(
+                                    callerAttributionSource.getPackageName(),
+                                    databaseName,
+                                    schemas,
+                                    visibilityDocuments,
+                                    forceOverride,
+                                    schemaVersion,
+                                    /*setSchemaStatsBuilder=*/ null);
                     ++operationSuccessCount;
                     invokeCallbackOnResult(callback,
-                            AppSearchResult.newSuccessfulResult(setSchemaResponse.getBundle()));
+                            AppSearchResult.newSuccessfulResult(
+                                    internalSetSchemaResponse.getBundle()));
 
                     // Schedule a task to dispatch change notifications. See requirements for where
                     // the method is called documented in the method description.
@@ -775,6 +784,7 @@ public class AppSearchManagerService extends SystemService {
         @Override
         public void getNextPage(
                 @NonNull AttributionSource callerAttributionSource,
+                @Nullable String databaseName,
                 long nextPageToken,
                 @NonNull UserHandle userHandle,
                 @NonNull IAppSearchResultCallback callback) {
@@ -788,19 +798,31 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+                AppSearchUserInstance instance = null;
+                SearchStats.Builder statsBuilder;
+                if (databaseName == null) {
+                    statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_GLOBAL,
+                            callerAttributionSource.getPackageName());
+                } else {
+                    statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_LOCAL,
+                            callerAttributionSource.getPackageName())
+                            .setDatabase(databaseName);
+                }
                 try {
-                    AppSearchUserInstance instance =
-                            mAppSearchUserInstanceManager.getUserInstance(targetUser);
-                    // TODO(b/173532925): Implement logging for statsBuilder
+                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     SearchResultPage searchResultPage =
                             instance.getAppSearchImpl().getNextPage(
                                     callerAttributionSource.getPackageName(), nextPageToken,
-                                    /*statsBuilder=*/ null);
+                                    statsBuilder);
                     invokeCallbackOnResult(
                             callback,
                             AppSearchResult.newSuccessfulResult(searchResultPage.getBundle()));
                 } catch (Throwable t) {
                     invokeCallbackOnResult(callback, throwableToFailedResult(t));
+                } finally {
+                    if (instance != null) {
+                        instance.getLogger().logStats(statsBuilder.build());
+                    }
                 }
             });
         }
@@ -945,6 +967,53 @@ public class AppSearchManagerService extends SystemService {
                             AppSearchResult.newSuccessfulResult(migrationFailureBundles));
                 } catch (Throwable t) {
                     invokeCallbackOnResult(callback, throwableToFailedResult(t));
+                }
+            });
+        }
+
+        @Override
+        public void searchSuggestion(
+                @NonNull AttributionSource callerAttributionSource,
+                @NonNull String databaseName,
+                @NonNull String searchQueryExpression,
+                @NonNull Bundle searchSuggestionSpecBundle,
+                @NonNull UserHandle userHandle,
+                long binderCallStartTimeMillis,
+                @NonNull IAppSearchResultCallback callback) {
+            Objects.requireNonNull(callerAttributionSource);
+            Objects.requireNonNull(databaseName);
+            Objects.requireNonNull(searchQueryExpression);
+            Objects.requireNonNull(searchSuggestionSpecBundle);
+            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(callback);
+
+            UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
+                    callerAttributionSource, userHandle, callback);
+            if (targetUser == null) {
+                return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+                try {
+                    AppSearchUserInstance instance =
+                            mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    // TODO(b/173532925): Implement logging for statsBuilder
+                    List<SearchSuggestionResult> searchSuggestionResults =
+                            instance.getAppSearchImpl().searchSuggestion(
+                                    callerAttributionSource.getPackageName(),
+                                    databaseName,
+                                    searchQueryExpression,
+                                    new SearchSuggestionSpec(searchSuggestionSpecBundle));
+                    List<Bundle> searchSuggestionResultBundles =
+                            new ArrayList<>(searchSuggestionResults.size());
+                    for (int i = 0; i < searchSuggestionResults.size(); i++) {
+                        searchSuggestionResultBundles.add(
+                                searchSuggestionResults.get(i).getBundle());
+                    }
+                    invokeCallbackOnResult(
+                            callback,
+                            AppSearchResult.newSuccessfulResult(searchSuggestionResultBundles));
+                } catch (Exception e) {
+                    invokeCallbackOnResult(callback, throwableToFailedResult(e));
                 }
             });
         }
