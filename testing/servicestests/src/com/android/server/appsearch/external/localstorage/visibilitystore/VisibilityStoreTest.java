@@ -21,6 +21,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
 import android.app.appsearch.AppSearchSchema;
+import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.exceptions.AppSearchException;
@@ -162,14 +163,16 @@ public class VisibilityStoreTest {
                 new AppSearchSchema.Builder(VisibilityDocument.SCHEMA_TYPE).build();
 
         // Index a broken schema into AppSearch, use the latest version to make it broken.
-        mAppSearchImpl.setSchema(
-                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                Collections.singletonList(brokenSchema),
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ true,
-                /*version=*/ VisibilityDocument.SCHEMA_VERSION_LATEST,
-                /*setSchemaStatsBuilder=*/ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                        Collections.singletonList(brokenSchema),
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ true,
+                        /*version=*/ VisibilityDocument.SCHEMA_VERSION_LATEST,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         // Create VisibilityStore should recover the broken schema
         mVisibilityStore = new VisibilityStore(mAppSearchImpl);
 
