@@ -43,7 +43,7 @@ public final class AppSearchResultParcel<ValueType> implements Parcelable {
     }
 
     private AppSearchResultParcel(@NonNull Parcel in) {
-        byte[] dataBlob = in.readBlob();
+        byte[] dataBlob = Objects.requireNonNull(in.readBlob());
         Parcel data = Parcel.obtain();
         try {
             data.unmarshall(dataBlob, 0, dataBlob.length);
