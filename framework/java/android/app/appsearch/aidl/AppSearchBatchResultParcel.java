@@ -47,14 +47,14 @@ public final class AppSearchBatchResultParcel<ValueType> implements Parcelable {
     private AppSearchBatchResultParcel(@NonNull Parcel in) {
         Parcel unmarshallParcel = Parcel.obtain();
         try {
-            byte[] dataBlob = in.readBlob();
+            byte[] dataBlob = Objects.requireNonNull(in.readBlob());
             unmarshallParcel.unmarshall(dataBlob, 0, dataBlob.length);
             unmarshallParcel.setDataPosition(0);
             AppSearchBatchResult.Builder<String, ValueType> builder =
                     new AppSearchBatchResult.Builder<>();
             int size = unmarshallParcel.dataSize();
             while (unmarshallParcel.dataPosition() < size) {
-                String key = unmarshallParcel.readString();
+                String key = Objects.requireNonNull(unmarshallParcel.readString());
                 builder.setResult(key, (AppSearchResult<ValueType>) AppSearchResultParcel
                         .directlyReadFromParcel(unmarshallParcel));
             }
