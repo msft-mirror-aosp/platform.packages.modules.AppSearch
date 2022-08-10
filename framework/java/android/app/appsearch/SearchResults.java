@@ -126,8 +126,8 @@ public class SearchResults implements Closeable {
                             wrapCallback(executor, callback));
                 }
             } else {
-                mService.getNextPage(mAttributionSource, mNextPageToken, mUserHandle,
-                        wrapCallback(executor, callback));
+                mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken,
+                        mUserHandle, wrapCallback(executor, callback));
             }
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -165,8 +165,8 @@ public class SearchResults implements Closeable {
             @NonNull Consumer<AppSearchResult<List<SearchResult>>> callback) {
         if (searchResultPageResult.isSuccess()) {
             try {
-                SearchResultPage searchResultPage =
-                        new SearchResultPage(searchResultPageResult.getResultValue());
+                SearchResultPage searchResultPage = new SearchResultPage
+                    (Objects.requireNonNull(searchResultPageResult.getResultValue()));
                 mNextPageToken = searchResultPage.getNextPageToken();
                 callback.accept(AppSearchResult.newSuccessfulResult(
                         searchResultPage.getResults()));
