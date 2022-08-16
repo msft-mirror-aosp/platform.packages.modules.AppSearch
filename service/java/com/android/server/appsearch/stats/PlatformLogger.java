@@ -528,6 +528,7 @@ public final class PlatformLogger implements AppSearchLogger {
             case CallStats.CALL_TYPE_REMOVE_DOCUMENT_BY_ID:
             case CallStats.CALL_TYPE_FLUSH:
             case CallStats.CALL_TYPE_REMOVE_DOCUMENT_BY_SEARCH:
+            case CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID:
                 // TODO(b/173532925) Some of them above will have dedicated sampling ratio config
             default:
                 return mConfig.getCachedSamplingIntervalDefault();
