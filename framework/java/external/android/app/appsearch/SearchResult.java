@@ -92,6 +92,7 @@ public final class SearchResult {
      *     method returns an empty list.
      */
     @NonNull
+    @SuppressWarnings("deprecation")
     public List<MatchInfo> getMatchInfos() {
         if (mMatchInfos == null) {
             List<Bundle> matchBundles =
@@ -226,67 +227,79 @@ public final class SearchResult {
     }
 
     /**
-     * This class represents a match objects for any Snippets that might be present in {@link
-     * SearchResults} from query. Using this class user can get the full text, exact matches and
-     * Snippets of document content for a given match.
+     * This class represents match objects for any Snippets that might be present in {@link
+     * SearchResults} from a query. Using this class, the user can get:
      *
-     * <p>Class Example 1: A document contains following text in property subject:
+     * <ul>
+     *   <li>the full text - all of the text in that String property
+     *   <li>the exact term match - the 'term' (full word) that matched the query
+     *   <li>the subterm match - the portion of the matched term that appears in the query
+     *   <li>a suggested text snippet - a portion of the full text surrounding the exact term match,
+     *       set to term boundaries. The size of the snippet is specified in {@link
+     *       SearchSpec.Builder#setMaxSnippetSize}
+     * </ul>
      *
-     * <p>A commonly used fake word is foo. Another nonsense word that’s used a lot is bar.
+     * for each match in the document.
      *
-     * <p>If the queryExpression is "foo".
+     * <p>Class Example 1:
      *
-     * <p>{@link MatchInfo#getPropertyPath()} returns "subject"
+     * <p>A document contains the following text in property "subject":
      *
-     * <p>{@link MatchInfo#getFullText()} returns "A commonly used fake word is foo. Another
-     * nonsense word that’s used a lot is bar."
+     * <p>"A commonly used fake word is foo. Another nonsense word that’s used a lot is bar."
      *
-     * <p>{@link MatchInfo#getExactMatchRange()} returns [29, 32]
+     * <p>If the queryExpression is "foo" and {@link SearchSpec#getMaxSnippetSize} is 10,
      *
-     * <p>{@link MatchInfo#getExactMatch()} returns "foo"
-     *
-     * <p>{@link MatchInfo#getSnippetRange()} returns [26, 33]
-     *
-     * <p>{@link MatchInfo#getSnippet()} returns "is foo."
+     * <ul>
+     *   <li>{@link MatchInfo#getPropertyPath()} returns "subject"
+     *   <li>{@link MatchInfo#getFullText()} returns "A commonly used fake word is foo. Another
+     *       nonsense word that’s used a lot is bar."
+     *   <li>{@link MatchInfo#getExactMatchRange()} returns [29, 32]
+     *   <li>{@link MatchInfo#getExactMatch()} returns "foo"
+     *   <li>{@link MatchInfo#getSubmatchRange()} returns [29, 32]
+     *   <li>{@link MatchInfo#getSubmatch()} returns "foo"
+     *   <li>{@link MatchInfo#getSnippetRange()} returns [26, 33]
+     *   <li>{@link MatchInfo#getSnippet()} returns "is foo."
+     * </ul>
      *
      * <p>
      *
-     * <p>Class Example 2: A document contains a property name sender which contains 2 property
-     * names name and email, so we will have 2 property paths: {@code sender.name} and {@code
-     * sender.email}.
+     * <p>Class Example 2:
      *
-     * <p>Let {@code sender.name = "Test Name Jr."} and {@code sender.email =
-     * "TestNameJr@gmail.com"}
+     * <p>A document contains one property named "subject" and one property named "sender" which
+     * contains a "name" property.
      *
-     * <p>If the queryExpression is "Test". We will have 2 matches.
+     * <p>In this case, we will have 2 property paths: {@code sender.name} and {@code subject}.
+     *
+     * <p>Let {@code sender.name = "Test Name Jr."} and {@code subject = "Testing 1 2 3"}
+     *
+     * <p>If the queryExpression is "Test" with {@link SearchSpec#TERM_MATCH_PREFIX} and {@link
+     * SearchSpec#getMaxSnippetSize} is 10. We will have 2 matches:
      *
      * <p>Match-1
      *
-     * <p>{@link MatchInfo#getPropertyPath()} returns "sender.name"
-     *
-     * <p>{@link MatchInfo#getFullText()} returns "Test Name Jr."
-     *
-     * <p>{@link MatchInfo#getExactMatchRange()} returns [0, 4]
-     *
-     * <p>{@link MatchInfo#getExactMatch()} returns "Test"
-     *
-     * <p>{@link MatchInfo#getSnippetRange()} returns [0, 9]
-     *
-     * <p>{@link MatchInfo#getSnippet()} returns "Test Name"
+     * <ul>
+     *   <li>{@link MatchInfo#getPropertyPath()} returns "sender.name"
+     *   <li>{@link MatchInfo#getFullText()} returns "Test Name Jr."
+     *   <li>{@link MatchInfo#getExactMatchRange()} returns [0, 4]
+     *   <li>{@link MatchInfo#getExactMatch()} returns "Test"
+     *   <li>{@link MatchInfo#getSubmatchRange()} returns [0, 4]
+     *   <li>{@link MatchInfo#getSubmatch()} returns "Test"
+     *   <li>{@link MatchInfo#getSnippetRange()} returns [0, 9]
+     *   <li>{@link MatchInfo#getSnippet()} returns "Test Name"
+     * </ul>
      *
      * <p>Match-2
      *
-     * <p>{@link MatchInfo#getPropertyPath()} returns "sender.email"
-     *
-     * <p>{@link MatchInfo#getFullText()} returns "TestNameJr@gmail.com"
-     *
-     * <p>{@link MatchInfo#getExactMatchRange()} returns [0, 20]
-     *
-     * <p>{@link MatchInfo#getExactMatch()} returns "TestNameJr@gmail.com"
-     *
-     * <p>{@link MatchInfo#getSnippetRange()} returns [0, 20]
-     *
-     * <p>{@link MatchInfo#getSnippet()} returns "TestNameJr@gmail.com"
+     * <ul>
+     *   <li>{@link MatchInfo#getPropertyPath()} returns "subject"
+     *   <li>{@link MatchInfo#getFullText()} returns "Testing 1 2 3"
+     *   <li>{@link MatchInfo#getExactMatchRange()} returns [0, 7]
+     *   <li>{@link MatchInfo#getExactMatch()} returns "Testing"
+     *   <li>{@link MatchInfo#getSubmatchRange()} returns [0, 4]
+     *   <li>{@link MatchInfo#getSubmatch()} returns "Test"
+     *   <li>{@link MatchInfo#getSnippetRange()} returns [0, 9]
+     *   <li>{@link MatchInfo#getSnippet()} returns "Testing 1"
+     * </ul>
      */
     public static final class MatchInfo {
         /** The path of the matching snippet property. */
@@ -294,6 +307,8 @@ public final class SearchResult {
 
         private static final String EXACT_MATCH_RANGE_LOWER_FIELD = "exactMatchRangeLower";
         private static final String EXACT_MATCH_RANGE_UPPER_FIELD = "exactMatchRangeUpper";
+        private static final String SUBMATCH_RANGE_LOWER_FIELD = "submatchRangeLower";
+        private static final String SUBMATCH_RANGE_UPPER_FIELD = "submatchRangeUpper";
         private static final String SNIPPET_RANGE_LOWER_FIELD = "snippetRangeLower";
         private static final String SNIPPET_RANGE_UPPER_FIELD = "snippetRangeUpper";
 
@@ -313,6 +328,12 @@ public final class SearchResult {
 
         /** Range of property that exactly matched the query. Populated on first use. */
         @Nullable private MatchRange mExactMatchRange;
+
+        /**
+         * Range of property that corresponds to the subsequence of the exact match that directly
+         * matches a query term. Populated on first use.
+         */
+        @Nullable private MatchRange mSubmatchRange;
 
         /** Range of some reasonable amount of context around the query. Populated on first use. */
         @Nullable private MatchRange mWindowRange;
@@ -340,8 +361,11 @@ public final class SearchResult {
         /**
          * Gets the full text corresponding to the given entry.
          *
-         * <p>For class example this returns "A commonly used fake word is foo. Another nonsense
-         * word that's used a lot is bar."
+         * <p>Class example 1: this returns "A commonly used fake word is foo. Another nonsense word
+         * that's used a lot is bar."
+         *
+         * <p>Class example 2: for the first {@link MatchInfo}, this returns "Test Name Jr." and,
+         * for the second {@link MatchInfo}, this returns "Testing 1 2 3".
          */
         @NonNull
         public String getFullText() {
@@ -355,9 +379,12 @@ public final class SearchResult {
         }
 
         /**
-         * Gets the exact {@link MatchRange} corresponding to the given entry.
+         * Gets the {@link MatchRange} of the exact term of the given entry that matched the query.
          *
-         * <p>For class example 1 this returns [29, 32]
+         * <p>Class example 1: this returns [29, 32].
+         *
+         * <p>Class example 2: for the first {@link MatchInfo}, this returns [0, 4] and, for the
+         * second {@link MatchInfo}, this returns [0, 7].
          */
         @NonNull
         public MatchRange getExactMatchRange() {
@@ -371,13 +398,51 @@ public final class SearchResult {
         }
 
         /**
-         * Gets the {@link MatchRange} corresponding to the given entry.
+         * Gets the exact term of the given entry that matched the query.
          *
-         * <p>For class example 1 this returns "foo"
+         * <p>Class example 1: this returns "foo".
+         *
+         * <p>Class example 2: for the first {@link MatchInfo}, this returns "Test" and, for the
+         * second {@link MatchInfo}, this returns "Testing".
          */
         @NonNull
         public CharSequence getExactMatch() {
             return getSubstring(getExactMatchRange());
+        }
+
+        /**
+         * Gets the {@link MatchRange} of the exact term subsequence of the given entry that matched
+         * the query.
+         *
+         * <p>Class example 1: this returns [29, 32].
+         *
+         * <p>Class example 2: for the first {@link MatchInfo}, this returns [0, 4] and, for the
+         * second {@link MatchInfo}, this returns [0, 4].
+         */
+        @NonNull
+        public MatchRange getSubmatchRange() {
+            checkSubmatchSupported();
+            if (mSubmatchRange == null) {
+                mSubmatchRange =
+                        new MatchRange(
+                                mBundle.getInt(SUBMATCH_RANGE_LOWER_FIELD),
+                                mBundle.getInt(SUBMATCH_RANGE_UPPER_FIELD));
+            }
+            return mSubmatchRange;
+        }
+
+        /**
+         * Gets the exact term subsequence of the given entry that matched the query.
+         *
+         * <p>Class example 1: this returns "foo".
+         *
+         * <p>Class example 2: for the first {@link MatchInfo}, this returns "Test" and, for the
+         * second {@link MatchInfo}, this returns "Test".
+         */
+        @NonNull
+        public CharSequence getSubmatch() {
+            checkSubmatchSupported();
+            return getSubstring(getSubmatchRange());
         }
 
         /**
@@ -386,7 +451,10 @@ public final class SearchResult {
          * <p>Only populated when set maxSnippetSize > 0 in {@link
          * SearchSpec.Builder#setMaxSnippetSize}.
          *
-         * <p>For class example 1 this returns [29, 41].
+         * <p>Class example 1: this returns [29, 41].
+         *
+         * <p>Class example 2: for the first {@link MatchInfo}, this returns [0, 9] and, for the
+         * second {@link MatchInfo}, this returns [0, 13].
          */
         @NonNull
         public MatchRange getSnippetRange() {
@@ -407,7 +475,10 @@ public final class SearchResult {
          * SearchSpec.Builder#setMaxSnippetSize}. Windowing is centered around the middle of the
          * matched token with content on either side clipped to token boundaries.
          *
-         * <p>For class example 1 this returns "foo. Another"
+         * <p>Class example 1: this returns "foo. Another".
+         *
+         * <p>Class example 2: for the first {@link MatchInfo}, this returns "Test Name" and, for
+         * the second {@link MatchInfo}, this returns "Testing 1 2 3".
          */
         @NonNull
         public CharSequence getSnippet() {
@@ -416,6 +487,14 @@ public final class SearchResult {
 
         private CharSequence getSubstring(MatchRange range) {
             return getFullText().substring(range.getStart(), range.getEnd());
+        }
+
+        private void checkSubmatchSupported() {
+            if (!mBundle.containsKey(SUBMATCH_RANGE_LOWER_FIELD)) {
+                throw new UnsupportedOperationException(
+                        "Submatch is not supported with this backend/Android API level "
+                                + "combination");
+            }
         }
 
         /** Extracts the matching string from the document. */
@@ -435,6 +514,7 @@ public final class SearchResult {
         public static final class Builder {
             private final String mPropertyPath;
             private MatchRange mExactMatchRange = new MatchRange(0, 0);
+            @Nullable private MatchRange mSubmatchRange;
             private MatchRange mSnippetRange = new MatchRange(0, 0);
 
             /**
@@ -461,6 +541,13 @@ public final class SearchResult {
                 return this;
             }
 
+            /** Sets the submatch {@link MatchRange} corresponding to the given entry. */
+            @NonNull
+            public Builder setSubmatchRange(@NonNull MatchRange matchRange) {
+                mSubmatchRange = Objects.requireNonNull(matchRange);
+                return this;
+            }
+
             /** Sets the snippet {@link MatchRange} corresponding to the given entry. */
             @NonNull
             public Builder setSnippetRange(@NonNull MatchRange matchRange) {
@@ -475,6 +562,11 @@ public final class SearchResult {
                 bundle.putString(SearchResult.MatchInfo.PROPERTY_PATH_FIELD, mPropertyPath);
                 bundle.putInt(MatchInfo.EXACT_MATCH_RANGE_LOWER_FIELD, mExactMatchRange.getStart());
                 bundle.putInt(MatchInfo.EXACT_MATCH_RANGE_UPPER_FIELD, mExactMatchRange.getEnd());
+                if (mSubmatchRange != null) {
+                    // Only populate the submatch fields if it was actually set.
+                    bundle.putInt(MatchInfo.SUBMATCH_RANGE_LOWER_FIELD, mSubmatchRange.getStart());
+                    bundle.putInt(MatchInfo.SUBMATCH_RANGE_UPPER_FIELD, mSubmatchRange.getEnd());
+                }
                 bundle.putInt(MatchInfo.SNIPPET_RANGE_LOWER_FIELD, mSnippetRange.getStart());
                 bundle.putInt(MatchInfo.SNIPPET_RANGE_UPPER_FIELD, mSnippetRange.getEnd());
                 return new MatchInfo(bundle, /*document=*/ null);
