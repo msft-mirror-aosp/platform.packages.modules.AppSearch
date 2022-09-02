@@ -20,14 +20,9 @@ import static android.app.appsearch.SearchSpec.TERM_MATCH_PREFIX;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import static org.testng.Assert.expectThrows;
-
-import android.app.appsearch.exceptions.AppSearchException;
 import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
-
-import com.android.server.appsearch.testing.AppSearchEmail;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -36,8 +31,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class AppSearchSessionUnitTest {
     private final Context mContext = ApplicationProvider.getApplicationContext();
@@ -62,47 +58,6 @@ public class AppSearchSessionUnitTest {
                 schemaFuture::complete);
 
         schemaFuture.get().getResultValue();
-    }
-
-    @Test
-    public void testPutDocument_throwsNullException() throws Exception {
-        // Create a document
-        AppSearchEmail inEmail =
-                new AppSearchEmail.Builder("namespace", "uri1")
-                        .setFrom("from@example.com")
-                        .setTo("to1@example.com", "to2@example.com")
-                        .setSubject("testPut example")
-                        .setBody("This is the body of the testPut email")
-                        .build();
-
-        // clear the document bundle to make our service crash and throw an NullPointerException.
-        inEmail.getBundle().clear();
-        CompletableFuture<AppSearchBatchResult<String, Void>> putDocumentsFuture =
-                new CompletableFuture<>();
-
-        // Index the broken document.
-        mSearchSession.put(
-                new PutDocumentsRequest.Builder().addGenericDocuments(inEmail).build(),
-                mExecutor, new BatchResultCallback<String, Void>() {
-                    @Override
-                    public void onResult(AppSearchBatchResult<String, Void> result) {
-                        putDocumentsFuture.complete(result);
-                    }
-
-                    @Override
-                    public void onSystemError(Throwable throwable) {
-                        putDocumentsFuture.completeExceptionally(throwable);
-                    }
-                });
-
-        // Verify the NullPointException has been thrown.
-        ExecutionException executionException =
-                expectThrows(ExecutionException.class, putDocumentsFuture::get);
-        assertThat(executionException.getCause()).isInstanceOf(AppSearchException.class);
-        AppSearchException appSearchException = (AppSearchException) executionException.getCause();
-        assertThat(appSearchException.getResultCode())
-                .isEqualTo(AppSearchResult.RESULT_INTERNAL_ERROR);
-        assertThat(appSearchException.getMessage()).startsWith("NullPointerException");
     }
 
     @Test
@@ -226,5 +181,21 @@ public class AppSearchSessionUnitTest {
         searchResults.getNextPage(mExecutor, getNextPageFuture::complete);
         results = getNextPageFuture.get().getResultValue();
         assertThat(results).isEmpty();
+    }
+
+    @Test
+    public void testClosedCallbackExecutor() throws Exception {
+        CompletableFuture<AppSearchResult<SetSchemaResponse>> schemaFuture =
+                new CompletableFuture<>();
+        ExecutorService callbackExecutor = Executors.newSingleThreadExecutor();
+        callbackExecutor.shutdown();
+        mSearchSession.setSchema(
+                new SetSchemaRequest.Builder()
+                        .addSchemas(new AppSearchSchema.Builder("schema1").build())
+                        .setForceOverride(true).build(),
+                mExecutor, callbackExecutor, schemaFuture::complete);
+        AppSearchResult<SetSchemaResponse> result = schemaFuture.get();
+        assertThat(result.getResultCode()).isEqualTo(AppSearchResult.RESULT_UNKNOWN_ERROR);
+        assertThat(result.getErrorMessage()).startsWith("RejectedExecutionException: ");
     }
 }

@@ -17,9 +17,9 @@
 package com.android.server.appsearch;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.content.Context;
-import android.os.Environment;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.util.ArrayMap;
@@ -29,7 +29,7 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
 import com.android.server.appsearch.stats.PlatformLogger;
-import com.android.server.appsearch.visibilitystore.VisibilityStoreImpl;
+import com.android.server.appsearch.visibilitystore.VisibilityCheckerImpl;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -50,6 +50,8 @@ public final class AppSearchUserInstanceManager {
 
     @GuardedBy("mInstancesLocked")
     private final Map<UserHandle, AppSearchUserInstance> mInstancesLocked = new ArrayMap<>();
+    @GuardedBy("mStorageInfoLocked")
+    private final Map<UserHandle, UserStorageInfo> mStorageInfoLocked = new ArrayMap<>();
 
     private AppSearchUserInstanceManager() {}
 
@@ -69,19 +71,6 @@ public final class AppSearchUserInstanceManager {
             }
         }
         return sAppSearchUserInstanceManager;
-    }
-
-    /**
-     * Returns AppSearch directory in the credential encrypted system directory for the given user.
-     *
-     * <p>This folder should only be accessed after unlock.
-     */
-    public static File getAppSearchDir(@NonNull UserHandle userHandle) {
-        // Duplicates the implementation of Environment#getDataSystemCeDirectory
-        // TODO(b/191059409): Unhide Environment#getDataSystemCeDirectory and switch to it.
-        File systemCeDir = new File(Environment.getDataDirectory(), "system_ce");
-        File systemCeUserDir = new File(systemCeDir, String.valueOf(userHandle.getIdentifier()));
-        return new File(systemCeUserDir, "appsearch");
     }
 
     /**
@@ -130,6 +119,9 @@ public final class AppSearchUserInstanceManager {
                 instance.getAppSearchImpl().close();
             }
         }
+        synchronized (mStorageInfoLocked) {
+            mStorageInfoLocked.remove(userHandle);
+        }
     }
 
     /**
@@ -160,6 +152,39 @@ public final class AppSearchUserInstanceManager {
     }
 
     /**
+     * Returns the initialized {@link AppSearchUserInstance} for the given user, or {@code null} if
+     * no such instance exists.
+     *
+     * @param userHandle The multi-user handle of the device user calling AppSearch
+     */
+    @Nullable
+    public AppSearchUserInstance getUserInstanceOrNull(@NonNull UserHandle userHandle) {
+        Objects.requireNonNull(userHandle);
+        synchronized (mInstancesLocked) {
+            return mInstancesLocked.get(userHandle);
+        }
+    }
+
+    /**
+     * Gets an {@link UserStorageInfo} for the given user.
+     *
+     * @param userHandle The multi-user handle of the device user
+     * @return An initialized {@link UserStorageInfo} for this user
+     */
+    @NonNull
+    public UserStorageInfo getOrCreateUserStorageInfoInstance(@NonNull UserHandle userHandle) {
+        Objects.requireNonNull(userHandle);
+        synchronized (mStorageInfoLocked) {
+            UserStorageInfo userStorageInfo = mStorageInfoLocked.get(userHandle);
+            if (userStorageInfo == null) {
+                userStorageInfo = new UserStorageInfo(AppSearchModule.getAppSearchDir(userHandle));
+                mStorageInfoLocked.put(userHandle, userStorageInfo);
+            }
+            return userStorageInfo;
+        }
+    }
+
+    /**
      * Returns the list of all {@link UserHandle}s.
      *
      * <p>It can return an empty list if there is no {@link AppSearchUserInstance} created yet.
@@ -183,29 +208,26 @@ public final class AppSearchUserInstanceManager {
         // Initialize the classes that make up AppSearchUserInstance
         PlatformLogger logger = new PlatformLogger(userContext, config);
 
-        File appSearchDir = getAppSearchDir(userHandle);
+        File appSearchDir = AppSearchModule.getAppSearchDir(userHandle);
         File icingDir = new File(appSearchDir, "icing");
         Log.i(TAG, "Creating new AppSearch instance at: " + icingDir);
+        VisibilityCheckerImpl visibilityCheckerImpl = new VisibilityCheckerImpl(userContext);
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
                 icingDir,
                 new FrameworkLimitConfig(config),
                 initStatsBuilder,
-                new FrameworkOptimizeStrategy(config));
+                new FrameworkOptimizeStrategy(config),
+                visibilityCheckerImpl);
 
-        long prepareVisibilityStoreLatencyStartMillis = SystemClock.elapsedRealtime();
-        VisibilityStoreImpl visibilityStore =
-                VisibilityStoreImpl.create(appSearchImpl, userContext);
-        long prepareVisibilityStoreLatencyEndMillis = SystemClock.elapsedRealtime();
+        // Update storage info file
+        UserStorageInfo userStorageInfo = getOrCreateUserStorageInfoInstance(userHandle);
+        userStorageInfo.updateStorageInfoFile(appSearchImpl);
 
         initStatsBuilder
                 .setTotalLatencyMillis(
-                        (int) (SystemClock.elapsedRealtime() - totalLatencyStartMillis))
-                .setPrepareVisibilityStoreLatencyMillis(
-                        (int)
-                                (prepareVisibilityStoreLatencyEndMillis
-                                        - prepareVisibilityStoreLatencyStartMillis));
+                        (int) (SystemClock.elapsedRealtime() - totalLatencyStartMillis));
         logger.logStats(initStatsBuilder.build());
 
-        return new AppSearchUserInstance(logger, appSearchImpl, visibilityStore);
+        return new AppSearchUserInstance(logger, appSearchImpl, visibilityCheckerImpl);
     }
 }
