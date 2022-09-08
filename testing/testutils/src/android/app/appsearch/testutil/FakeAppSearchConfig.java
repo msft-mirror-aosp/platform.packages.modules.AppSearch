@@ -62,14 +62,14 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
 
     @Override
     public int getCachedSamplingIntervalForInitializeStats() {
-        throwIfClosed();
-        return getCachedSamplingIntervalDefault();
+            throwIfClosed();
+            return getCachedSamplingIntervalDefault();
     }
 
     @Override
     public int getCachedSamplingIntervalForSearchStats() {
-        throwIfClosed();
-        return getCachedSamplingIntervalDefault();
+            throwIfClosed();
+            return getCachedSamplingIntervalDefault();
     }
 
     @Override
@@ -94,12 +94,6 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
     public int getCachedLimitConfigMaxDocumentCount() {
         throwIfClosed();
         return DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT;
-    }
-
-    @Override
-    public int getCachedLimitConfigMaxSuggestionCount() {
-        throwIfClosed();
-        return DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT;
     }
 
     @Override

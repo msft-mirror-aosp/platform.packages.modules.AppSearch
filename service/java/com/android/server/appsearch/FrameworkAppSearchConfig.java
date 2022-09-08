@@ -65,9 +65,7 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
     public static final String KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES =
             "limit_config_max_document_size_bytes";
     public static final String KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT =
-            "limit_config_max_document_count";
-    public static final String KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT =
-            "limit_config_max_suggestion_count";
+            "limit_config_max_document_docunt";
     public static final String KEY_BYTES_OPTIMIZE_THRESHOLD = "bytes_optimize_threshold";
     public static final String KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS = "time_optimize_threshold";
     public static final String KEY_DOC_COUNT_OPTIMIZE_THRESHOLD = "doc_count_optimize_threshold";
@@ -270,15 +268,6 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             throwIfClosedLocked();
             return mBundleLocked.getInt(KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
                     DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT);
-        }
-    }
-
-    @Override
-    public int getCachedLimitConfigMaxSuggestionCount() {
-        synchronized (mLock) {
-            throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
-                    DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT);
         }
     }
 

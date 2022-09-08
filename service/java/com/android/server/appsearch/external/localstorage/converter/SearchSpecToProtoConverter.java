@@ -54,24 +54,16 @@ import java.util.Set;
  */
 public final class SearchSpecToProtoConverter {
     private static final String TAG = "AppSearchSearchSpecConv";
-    private final String mQueryExpression;
     private final SearchSpec mSearchSpec;
     private final Set<String> mPrefixes;
-    /**
-     * The intersected prefixed namespaces that are existing in AppSearch and also accessible to the
-     * client.
-     */
-    private final Set<String> mTargetPrefixedNamespaceFilters;
-    /**
-     * The intersected prefixed schema types that are existing in AppSearch and also accessible to
-     * the client.
-     */
-    private final Set<String> mTargetPrefixedSchemaFilters;
+    /** Prefixed namespaces that the client is allowed to query over */
+    private final Set<String> mTargetPrefixedNamespaceFilters = new ArraySet<>();
+    /** Prefixed schemas that the client is allowed to query over */
+    private final Set<String> mTargetPrefixedSchemaFilters = new ArraySet<>();
 
     /**
      * Creates a {@link SearchSpecToProtoConverter} for given {@link SearchSpec}.
      *
-     * @param queryExpression Query String to search.
      * @param searchSpec The spec we need to convert from.
      * @param prefixes Set of database prefix which the caller want to access.
      * @param namespaceMap The cached Map of {@code <Prefix, Set<PrefixedNamespace>>} stores all
@@ -80,27 +72,75 @@ public final class SearchSpecToProtoConverter {
      *     stores all prefixed schema filters which are stored inAppSearch.
      */
     public SearchSpecToProtoConverter(
-            @NonNull String queryExpression,
             @NonNull SearchSpec searchSpec,
             @NonNull Set<String> prefixes,
             @NonNull Map<String, Set<String>> namespaceMap,
             @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap) {
-        mQueryExpression = Objects.requireNonNull(queryExpression);
         mSearchSpec = Objects.requireNonNull(searchSpec);
         mPrefixes = Objects.requireNonNull(prefixes);
         Objects.requireNonNull(namespaceMap);
         Objects.requireNonNull(schemaMap);
-        mTargetPrefixedNamespaceFilters =
-                SearchSpecToProtoConverterUtil.generateTargetNamespaceFilters(
-                        prefixes, namespaceMap, searchSpec.getFilterNamespaces());
-        // If the target namespace filter is empty, the user has nothing to search for. We can skip
-        // generate the target schema filter.
+        generateTargetNamespaceFilters(namespaceMap);
         if (!mTargetPrefixedNamespaceFilters.isEmpty()) {
-            mTargetPrefixedSchemaFilters =
-                    SearchSpecToProtoConverterUtil.generateTargetSchemaFilters(
-                            prefixes, schemaMap, searchSpec.getFilterSchemas());
-        } else {
-            mTargetPrefixedSchemaFilters = new ArraySet<>();
+            // Skip generate the target schema filter if the target namespace filter is empty. We
+            // have nothing to search anyway.
+            generateTargetSchemaFilters(schemaMap);
+        }
+    }
+
+    /**
+     * Add prefix to the given namespace filters that user want to search over and find the
+     * intersection set with those prefixed namespace candidates that are stored in AppSearch.
+     *
+     * @param namespaceMap The cached Map of {@code <Prefix, Set<PrefixedNamespace>>} stores all
+     *     prefixed namespace filters which are stored in AppSearch.
+     */
+    private void generateTargetNamespaceFilters(@NonNull Map<String, Set<String>> namespaceMap) {
+        // Convert namespace filters to prefixed namespace filters
+        for (String prefix : mPrefixes) {
+            // Step1: find all prefixed namespace candidates that are stored in AppSearch.
+            Set<String> prefixedNamespaceCandidates = namespaceMap.get(prefix);
+            if (prefixedNamespaceCandidates == null) {
+                // This is should never happen. All prefixes should be verified before reach
+                // here.
+                continue;
+            }
+            // Step2: get the intersection of user searching filters and those candidates which are
+            // stored in AppSearch.
+            getIntersectedFilters(
+                    prefix,
+                    prefixedNamespaceCandidates,
+                    mSearchSpec.getFilterNamespaces(),
+                    mTargetPrefixedNamespaceFilters);
+        }
+    }
+
+    /**
+     * Add prefix to the given schema filters that user want to search over and find the
+     * intersection set with those prefixed schema candidates that are stored in AppSearch.
+     *
+     * @param schemaMap The cached Map of <Prefix, Map<PrefixedSchemaType, schemaProto>> stores all
+     *     prefixed schema filters which are stored in AppSearch.
+     */
+    private void generateTargetSchemaFilters(
+            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap) {
+        // Append prefix to input schema filters and get the intersection of existing schema filter.
+        for (String prefix : mPrefixes) {
+            // Step1: find all prefixed schema candidates that are stored in AppSearch.
+            Map<String, SchemaTypeConfigProto> prefixedSchemaMap = schemaMap.get(prefix);
+            if (prefixedSchemaMap == null) {
+                // This is should never happen. All prefixes should be verified before reach
+                // here.
+                continue;
+            }
+            Set<String> prefixedSchemaCandidates = prefixedSchemaMap.keySet();
+            // Step2: get the intersection of user searching filters and those candidates which are
+            // stored in AppSearch.
+            getIntersectedFilters(
+                    prefix,
+                    prefixedSchemaCandidates,
+                    mSearchSpec.getFilterSchemas(),
+                    mTargetPrefixedSchemaFilters);
         }
     }
 
@@ -108,7 +148,7 @@ public final class SearchSpecToProtoConverter {
      * @return whether this search's target filters are empty. If any target filter is empty, we
      *     should skip send request to Icing.
      */
-    public boolean hasNothingToSearch() {
+    public boolean isNothingToSearch() {
         return mTargetPrefixedNamespaceFilters.isEmpty() || mTargetPrefixedSchemaFilters.isEmpty();
     }
 
@@ -143,15 +183,20 @@ public final class SearchSpecToProtoConverter {
         }
     }
 
-    /** Extracts {@link SearchSpecProto} information from a {@link SearchSpec}. */
+    /**
+     * Extracts {@link SearchSpecProto} information from a {@link SearchSpec}.
+     *
+     * @param queryExpression Query String to search.
+     */
     @NonNull
-    public SearchSpecProto toSearchSpecProto() {
+    public SearchSpecProto toSearchSpecProto(@NonNull String queryExpression) {
+        Objects.requireNonNull(queryExpression);
+
         // set query to SearchSpecProto and override schema and namespace filter by
-        // targetPrefixedFilters which contains all existing and also accessible to the caller
-        // filters.
+        // targetPrefixedFilters which is
         SearchSpecProto.Builder protoBuilder =
                 SearchSpecProto.newBuilder()
-                        .setQuery(mQueryExpression)
+                        .setQuery(queryExpression)
                         .addAllNamespaceFilters(mTargetPrefixedNamespaceFilters)
                         .addAllSchemaTypeFilters(mTargetPrefixedSchemaFilters);
 
@@ -408,6 +453,36 @@ public final class SearchSpecToProtoConverter {
                     ResultSpecProto.ResultGrouping.newBuilder()
                             .addAllNamespaces(namespaces)
                             .setMaxResults(maxNumResults));
+        }
+    }
+
+    /**
+     * Find the intersection set of candidates existing in AppSearch and user specified filters.
+     *
+     * @param prefix The package and database's identifier.
+     * @param prefixedCandidates The set contains all prefixed candidates which are existing in a
+     *     database.
+     * @param inputFilters The set contains all desired but un-prefixed filters of user.
+     * @param prefixedTargetFilters The output set contains all desired prefixed filters which are
+     *     existing in the database.
+     */
+    private static void getIntersectedFilters(
+            @NonNull String prefix,
+            @NonNull Set<String> prefixedCandidates,
+            @NonNull List<String> inputFilters,
+            @NonNull Set<String> prefixedTargetFilters) {
+        if (inputFilters.isEmpty()) {
+            // Client didn't specify certain schemas to search over, add all candidates.
+            prefixedTargetFilters.addAll(prefixedCandidates);
+        } else {
+            // Client specified some filters to search over, check and only add those are
+            // existing in the database.
+            for (int i = 0; i < inputFilters.size(); i++) {
+                String prefixedTargetFilter = prefix + inputFilters.get(i);
+                if (prefixedCandidates.contains(prefixedTargetFilter)) {
+                    prefixedTargetFilters.add(prefixedTargetFilter);
+                }
+            }
         }
     }
 }

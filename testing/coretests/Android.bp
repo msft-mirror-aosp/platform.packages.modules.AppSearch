@@ -29,7 +29,6 @@ android_test {
     ],
     libs: [
         "android.test.runner",
-        "framework-annotations-lib",
         "framework-appsearch.impl",
     ],
     sdk_version: "module_current",

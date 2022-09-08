@@ -38,9 +38,4 @@ class FrameworkLimitConfig implements LimitConfig {
     public int getMaxDocumentCount() {
         return mAppSearchConfig.getCachedLimitConfigMaxDocumentCount();
     }
-
-    @Override
-    public int getMaxSuggestionCount() {
-        return mAppSearchConfig.getCachedLimitConfigMaxSuggestionCount();
-    }
 }

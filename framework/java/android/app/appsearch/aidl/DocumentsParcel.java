@@ -42,7 +42,7 @@ public final class DocumentsParcel implements Parcelable {
     }
 
     private DocumentsParcel(@NonNull Parcel in) {
-        this(Objects.requireNonNull(in.readBlob()));
+        this(in.readBlob());
     }
 
     private DocumentsParcel(@NonNull byte[] dataBlob) {

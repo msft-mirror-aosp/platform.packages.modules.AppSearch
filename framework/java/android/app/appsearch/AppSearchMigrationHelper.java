@@ -158,7 +158,7 @@ public class AppSearchMigrationHelper implements Closeable {
             if (!result.isSuccess()) {
                 return AppSearchResult.newFailedResult(result);
             }
-            List<Bundle> migratedFailureBundles = Objects.requireNonNull(result.getResultValue());
+            List<Bundle> migratedFailureBundles = result.getResultValue();
             for (int i = 0; i < migratedFailureBundles.size(); i++) {
                 responseBuilder.addMigrationFailure(
                         new SetSchemaResponse.MigrationFailure(migratedFailureBundles.get(i)));

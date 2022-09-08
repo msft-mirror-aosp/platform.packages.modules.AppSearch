@@ -295,8 +295,8 @@ public class GlobalSearchSession implements Closeable {
                             safeExecute(executor, callback, () -> {
                                 AppSearchResult<Bundle> result = resultParcel.getResult();
                                 if (result.isSuccess()) {
-                                    GetSchemaResponse response = new GetSchemaResponse(
-                                        Objects.requireNonNull(result.getResultValue()));
+                                    GetSchemaResponse response =
+                                            new GetSchemaResponse(result.getResultValue());
                                     callback.accept(AppSearchResult.newSuccessfulResult(response));
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
