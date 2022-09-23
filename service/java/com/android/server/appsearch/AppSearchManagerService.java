@@ -1548,6 +1548,13 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         protected void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+            if (mContext.checkCallingOrSelfPermission(android.Manifest.permission.DUMP)
+                    != PackageManager.PERMISSION_GRANTED) {
+                pw.println("Permission Denial: can't dump AppSearchManagerService from pid="
+                        + Binder.getCallingPid() + ", uid=" + Binder.getCallingUid()
+                        + " due to missing android.permission.DUMP permission");
+                return;
+            }
             boolean verbose = false;
             boolean appSearch = false;
             boolean unknownArg = false;
