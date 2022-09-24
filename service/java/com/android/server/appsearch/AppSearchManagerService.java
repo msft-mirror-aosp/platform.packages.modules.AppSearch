@@ -23,6 +23,7 @@ import static com.android.server.appsearch.external.localstorage.stats.SearchSta
 import static com.android.server.appsearch.util.ServiceImplHelper.invokeCallbackOnError;
 import static com.android.server.appsearch.util.ServiceImplHelper.invokeCallbackOnResult;
 
+import android.annotation.BinderThread;
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -74,20 +75,26 @@ import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
+import com.android.server.appsearch.util.AdbDumpUtil;
 import com.android.server.appsearch.util.ExecutorManager;
 import com.android.server.appsearch.util.ServiceImplHelper;
 import com.android.server.appsearch.visibilitystore.FrameworkCallerAccess;
 import com.android.server.usage.StorageStatsManagerLocal;
 import com.android.server.usage.StorageStatsManagerLocal.StorageStatsAugmenter;
 
+import com.google.android.icing.proto.DebugInfoProto;
+import com.google.android.icing.proto.DebugInfoVerbosity;
 import com.google.android.icing.proto.PersistType;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
+import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1504,6 +1511,71 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+        }
+
+        @BinderThread
+        private void dumpAppSearch(@NonNull PrintWriter pw, boolean verbose) {
+            Objects.requireNonNull(pw);
+
+            UserHandle currentUser = UserHandle.getUserHandleForUid(Binder.getCallingUid());
+            try {
+                AppSearchUserInstance instance = mAppSearchUserInstanceManager.getUserInstance(
+                        currentUser);
+                DebugInfoProto debugInfo = instance.getAppSearchImpl().getRawDebugInfoProto(
+                        verbose ? DebugInfoVerbosity.Code.DETAILED
+                                : DebugInfoVerbosity.Code.BASIC);
+                // TODO(b/229778472) Consider showing the original names of namespaces and types
+                //  for a specific package if the package name is passed as a parameter from users.
+                debugInfo = AdbDumpUtil.desensitizeDebugInfo(debugInfo);
+                pw.println(debugInfo.getIndexInfo().getIndexStorageInfo());
+                pw.println();
+                pw.println("lite_index_info:");
+                pw.println(debugInfo.getIndexInfo().getLiteIndexInfo());
+                pw.println();
+                pw.println("main_index_info:");
+                pw.println(debugInfo.getIndexInfo().getMainIndexInfo());
+                pw.println();
+                pw.println(debugInfo.getDocumentInfo());
+                pw.println();
+                pw.println(debugInfo.getSchemaInfo());
+            } catch (Exception e) {
+                String errorMessage =
+                        "Unable to dump the internal state for the user: " + currentUser;
+                Log.e(TAG, errorMessage, e);
+                pw.println(errorMessage);
+            }
+        }
+
+        @Override
+        protected void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+            boolean verbose = false;
+            boolean appSearch = false;
+            boolean unknownArg = false;
+            if (args != null) {
+                for (int i = 0; i < args.length; i++) {
+                    String arg = args[i];
+                    if ("-v".equalsIgnoreCase(arg)) {
+                        verbose = true;
+                    } else if ("-a".equalsIgnoreCase(arg)) {
+                        appSearch = true;
+                    } else {
+                        unknownArg = true;
+                        break;
+                    }
+                }
+            }
+            verbose = verbose && AdbDumpUtil.DEBUG;
+            if (appSearch && !unknownArg) {
+                dumpAppSearch(pw, verbose);
+            } else {
+                pw.printf("Invalid args: %s\n", Arrays.toString(args));
+                pw.println(
+                        "-a, dump the internal state of AppSearch platform storage for the "
+                                + "current user.");
+                if (AdbDumpUtil.DEBUG) {
+                    pw.println("-v, verbose mode");
+                }
+            }
         }
     }
 
