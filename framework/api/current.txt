@@ -194,6 +194,7 @@ package android.app.appsearch {
   public final class GetByDocumentIdRequest {
     method @NonNull public java.util.Set<java.lang.String> getIds();
     method @NonNull public String getNamespace();
+    method @NonNull public java.util.Map<java.lang.String,java.util.List<android.app.appsearch.PropertyPath>> getProjectionPaths();
     method @NonNull public java.util.Map<java.lang.String,java.util.List<java.lang.String>> getProjections();
     field public static final String PROJECTION_SCHEMA_TYPE_WILDCARD = "*";
   }
@@ -203,6 +204,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.GetByDocumentIdRequest.Builder addIds(@NonNull java.lang.String...);
     method @NonNull public android.app.appsearch.GetByDocumentIdRequest.Builder addIds(@NonNull java.util.Collection<java.lang.String>);
     method @NonNull public android.app.appsearch.GetByDocumentIdRequest.Builder addProjection(@NonNull String, @NonNull java.util.Collection<java.lang.String>);
+    method @NonNull public android.app.appsearch.GetByDocumentIdRequest.Builder addProjectionPaths(@NonNull String, @NonNull java.util.Collection<android.app.appsearch.PropertyPath>);
     method @NonNull public android.app.appsearch.GetByDocumentIdRequest build();
   }
 
@@ -245,6 +247,22 @@ package android.app.appsearch {
     ctor public PackageIdentifier(@NonNull String, @NonNull byte[]);
     method @NonNull public String getPackageName();
     method @NonNull public byte[] getSha256Certificate();
+  }
+
+  public class PropertyPath implements java.lang.Iterable<android.app.appsearch.PropertyPath.PathSegment> {
+    ctor public PropertyPath(@NonNull java.util.List<android.app.appsearch.PropertyPath.PathSegment>);
+    ctor public PropertyPath(@NonNull String);
+    method @NonNull public android.app.appsearch.PropertyPath.PathSegment get(int);
+    method @NonNull public java.util.Iterator<android.app.appsearch.PropertyPath.PathSegment> iterator();
+    method public int size();
+  }
+
+  public static class PropertyPath.PathSegment {
+    method @NonNull public static android.app.appsearch.PropertyPath.PathSegment create(@NonNull String, int);
+    method @NonNull public static android.app.appsearch.PropertyPath.PathSegment create(@NonNull String);
+    method public int getPropertyIndex();
+    method @NonNull public String getPropertyName();
+    field public static final int NON_REPEATED_CARDINALITY = -1; // 0xffffffff
   }
 
   public final class PutDocumentsRequest {
@@ -317,6 +335,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchResult.MatchRange getExactMatchRange();
     method @NonNull public String getFullText();
     method @NonNull public String getPropertyPath();
+    method @NonNull public android.app.appsearch.PropertyPath getPropertyPathObject();
     method @NonNull public CharSequence getSnippet();
     method @NonNull public android.app.appsearch.SearchResult.MatchRange getSnippetRange();
     method @NonNull public CharSequence getSubmatch();
@@ -348,6 +367,7 @@ package android.app.appsearch {
     method @NonNull public java.util.List<java.lang.String> getFilterSchemas();
     method public int getMaxSnippetSize();
     method public int getOrder();
+    method @NonNull public java.util.Map<java.lang.String,java.util.List<android.app.appsearch.PropertyPath>> getProjectionPaths();
     method @NonNull public java.util.Map<java.lang.String,java.util.List<java.lang.String>> getProjections();
     method public int getRankingStrategy();
     method public int getResultCountPerPage();
@@ -382,6 +402,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSpec.Builder addFilterSchemas(@NonNull java.lang.String...);
     method @NonNull public android.app.appsearch.SearchSpec.Builder addFilterSchemas(@NonNull java.util.Collection<java.lang.String>);
     method @NonNull public android.app.appsearch.SearchSpec.Builder addProjection(@NonNull String, @NonNull java.util.Collection<java.lang.String>);
+    method @NonNull public android.app.appsearch.SearchSpec.Builder addProjectionPaths(@NonNull String, @NonNull java.util.Collection<android.app.appsearch.PropertyPath>);
     method @NonNull public android.app.appsearch.SearchSpec build();
     method @NonNull public android.app.appsearch.SearchSpec.Builder setMaxSnippetSize(@IntRange(from=0, to=0x2710) int);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setOrder(int);

@@ -927,7 +927,7 @@ public class GenericDocument {
         Arrays.sort(sortedProperties);
 
         for (int i = 0; i < sortedProperties.length; i++) {
-            Object property = getProperty(sortedProperties[i]);
+            Object property = Objects.requireNonNull(getProperty(sortedProperties[i]));
             builder.increaseIndentLevel();
             appendPropertyString(sortedProperties[i], property, builder);
             if (i != sortedProperties.length - 1) {
@@ -1049,7 +1049,8 @@ public class GenericDocument {
         @SuppressWarnings("unchecked")
         Builder(@NonNull Bundle bundle) {
             mBundle = Objects.requireNonNull(bundle);
-            mProperties = mBundle.getBundle(PROPERTIES_FIELD);
+            // mProperties is NonNull and initialized to empty Bundle() in builder.
+            mProperties = Objects.requireNonNull(mBundle.getBundle(PROPERTIES_FIELD));
             mBuilderTypeInstance = (BuilderType) this;
         }
 
@@ -1365,7 +1366,8 @@ public class GenericDocument {
         private void resetIfBuilt() {
             if (mBuilt) {
                 mBundle = BundleUtil.deepCopy(mBundle);
-                mProperties = mBundle.getBundle(PROPERTIES_FIELD);
+                // mProperties is NonNull and initialized to empty Bundle() in builder.
+                mProperties = Objects.requireNonNull(mBundle.getBundle(PROPERTIES_FIELD));
                 mBuilt = false;
             }
         }
