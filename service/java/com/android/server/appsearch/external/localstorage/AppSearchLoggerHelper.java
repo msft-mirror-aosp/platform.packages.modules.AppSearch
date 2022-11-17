@@ -121,8 +121,11 @@ public final class AppSearchLoggerHelper {
                 .setScoringLatencyMillis(fromNativeStats.getScoringLatencyMs())
                 .setRankingLatencyMillis(fromNativeStats.getRankingLatencyMs())
                 .setResultWithSnippetsCount(fromNativeStats.getNumResultsWithSnippets())
-                .setDocumentRetrievingLatencyMillis(
-                        fromNativeStats.getDocumentRetrievalLatencyMs());
+                .setDocumentRetrievingLatencyMillis(fromNativeStats.getDocumentRetrievalLatencyMs())
+                .setNativeLockAcquisitionLatencyMillis(
+                        fromNativeStats.getLockAcquisitionLatencyMs())
+                .setJavaToNativeJniLatencyMillis(fromNativeStats.getJavaToNativeJniLatencyMs())
+                .setNativeToJavaJniLatencyMillis(fromNativeStats.getNativeToJavaJniLatencyMs());
     }
 
     /**
