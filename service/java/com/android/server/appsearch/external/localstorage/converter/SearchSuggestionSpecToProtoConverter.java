@@ -19,6 +19,7 @@ package com.android.server.appsearch.external.localstorage.converter;
 import android.annotation.NonNull;
 import android.app.appsearch.SearchSuggestionSpec;
 
+import com.google.android.icing.proto.SuggestionScoringSpecProto;
 import com.google.android.icing.proto.SuggestionSpecProto;
 import com.google.android.icing.proto.TermMatchType;
 
@@ -86,10 +87,27 @@ public final class SearchSuggestionSpecToProtoConverter {
 
         // TODO(b/227356108) expose setTermMatch in SearchSuggestionSpec.
         protoBuilder.setScoringSpec(
-                SuggestionSpecProto.SuggestionScoringSpecProto.newBuilder()
+                SuggestionScoringSpecProto.newBuilder()
                         .setScoringMatchType(TermMatchType.Code.EXACT_ONLY)
+                        .setRankBy(
+                                toProtoRankingStrategy(mSearchSuggestionSpec.getRankingStrategy()))
                         .build());
 
         return protoBuilder.build();
+    }
+
+    private static SuggestionScoringSpecProto.SuggestionRankingStrategy.Code toProtoRankingStrategy(
+            @SearchSuggestionSpec.SuggestionRankingStrategy int rankingStrategyCode) {
+        switch (rankingStrategyCode) {
+            case SearchSuggestionSpec.SUGGESTION_RANKING_STRATEGY_NONE:
+                return SuggestionScoringSpecProto.SuggestionRankingStrategy.Code.NONE;
+            case SearchSuggestionSpec.SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT:
+                return SuggestionScoringSpecProto.SuggestionRankingStrategy.Code.DOCUMENT_COUNT;
+            case SearchSuggestionSpec.SUGGESTION_RANKING_STRATEGY_TERM_FREQUENCY:
+                return SuggestionScoringSpecProto.SuggestionRankingStrategy.Code.TERM_FREQUENCY;
+            default:
+                throw new IllegalArgumentException(
+                        "Invalid suggestion ranking strategy: " + rankingStrategyCode);
+        }
     }
 }

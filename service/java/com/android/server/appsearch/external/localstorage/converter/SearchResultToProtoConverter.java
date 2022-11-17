@@ -35,6 +35,7 @@ import com.google.android.icing.proto.SnippetProto;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Translates a {@link SearchResultProto} into {@link SearchResult}s.
@@ -85,7 +86,8 @@ public class SearchResultToProtoConverter {
 
         DocumentProto.Builder documentBuilder = proto.getDocument().toBuilder();
         String prefix = removePrefixesFromDocument(documentBuilder);
-        Map<String, SchemaTypeConfigProto> schemaTypeMap = schemaMap.get(prefix);
+        Map<String, SchemaTypeConfigProto> schemaTypeMap =
+                Objects.requireNonNull(schemaMap.get(prefix));
         GenericDocument document =
                 GenericDocumentToProtoConverter.toGenericDocument(
                         documentBuilder, prefix, schemaTypeMap);

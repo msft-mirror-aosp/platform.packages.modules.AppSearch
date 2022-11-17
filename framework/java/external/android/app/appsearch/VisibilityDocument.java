@@ -116,7 +116,7 @@ public class VisibilityDocument extends GenericDocument {
      */
     @NonNull
     public String[] getPackageNames() {
-        return getPropertyStringArray(PACKAGE_NAME_PROPERTY);
+        return Objects.requireNonNull(getPropertyStringArray(PACKAGE_NAME_PROPERTY));
     }
 
     /**
@@ -126,7 +126,7 @@ public class VisibilityDocument extends GenericDocument {
      */
     @NonNull
     public byte[][] getSha256Certs() {
-        return getPropertyBytesArray(SHA_256_CERT_PROPERTY);
+        return Objects.requireNonNull(getPropertyBytesArray(SHA_256_CERT_PROPERTY));
     }
 
     /**
@@ -141,9 +141,12 @@ public class VisibilityDocument extends GenericDocument {
         }
         Set<Set<Integer>> visibleToPermissions = new ArraySet<>(permissionDocuments.length);
         for (GenericDocument permissionDocument : permissionDocuments) {
-            visibleToPermissions.add(
+            Set<Integer> requiredPermissions =
                     new VisibilityPermissionDocument(permissionDocument)
-                            .getAllRequiredPermissions());
+                            .getAllRequiredPermissions();
+            if (requiredPermissions != null) {
+                visibleToPermissions.add(requiredPermissions);
+            }
         }
         return visibleToPermissions;
     }
