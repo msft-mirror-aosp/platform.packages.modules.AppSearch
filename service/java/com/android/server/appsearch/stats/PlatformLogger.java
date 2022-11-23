@@ -313,7 +313,12 @@ public final class PlatformLogger implements AppSearchLogger {
                     stats.getScoringLatencyMillis(),
                     stats.getRankingLatencyMillis(),
                     stats.getDocumentRetrievingLatencyMillis(),
-                    stats.getResultWithSnippetsCount());
+                    stats.getResultWithSnippetsCount(),
+                    stats.getJavaLockAcquisitionLatencyMillis(),
+                    stats.getAclCheckLatencyMillis(),
+                    stats.getNativeLockAcquisitionLatencyMillis(),
+                    stats.getJavaToNativeJniLatencyMillis(),
+                    stats.getNativeToJavaJniLatencyMillis());
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
             // TODO(b/184204720) report hashing error to statsd
             //  We need to set a special value(e.g. 0xFFFFFFFF) for the hashing of the database,
