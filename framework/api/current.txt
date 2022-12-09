@@ -121,13 +121,17 @@ package android.app.appsearch {
 
   public static final class AppSearchSchema.StringPropertyConfig extends android.app.appsearch.AppSearchSchema.PropertyConfig {
     method public int getIndexingType();
+    method public int getJoinableValueType();
     method public int getTokenizerType();
     field public static final int INDEXING_TYPE_EXACT_TERMS = 1; // 0x1
     field public static final int INDEXING_TYPE_NONE = 0; // 0x0
     field public static final int INDEXING_TYPE_PREFIXES = 2; // 0x2
+    field public static final int JOINABLE_VALUE_TYPE_NONE = 0; // 0x0
+    field public static final int JOINABLE_VALUE_TYPE_QUALIFIED_ID = 1; // 0x1
     field public static final int TOKENIZER_TYPE_NONE = 0; // 0x0
     field public static final int TOKENIZER_TYPE_PLAIN = 1; // 0x1
     field public static final int TOKENIZER_TYPE_RFC822 = 3; // 0x3
+    field public static final int TOKENIZER_TYPE_VERBATIM = 2; // 0x2
   }
 
   public static final class AppSearchSchema.StringPropertyConfig.Builder {
@@ -135,6 +139,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig build();
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setCardinality(int);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setIndexingType(int);
+    method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setJoinableValueType(int);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setTokenizerType(int);
   }
 
@@ -607,6 +612,15 @@ package android.app.appsearch.observer {
     method @NonNull public java.util.Set<java.lang.String> getChangedSchemaNames();
     method @NonNull public String getDatabaseName();
     method @NonNull public String getPackageName();
+  }
+
+}
+
+package android.app.appsearch.util {
+
+  public class DocumentIdUtil {
+    method @NonNull public static String createQualifiedId(@NonNull String, @NonNull String, @NonNull android.app.appsearch.GenericDocument);
+    method @NonNull public static String createQualifiedId(@NonNull String, @NonNull String, @NonNull String, @NonNull String);
   }
 
 }
