@@ -479,11 +479,7 @@ public final class AppSearchSchema {
          */
         // NOTE: The integer values of these constants must match the proto enum constants in
         // com.google.android.icing.proto.IndexingConfig.TokenizerType.Code.
-        @IntDef(
-                value = {
-                    TOKENIZER_TYPE_NONE,
-                    TOKENIZER_TYPE_PLAIN,
-                })
+        @IntDef(value = {TOKENIZER_TYPE_NONE, TOKENIZER_TYPE_PLAIN, TOKENIZER_TYPE_RFC822})
         @Retention(RetentionPolicy.SOURCE)
         public @interface TokenizerType {}
 
@@ -507,6 +503,20 @@ public final class AppSearchSchema {
          * {@link #INDEXING_TYPE_EXACT_TERMS} or {@link #INDEXING_TYPE_PREFIXES}.
          */
         public static final int TOKENIZER_TYPE_PLAIN = 1;
+
+        // TODO(b/204333391): In icing, the "2" tokenizer is the verbatim tokenizer.
+
+        /**
+         * Tokenization for emails. This value indicates that tokens should be extracted from this
+         * property based on email structure.
+         *
+         * <p>Ex. A property with "alex.sav@google.com" will produce tokens for "alex", "sav",
+         * "alex.sav", "google", "com", and "alexsav@google.com"
+         *
+         * <p>It is only valid for tokenizer_type to be 'RFC822' if {@link #getIndexingType} is
+         * {@link #INDEXING_TYPE_EXACT_TERMS} or {@link #INDEXING_TYPE_PREFIXES}.
+         */
+        public static final int TOKENIZER_TYPE_RFC822 = 3;
 
         StringPropertyConfig(@NonNull Bundle bundle) {
             super(bundle);
@@ -576,8 +586,16 @@ public final class AppSearchSchema {
              */
             @NonNull
             public StringPropertyConfig.Builder setTokenizerType(@TokenizerType int tokenizerType) {
-                Preconditions.checkArgumentInRange(
-                        tokenizerType, TOKENIZER_TYPE_NONE, TOKENIZER_TYPE_PLAIN, "tokenizerType");
+                // TODO(b/204333391): Change to checkArgumentInRange once verbatim is supported
+                if (tokenizerType != TOKENIZER_TYPE_NONE
+                        && tokenizerType != TOKENIZER_TYPE_PLAIN
+                        && tokenizerType != TOKENIZER_TYPE_RFC822) {
+                    throw new IllegalArgumentException(
+                            "Tokenizer value "
+                                    + tokenizerType
+                                    + " is out of range. Valid values are TOKENIZER_TYPE_NONE, "
+                                    + "TOKENIZER_TYPE_PLAIN, and TOKENIZER_TYPE_RFC822");
+                }
                 mTokenizerType = tokenizerType;
                 return this;
             }

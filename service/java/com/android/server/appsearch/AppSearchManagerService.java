@@ -15,6 +15,7 @@
  */
 package com.android.server.appsearch;
 
+import static android.app.appsearch.AppSearchResult.RESULT_OK;
 import static android.app.appsearch.AppSearchResult.throwableToFailedResult;
 import static android.os.Process.INVALID_UID;
 
@@ -50,6 +51,7 @@ import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverSpec;
+import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.AttributionSource;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -72,6 +74,7 @@ import com.android.server.SystemService;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
+import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
@@ -320,6 +323,7 @@ public class AppSearchManagerService extends SystemService {
                 int schemaVersion,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @SchemaMigrationStats.SchemaMigrationCallType int schemaMigrationCallType,
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
@@ -329,6 +333,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
+            long verifyIncomingCallLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
                     callerAttributionSource, userHandle, callback);
             String callingPackageName =
@@ -336,12 +341,20 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            long verifyIncomingCallLatencyEndTimeMillis = SystemClock.elapsedRealtime();
+
+            long waitExecutorStartTimeMillis = SystemClock.elapsedRealtime();
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+                long waitExecutorEndTimeMillis = SystemClock.elapsedRealtime();
+
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
+                SetSchemaStats.Builder setSchemaStatsBuilder = new SetSchemaStats.Builder(
+                        callingPackageName, databaseName);
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
+                    long rebuildFromBundleLatencyStartTimeMillis = SystemClock.elapsedRealtime();
                     List<AppSearchSchema> schemas = new ArrayList<>(schemaBundles.size());
                     for (int i = 0; i < schemaBundles.size(); i++) {
                         schemas.add(new AppSearchSchema(schemaBundles.get(i)));
@@ -352,8 +365,9 @@ public class AppSearchManagerService extends SystemService {
                         visibilityDocuments.add(
                                 new VisibilityDocument(visibilityBundles.get(i)));
                     }
+                    long rebuildFromBundleLatencyEndTimeMillis = SystemClock.elapsedRealtime();
+
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-                    // TODO(b/173532925): Implement logging for statsBuilder
                     InternalSetSchemaResponse internalSetSchemaResponse =
                             instance.getAppSearchImpl().setSchema(
                                     callingPackageName,
@@ -362,7 +376,7 @@ public class AppSearchManagerService extends SystemService {
                                     visibilityDocuments,
                                     forceOverride,
                                     schemaVersion,
-                                    /*setSchemaStatsBuilder=*/ null);
+                                    setSchemaStatsBuilder);
                     ++operationSuccessCount;
                     invokeCallbackOnResult(callback,
                             AppSearchResult.newSuccessfulResult(
@@ -370,13 +384,36 @@ public class AppSearchManagerService extends SystemService {
 
                     // Schedule a task to dispatch change notifications. See requirements for where
                     // the method is called documented in the method description.
+                    long dispatchNotificationLatencyStartTimeMillis = SystemClock.elapsedRealtime();
                     dispatchChangeNotifications(instance);
+                    long dispatchNotificationLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                     // setSchema will sync the schemas in the request to AppSearch, any existing
                     // schemas which  is not included in the request will be delete if we force
                     // override incompatible schemas. And all documents of these types will be
                     // deleted as well. We should checkForOptimize for these deletion.
+                    long checkForOptimizeLatencyStartTimeMillis = SystemClock.elapsedRealtime();
                     checkForOptimize(targetUser, instance);
+                    long checkForOptimizeLatencyEndTimeMillis = SystemClock.elapsedRealtime();
+
+                    setSchemaStatsBuilder
+                            .setStatusCode(statusCode)
+                            .setSchemaMigrationCallType(schemaMigrationCallType)
+                            .setVerifyIncomingCallLatencyMillis(
+                                    (int) (verifyIncomingCallLatencyEndTimeMillis
+                                            - verifyIncomingCallLatencyStartTimeMillis))
+                            .setExecutorAcquisitionLatencyMillis(
+                                    (int) (waitExecutorEndTimeMillis
+                                            - waitExecutorStartTimeMillis))
+                            .setRebuildFromBundleLatencyMillis(
+                                    (int) (rebuildFromBundleLatencyEndTimeMillis
+                                            - rebuildFromBundleLatencyStartTimeMillis))
+                            .setDispatchChangeNotificationsLatencyMillis(
+                                    (int) (dispatchNotificationLatencyEndTimeMillis
+                                            - dispatchNotificationLatencyStartTimeMillis))
+                            .setOptimizeLatencyMillis(
+                                    (int) (checkForOptimizeLatencyEndTimeMillis
+                                            - checkForOptimizeLatencyStartTimeMillis));
                 } catch (Throwable t) {
                     ++operationFailureCount;
                     statusCode = throwableToFailedResult(t).getResultCode();
@@ -399,6 +436,9 @@ public class AppSearchManagerService extends SystemService {
                                 .setEstimatedBinderLatencyMillis(estimatedBinderLatencyMillis)
                                 .setNumOperationsSucceeded(operationSuccessCount)
                                 .setNumOperationsFailed(operationFailureCount)
+                                .build());
+                        instance.getLogger().logStats(setSchemaStatsBuilder
+                                .setTotalLatencyMillis(totalLatencyMillis)
                                 .build());
                     }
                 }
@@ -503,7 +543,7 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
-                @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
@@ -550,6 +590,7 @@ public class AppSearchManagerService extends SystemService {
                     statusCode = throwableToFailedResult(t).getResultCode();
                     invokeCallbackOnError(callback, t);
                 } finally {
+                    // TODO(b/261959320) add outstanding latency fields in AppSearch stats
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
@@ -602,7 +643,7 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
-                @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
@@ -653,6 +694,7 @@ public class AppSearchManagerService extends SystemService {
                     statusCode = throwableToFailedResult(t).getResultCode();
                     invokeCallbackOnError(callback, t);
                 } finally {
+                    // TODO(b/261959320) add outstanding latency fields in AppSearch stats
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
@@ -704,7 +746,7 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
-                @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
@@ -771,7 +813,7 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
-                @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
@@ -957,6 +999,9 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull String databaseName,
                 @NonNull ParcelFileDescriptor fileDescriptor,
                 @NonNull UserHandle userHandle,
+                @NonNull Bundle schemaMigrationStatsBundle,
+                @ElapsedRealtimeLong long totalLatencyStartTimeMillis,
+                @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
@@ -972,10 +1017,14 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+                AppSearchUserInstance instance = null;
+                SchemaMigrationStats.Builder schemaMigrationStatsBuilder = new SchemaMigrationStats
+                        .Builder(schemaMigrationStatsBundle);;
+                AppSearchResult<Void> failedResult = null;
                 try {
-                    AppSearchUserInstance instance =
-                            mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
 
+                    int totalSuccessMigratedDocumentCount = 0;
                     GenericDocument document;
                     ArrayList<Bundle> migrationFailureBundles = new ArrayList<>();
                     try (DataInputStream inputStream = new DataInputStream(
@@ -997,6 +1046,7 @@ public class AppSearchManagerService extends SystemService {
                                         document,
                                         /*sendChangeNotifications=*/ false,
                                         /*logger=*/ null);
+                                ++totalSuccessMigratedDocumentCount;
                             } catch (Throwable t) {
                                 migrationFailureBundles.add(new SetSchemaResponse.MigrationFailure(
                                         document.getNamespace(),
@@ -1008,10 +1058,35 @@ public class AppSearchManagerService extends SystemService {
                         }
                     }
                     instance.getAppSearchImpl().persistToDisk(PersistType.Code.FULL);
+
+                    schemaMigrationStatsBuilder
+                            .setTotalSuccessMigratedDocumentCount(totalSuccessMigratedDocumentCount)
+                            .setMigrationFailureCount(migrationFailureBundles.size());
                     invokeCallbackOnResult(callback,
                             AppSearchResult.newSuccessfulResult(migrationFailureBundles));
                 } catch (Throwable t) {
-                    invokeCallbackOnResult(callback, throwableToFailedResult(t));
+                    failedResult = throwableToFailedResult(t);
+                    invokeCallbackOnResult(callback, failedResult);
+                } finally {
+                    if (instance != null) {
+                        long putDocumentsFromFileLatencyEndTimeMillis =
+                                SystemClock.elapsedRealtime();
+                        instance.getLogger().logStats(schemaMigrationStatsBuilder
+                                .setStatusCode(failedResult == null ?
+                                        RESULT_OK : failedResult.getResultCode())
+                                // totalLatencyStartTimeMillis is captured in the SDK side, and
+                                // put migrate documents is the last step of migration process.
+                                // This should includes whole schema migration process.
+                                // Like get old schema, first and second set schema, query old
+                                // documents, transform documents and save migrated documents.
+                                .setTotalLatencyMillis(
+                                        (int) (putDocumentsFromFileLatencyEndTimeMillis
+                                                - totalLatencyStartTimeMillis))
+                                .setSaveDocumentLatencyMillis(
+                                        (int)(putDocumentsFromFileLatencyEndTimeMillis
+                                                - binderCallStartTimeMillis))
+                                .build());
+                    }
                 }
             });
         }
@@ -1146,7 +1221,7 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
-                @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
@@ -1188,6 +1263,7 @@ public class AppSearchManagerService extends SystemService {
                     statusCode = throwableToFailedResult(t).getResultCode();
                     invokeCallbackOnError(callback, t);
                 } finally {
+                    // TODO(b/261959320) add outstanding latency fields in AppSearch stats
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
@@ -1237,7 +1313,7 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
-                @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
@@ -1264,6 +1340,7 @@ public class AppSearchManagerService extends SystemService {
                     statusCode = throwableToFailedResult(t).getResultCode();
                     invokeCallbackOnResult(callback, throwableToFailedResult(t));
                 } finally {
+                    // TODO(b/261959320) add outstanding latency fields in AppSearch stats
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
@@ -1333,7 +1410,7 @@ public class AppSearchManagerService extends SystemService {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
                         callerAttributionSource, userHandle);
                 mExecutorManager.getOrCreateUserExecutor(targetUser).execute(() -> {
-                    @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
+                    @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                     AppSearchUserInstance instance = null;
                     int operationSuccessCount = 0;
                     int operationFailureCount = 0;
@@ -1476,7 +1553,7 @@ public class AppSearchManagerService extends SystemService {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
-                @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;

@@ -547,11 +547,11 @@ public final class SearchResult {
              * <p>A property path is a dot-delimited sequence of property names indicating which
              * property in the document these snippets correspond to.
              *
-             * <p>Example properties: 'body', 'sender.name', 'sender.emailaddress', etc.
-             * For class example 1 this returns "subject".
+             * <p>Example properties: 'body', 'sender.name', 'sender.emailaddress', etc. For class
+             * example 1 this returns "subject".
              *
-             * @param propertyPath A {@code dot-delimited sequence of property names indicating
-             *                     which property in the document these snippets correspond to.
+             * @param propertyPath A dot-delimited sequence of property names indicating which
+             *     property in the document these snippets correspond to.
              */
             public Builder(@NonNull String propertyPath) {
                 mPropertyPath = Objects.requireNonNull(propertyPath);

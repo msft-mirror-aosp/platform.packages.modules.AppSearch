@@ -123,6 +123,7 @@ package android.app.appsearch {
     field public static final int INDEXING_TYPE_PREFIXES = 2; // 0x2
     field public static final int TOKENIZER_TYPE_NONE = 0; // 0x0
     field public static final int TOKENIZER_TYPE_PLAIN = 1; // 0x1
+    field public static final int TOKENIZER_TYPE_RFC822 = 3; // 0x3
   }
 
   public static final class AppSearchSchema.StringPropertyConfig.Builder {
