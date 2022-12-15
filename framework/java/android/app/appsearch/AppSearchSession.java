@@ -26,6 +26,7 @@ import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.SchemaMigrationUtil;
 import android.content.AttributionSource;
 import android.os.Bundle;
@@ -533,6 +534,8 @@ public final class AppSearchSession implements Closeable {
                                                 AppSearchResult.newSuccessfulResult(
                                                         searchSuggestionResults));
                                     } else {
+                                        // TODO(b/261897334) save SDK errors/crashes and send to
+                                        //  server for logging.
                                         callback.accept(AppSearchResult.newFailedResult(result));
                                     }
                                 } catch (Exception e) {
@@ -794,6 +797,7 @@ public final class AppSearchSession implements Closeable {
                     request.getVersion(),
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    SchemaMigrationStats.NO_MIGRATION,
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -816,6 +820,8 @@ public final class AppSearchSession implements Closeable {
                                         callback.accept(AppSearchResult.newSuccessfulResult(
                                                 internalSetSchemaResponse.getSetSchemaResponse()));
                                     } catch (Throwable t) {
+                                        // TODO(b/261897334) save SDK errors/crashes and send to
+                                        //  server for logging.
                                         callback.accept(AppSearchResult.throwableToFailedResult(t));
                                     }
                                 } else {
@@ -843,15 +849,23 @@ public final class AppSearchSession implements Closeable {
             @NonNull Executor workExecutor,
             @NonNull @CallbackExecutor Executor callbackExecutor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
+        long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
+        long waitExecutorStartLatencyMillis = SystemClock.elapsedRealtime();
         safeExecute(workExecutor, callback, () -> {
             try {
+                long waitExecutorEndLatencyMillis = SystemClock.elapsedRealtime();
+                SchemaMigrationStats.Builder statsBuilder = new SchemaMigrationStats.Builder(
+                        mCallerAttributionSource.getPackageName(), mDatabaseName);
+
                 // Migration process
                 // 1. Validate and retrieve all active migrators.
+                long getSchemaLatencyStartTimeMillis = SystemClock.elapsedRealtime();
                 CompletableFuture<AppSearchResult<GetSchemaResponse>> getSchemaFuture =
                         new CompletableFuture<>();
                 getSchema(callbackExecutor, getSchemaFuture::complete);
                 AppSearchResult<GetSchemaResponse> getSchemaResult = getSchemaFuture.get();
                 if (!getSchemaResult.isSuccess()) {
+                    // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                     safeExecute(
                             callbackExecutor,
                             callback,
@@ -860,12 +874,13 @@ public final class AppSearchSession implements Closeable {
                     return;
                 }
                 GetSchemaResponse getSchemaResponse =
-                    Objects.requireNonNull(getSchemaResult.getResultValue());
+                        Objects.requireNonNull(getSchemaResult.getResultValue());
                 int currentVersion = getSchemaResponse.getVersion();
                 int finalVersion = request.getVersion();
                 Map<String, Migrator> activeMigrators = SchemaMigrationUtil.getActiveMigrators(
                         getSchemaResponse.getSchemas(), request.getMigrators(), currentVersion,
                         finalVersion);
+                long getSchemaLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                 // No need to trigger migration if no migrator is active.
                 if (activeMigrators.isEmpty()) {
@@ -876,6 +891,7 @@ public final class AppSearchSession implements Closeable {
 
                 // 2. SetSchema with forceOverride=false, to retrieve the list of
                 // incompatible/deleted types.
+                long firstSetSchemaLatencyStartMillis = SystemClock.elapsedRealtime();
                 CompletableFuture<AppSearchResult<Bundle>> setSchemaFuture =
                         new CompletableFuture<>();
                 mService.setSchema(
@@ -887,6 +903,7 @@ public final class AppSearchSession implements Closeable {
                         request.getVersion(),
                         mUserHandle,
                         /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                        SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE,
                         new IAppSearchResultCallback.Stub() {
                             @Override
                             public void onResult(AppSearchResultParcel resultParcel) {
@@ -895,6 +912,7 @@ public final class AppSearchSession implements Closeable {
                         });
                 AppSearchResult<Bundle> setSchemaResult = setSchemaFuture.get();
                 if (!setSchemaResult.isSuccess()) {
+                    // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                     safeExecute(
                             callbackExecutor,
                             callback,
@@ -904,6 +922,7 @@ public final class AppSearchSession implements Closeable {
                 }
                 InternalSetSchemaResponse internalSetSchemaResponse1 =
                         new InternalSetSchemaResponse(setSchemaResult.getResultValue());
+                long firstSetSchemaLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                 // 3. If forceOverride is false, check that all incompatible types will be migrated.
                 // If some aren't we must throw an error, rather than proceeding and deleting those
@@ -916,16 +935,17 @@ public final class AppSearchSession implements Closeable {
                         request.getSchemas())) {
 
                     // 4. Trigger migration for all migrators.
-                    // TODO(b/177266929) trigger migration for all types together rather than
-                    //  separately.
+                    long queryAndTransformLatencyStartTimeMillis = SystemClock.elapsedRealtime();
                     for (Map.Entry<String, Migrator> entry : activeMigrators.entrySet()) {
                         migrationHelper.queryAndTransform(/*schemaType=*/ entry.getKey(),
                                 /*migrator=*/ entry.getValue(), currentVersion,
-                                finalVersion);
+                                finalVersion, statsBuilder);
                     }
+                    long queryAndTransformLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                     // 5. SetSchema a second time with forceOverride=true if the first attempted
                     // failed.
+                    long secondSetSchemaLatencyStartMillis = SystemClock.elapsedRealtime();
                     InternalSetSchemaResponse internalSetSchemaResponse;
                     if (internalSetSchemaResponse1.isSuccess()) {
                         internalSetSchemaResponse = internalSetSchemaResponse1;
@@ -942,6 +962,7 @@ public final class AppSearchSession implements Closeable {
                                 request.getVersion(),
                                 mUserHandle,
                                 /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                                SchemaMigrationStats.SECOND_CALL_APPLY_NEW_SCHEMA,
                                 new IAppSearchResultCallback.Stub() {
                                     @Override
                                     public void onResult(AppSearchResultParcel resultParcel) {
@@ -954,6 +975,8 @@ public final class AppSearchSession implements Closeable {
                             // which is an impossible case. Since we only swallow the incompatible
                             // error in the first setSchema call, all other errors will be thrown at
                             // the first time.
+                            // TODO(b/261897334) save SDK errors/crashes and send to server for
+                            //  logging.
                             safeExecute(
                                     callbackExecutor,
                                     callback,
@@ -967,6 +990,8 @@ public final class AppSearchSession implements Closeable {
                             // Impossible case, we just set forceOverride to be true, we should
                             // never fail in incompatible changes. And all other cases should failed
                             // during the first call.
+                            // TODO(b/261897334) save SDK errors/crashes and send to server for
+                            //  logging.
                             safeExecute(
                                     callbackExecutor,
                                     callback,
@@ -978,6 +1003,25 @@ public final class AppSearchSession implements Closeable {
                         }
                         internalSetSchemaResponse = internalSetSchemaResponse2;
                     }
+                    long secondSetSchemaLatencyEndTimeMillis = SystemClock.elapsedRealtime();
+
+                    statsBuilder
+                            .setExecutorAcquisitionLatencyMillis(
+                                    (int) (waitExecutorEndLatencyMillis
+                                            - waitExecutorStartLatencyMillis))
+                            .setGetSchemaLatencyMillis(
+                                    (int)(getSchemaLatencyEndTimeMillis
+                                            - getSchemaLatencyStartTimeMillis))
+                            .setFirstSetSchemaLatencyMillis(
+                                    (int)(firstSetSchemaLatencyEndTimeMillis
+                                            - firstSetSchemaLatencyStartMillis))
+                            .setIsFirstSetSchemaSuccess(internalSetSchemaResponse1.isSuccess())
+                            .setQueryAndTransformLatencyMillis(
+                                    (int)(queryAndTransformLatencyEndTimeMillis -
+                                            queryAndTransformLatencyStartTimeMillis))
+                            .setSecondSetSchemaLatencyMillis(
+                                    (int)(secondSetSchemaLatencyEndTimeMillis
+                                            - secondSetSchemaLatencyStartMillis));
                     SetSchemaResponse.Builder responseBuilder = internalSetSchemaResponse
                             .getSetSchemaResponse()
                             .toBuilder()
@@ -986,10 +1030,12 @@ public final class AppSearchSession implements Closeable {
                     // 6. Put all the migrated documents into the index, now that the new schema is
                     // set.
                     AppSearchResult<SetSchemaResponse> putResult =
-                            migrationHelper.putMigratedDocuments(responseBuilder);
+                            migrationHelper.putMigratedDocuments(
+                                    responseBuilder, statsBuilder, totalLatencyStartTimeMillis);
                     safeExecute(callbackExecutor, callback, () -> callback.accept(putResult));
                 }
             } catch (Throwable t) {
+                // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                 safeExecute(
                         callbackExecutor,
                         callback,

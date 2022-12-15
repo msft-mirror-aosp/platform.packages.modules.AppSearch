@@ -55,6 +55,8 @@ interface IAppSearchManager {
      * @param schemaVersion  The overall schema version number of the request.
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param schemaMigrationCallType Indicates how a SetSchema call relative to SchemaMigration
+     *     case.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Bundle}&gt;, where the value are
      *     {@link SetSchemaResponse} bundle.
@@ -68,6 +70,7 @@ interface IAppSearchManager {
         in int schemaVersion,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
+        in int schemaMigrationCallType,
         in IAppSearchResultCallback callback);
 
     /**
@@ -267,6 +270,10 @@ interface IAppSearchManager {
     * @param databaseName  The name of the database where this document lives.
     * @param fileDescriptor The ParcelFileDescriptor where documents should be read from.
     * @param userHandle Handle of the calling user.
+    * @param schemaMigrationStatsBundle the Bundle contains SchemaMigrationStats information.
+    * @param totalLatencyStartTimeMillis start timestamp to calculate total migration latency in
+    *     Millis
+    * @param binderCallStartTimeMillis start timestamp of binder call in Millis
     * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
     *     {@link AppSearchResult}&lt;{@link List}&lt;{@link Bundle}&gt;&gt;, where the value are
     *     MigrationFailure bundles.
@@ -276,6 +283,9 @@ interface IAppSearchManager {
         in String databaseName,
         in ParcelFileDescriptor fileDescriptor,
         in UserHandle userHandle,
+        in Bundle schemaMigrationStatsBundle,
+        in long totalLatencyStartTimeMillis,
+        in long binderCallStartTimeMillis,
         in IAppSearchResultCallback callback);
 
     /**
