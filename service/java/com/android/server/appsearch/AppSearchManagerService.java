@@ -234,26 +234,28 @@ public class AppSearchManagerService extends SystemService {
 
     private void handlePackageRemoved(@NonNull String packageName, int uid) {
         UserHandle userHandle = UserHandle.getUserHandleForUid(uid);
-        try {
-            if (mServiceImplHelper.isUserLocked(userHandle)) {
-                // We cannot access a locked user's directory and remove package data from it.
-                // We should remove those uninstalled package data when the user is unlocking.
-                return;
-            }
-            // Only clear the package's data if AppSearch exists for this user.
-            if (AppSearchModule.getAppSearchDir(userHandle).exists()) {
-                Context userContext = mContext.createContextAsUser(userHandle, /*flags=*/ 0);
-                AppSearchUserInstance instance =
-                        mAppSearchUserInstanceManager.getOrCreateUserInstance(
-                                userContext,
-                                userHandle,
-                                FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
-                instance.getAppSearchImpl().clearPackageData(packageName);
-                dispatchChangeNotifications(instance);
-                instance.getLogger().removeCachedUidForPackage(packageName);
-            }
-        } catch (Throwable t) {
-            Log.e(TAG, "Unable to remove data for package: " + packageName, t);
+        if (mServiceImplHelper.isUserLocked(userHandle)) {
+            // We cannot access a locked user's directory and remove package data from it.
+            // We should remove those uninstalled package data when the user is unlocking.
+            return;
+        }
+        // Only clear the package's data if AppSearch exists for this user.
+        if (AppSearchModule.getAppSearchDir(userHandle).exists()) {
+            mExecutorManager.getOrCreateUserExecutor(userHandle).execute(() -> {
+                try {
+                    Context userContext = mContext.createContextAsUser(userHandle, /*flags=*/ 0);
+                    AppSearchUserInstance instance =
+                            mAppSearchUserInstanceManager.getOrCreateUserInstance(
+                                    userContext,
+                                    userHandle,
+                                    FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
+                    instance.getAppSearchImpl().clearPackageData(packageName);
+                    dispatchChangeNotifications(instance);
+                    instance.getLogger().removeCachedUidForPackage(packageName);
+                } catch(Throwable t){
+                    Log.e(TAG, "Unable to remove data for package: " + packageName, t);
+                }
+            });
         }
     }
 
