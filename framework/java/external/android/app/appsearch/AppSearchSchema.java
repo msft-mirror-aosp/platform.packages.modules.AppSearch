@@ -440,6 +440,7 @@ public final class AppSearchSchema {
     public static final class StringPropertyConfig extends PropertyConfig {
         private static final String INDEXING_TYPE_FIELD = "indexingType";
         private static final String TOKENIZER_TYPE_FIELD = "tokenizerType";
+        private static final String JOINABLE_VALUE_TYPE_FIELD = "joinableValueType";
 
         /**
          * Encapsulates the configurations on how AppSearch should query/index these terms.
@@ -481,7 +482,13 @@ public final class AppSearchSchema {
          */
         // NOTE: The integer values of these constants must match the proto enum constants in
         // com.google.android.icing.proto.IndexingConfig.TokenizerType.Code.
-        @IntDef(value = {TOKENIZER_TYPE_NONE, TOKENIZER_TYPE_PLAIN, TOKENIZER_TYPE_RFC822})
+        @IntDef(
+                value = {
+                    TOKENIZER_TYPE_NONE,
+                    TOKENIZER_TYPE_PLAIN,
+                    TOKENIZER_TYPE_VERBATIM,
+                    TOKENIZER_TYPE_RFC822
+                })
         @Retention(RetentionPolicy.SOURCE)
         public @interface TokenizerType {}
 
@@ -506,7 +513,18 @@ public final class AppSearchSchema {
          */
         public static final int TOKENIZER_TYPE_PLAIN = 1;
 
-        // TODO(b/204333391): In icing, the "2" tokenizer is the verbatim tokenizer.
+        /**
+         * This value indicates that no normalization or segmentation should be applied to string
+         * values that are tokenized using this type. Therefore, the output token is equivalent to
+         * the raw string value.
+         *
+         * <p>Ex. A property with "Hello, world!" will produce the token "Hello, world!", preserving
+         * punctuation and capitalization, and not creating separate tokens between the space.
+         *
+         * <p>It is only valid for tokenizer_type to be 'VERBATIM' if {@link #getIndexingType} is
+         * {@link #INDEXING_TYPE_EXACT_TERMS} or {@link #INDEXING_TYPE_PREFIXES}.
+         */
+        public static final int TOKENIZER_TYPE_VERBATIM = 2;
 
         /**
          * Tokenization for emails. This value indicates that tokens should be extracted from this
@@ -519,6 +537,40 @@ public final class AppSearchSchema {
          * {@link #INDEXING_TYPE_EXACT_TERMS} or {@link #INDEXING_TYPE_PREFIXES}.
          */
         public static final int TOKENIZER_TYPE_RFC822 = 3;
+
+        /**
+         * The joinable value type of the property. By setting the appropriate joinable value type
+         * for a property, the client can use the property for joining documents from other schema
+         * types using Search API (see {@link JoinSpec}).
+         *
+         * @hide
+         */
+        // NOTE: The integer values of these constants must match the proto enum constants in
+        // com.google.android.icing.proto.JoinableConfig.ValueType.Code.
+        @IntDef(
+                value = {
+                    JOINABLE_VALUE_TYPE_NONE,
+                    JOINABLE_VALUE_TYPE_QUALIFIED_ID,
+                })
+        @Retention(RetentionPolicy.SOURCE)
+        public @interface JoinableValueType {}
+
+        /** Content in this property is not joinable. */
+        public static final int JOINABLE_VALUE_TYPE_NONE = 0;
+
+        /**
+         * Content in this property will be used as string qualified id to join documents.
+         *
+         * <ul>
+         *   <li>Qualified id: a unique identifier for a document, and this joinable value type is
+         *       similar to primary and foreign key in relational database. See {@link
+         *       android.app.appsearch.util.DocumentIdUtil} for more details.
+         *   <li>Currently we only support single string joining, so it should only be used with
+         *       {@link PropertyConfig#CARDINALITY_OPTIONAL} and {@link
+         *       PropertyConfig#CARDINALITY_REQUIRED}.
+         * </ul>
+         */
+        public static final int JOINABLE_VALUE_TYPE_QUALIFIED_ID = 1;
 
         StringPropertyConfig(@NonNull Bundle bundle) {
             super(bundle);
@@ -534,12 +586,20 @@ public final class AppSearchSchema {
             return mBundle.getInt(TOKENIZER_TYPE_FIELD);
         }
 
+        /**
+         * Returns how this property is going to be used to join documents from other schema types.
+         */
+        public @JoinableValueType int getJoinableValueType() {
+            return mBundle.getInt(JOINABLE_VALUE_TYPE_FIELD, JOINABLE_VALUE_TYPE_NONE);
+        }
+
         /** Builder for {@link StringPropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
             private @Cardinality int mCardinality = CARDINALITY_OPTIONAL;
             private @IndexingType int mIndexingType = INDEXING_TYPE_NONE;
             private @TokenizerType int mTokenizerType = TOKENIZER_TYPE_NONE;
+            private @JoinableValueType int mJoinableValueType = JOINABLE_VALUE_TYPE_NONE;
 
             /** Creates a new {@link StringPropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -588,17 +648,27 @@ public final class AppSearchSchema {
              */
             @NonNull
             public StringPropertyConfig.Builder setTokenizerType(@TokenizerType int tokenizerType) {
-                // TODO(b/204333391): Change to checkArgumentInRange once verbatim is supported
-                if (tokenizerType != TOKENIZER_TYPE_NONE
-                        && tokenizerType != TOKENIZER_TYPE_PLAIN
-                        && tokenizerType != TOKENIZER_TYPE_RFC822) {
-                    throw new IllegalArgumentException(
-                            "Tokenizer value "
-                                    + tokenizerType
-                                    + " is out of range. Valid values are TOKENIZER_TYPE_NONE, "
-                                    + "TOKENIZER_TYPE_PLAIN, and TOKENIZER_TYPE_RFC822");
-                }
+                Preconditions.checkArgumentInRange(
+                        tokenizerType, TOKENIZER_TYPE_NONE, TOKENIZER_TYPE_RFC822, "tokenizerType");
                 mTokenizerType = tokenizerType;
+                return this;
+            }
+
+            /**
+             * Configures how this property should be used as a joining matcher.
+             *
+             * <p>If this method is not called, the default joinable value type is {@link
+             * StringPropertyConfig#JOINABLE_VALUE_TYPE_NONE}, so that it is not joinable.
+             */
+            @NonNull
+            public StringPropertyConfig.Builder setJoinableValueType(
+                    @JoinableValueType int joinableValueType) {
+                Preconditions.checkArgumentInRange(
+                        joinableValueType,
+                        JOINABLE_VALUE_TYPE_NONE,
+                        JOINABLE_VALUE_TYPE_QUALIFIED_ID,
+                        "joinableValueType");
+                mJoinableValueType = joinableValueType;
                 return this;
             }
 
@@ -614,7 +684,13 @@ public final class AppSearchSchema {
                 } else {
                     Preconditions.checkState(
                             mIndexingType != INDEXING_TYPE_NONE,
-                            "Cannot set " + "TOKENIZER_TYPE_PLAIN  with INDEXING_TYPE_NONE.");
+                            "Cannot set " + "TOKENIZER_TYPE_PLAIN with INDEXING_TYPE_NONE.");
+                }
+                if (mJoinableValueType == JOINABLE_VALUE_TYPE_QUALIFIED_ID) {
+                    Preconditions.checkState(
+                            mCardinality != CARDINALITY_REPEATED,
+                            "Cannot set JOINABLE_VALUE_TYPE_QUALIFIED_ID with"
+                                + " CARDINALITY_REPEATED.");
                 }
                 Bundle bundle = new Bundle();
                 bundle.putString(NAME_FIELD, mPropertyName);
@@ -622,6 +698,7 @@ public final class AppSearchSchema {
                 bundle.putInt(CARDINALITY_FIELD, mCardinality);
                 bundle.putInt(INDEXING_TYPE_FIELD, mIndexingType);
                 bundle.putInt(TOKENIZER_TYPE_FIELD, mTokenizerType);
+                bundle.putInt(JOINABLE_VALUE_TYPE_FIELD, mJoinableValueType);
                 return new StringPropertyConfig(bundle);
             }
         }
@@ -656,8 +733,25 @@ public final class AppSearchSchema {
                 case AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN:
                     builder.append("tokenizerType: TOKENIZER_TYPE_PLAIN,\n");
                     break;
+                case AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_VERBATIM:
+                    builder.append("tokenizerType: TOKENIZER_TYPE_VERBATIM,\n");
+                    break;
+                case AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_RFC822:
+                    builder.append("tokenizerType: TOKENIZER_TYPE_RFC822,\n");
+                    break;
                 default:
                     builder.append("tokenizerType: TOKENIZER_TYPE_UNKNOWN,\n");
+            }
+
+            switch (getJoinableValueType()) {
+                case AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE:
+                    builder.append("joinableValueType: JOINABLE_VALUE_TYPE_NONE,\n");
+                    break;
+                case AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID:
+                    builder.append("joinableValueType: JOINABLE_VALUE_TYPE_QUALIFIED_ID,\n");
+                    break;
+                default:
+                    builder.append("joinableValueType: JOINABLE_VALUE_TYPE_UNKNOWN,\n");
             }
         }
     }
@@ -693,10 +787,7 @@ public final class AppSearchSchema {
 
         /** Returns how the property is indexed. */
         public @IndexingType int getIndexingType() {
-            if (mBundle.containsKey(INDEXING_TYPE_FIELD)) {
-                return mBundle.getInt(INDEXING_TYPE_FIELD);
-            }
-            return INDEXING_TYPE_NONE;
+            return mBundle.getInt(INDEXING_TYPE_FIELD, INDEXING_TYPE_NONE);
         }
 
         /** Builder for {@link LongPropertyConfig}. */

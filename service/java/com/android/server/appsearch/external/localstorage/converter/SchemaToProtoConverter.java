@@ -22,6 +22,7 @@ import android.util.Log;
 
 import com.google.android.icing.proto.DocumentIndexingConfig;
 import com.google.android.icing.proto.IntegerIndexingConfig;
+import com.google.android.icing.proto.JoinableConfig;
 import com.google.android.icing.proto.PropertyConfigProto;
 import com.google.android.icing.proto.SchemaTypeConfigProto;
 import com.google.android.icing.proto.SchemaTypeConfigProtoOrBuilder;
@@ -89,6 +90,19 @@ public final class SchemaToProtoConverter {
         if (property instanceof AppSearchSchema.StringPropertyConfig) {
             AppSearchSchema.StringPropertyConfig stringProperty =
                     (AppSearchSchema.StringPropertyConfig) property;
+
+            // Set JoinableConfig only if it is joinable (i.e. joinableValueType is not NONE).
+            if (stringProperty.getJoinableValueType()
+                    != AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE) {
+                JoinableConfig joinableConfig =
+                        JoinableConfig.newBuilder()
+                                .setValueType(
+                                        convertJoinableValueTypeToProto(
+                                                stringProperty.getJoinableValueType()))
+                                .build();
+                builder.setJoinableConfig(joinableConfig);
+            }
+
             StringIndexingConfig stringIndexingConfig =
                     StringIndexingConfig.newBuilder()
                             .setTermMatchType(
@@ -174,6 +188,9 @@ public final class SchemaToProtoConverter {
         AppSearchSchema.StringPropertyConfig.Builder builder =
                 new AppSearchSchema.StringPropertyConfig.Builder(proto.getPropertyName())
                         .setCardinality(proto.getCardinality().getNumber())
+                        .setJoinableValueType(
+                                convertJoinableValueTypeFromProto(
+                                        proto.getJoinableConfig().getValueType()))
                         .setTokenizerType(
                                 proto.getStringIndexingConfig().getTokenizerType().getNumber());
 
@@ -208,6 +225,36 @@ public final class SchemaToProtoConverter {
         builder.setIndexingType(convertNumericMatchTypeFromProto(numericMatchTypeProto));
 
         return builder.build();
+    }
+
+    @NonNull
+    private static JoinableConfig.ValueType.Code convertJoinableValueTypeToProto(
+            @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinableValueType) {
+        switch (joinableValueType) {
+            case AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE:
+                return JoinableConfig.ValueType.Code.NONE;
+            case AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID:
+                return JoinableConfig.ValueType.Code.QUALIFIED_ID;
+            default:
+                throw new IllegalArgumentException(
+                        "Invalid joinableValueType: " + joinableValueType);
+        }
+    }
+
+    @AppSearchSchema.StringPropertyConfig.JoinableValueType
+    private static int convertJoinableValueTypeFromProto(
+            @NonNull JoinableConfig.ValueType.Code joinableValueType) {
+        switch (joinableValueType) {
+            case NONE:
+                return AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE;
+            case QUALIFIED_ID:
+                return AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID;
+            default:
+                // Avoid crashing in the 'read' path; we should try to interpret the document to the
+                // extent possible.
+                Log.w(TAG, "Invalid joinableValueType: " + joinableValueType.getNumber());
+                return AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE;
+        }
     }
 
     @NonNull
