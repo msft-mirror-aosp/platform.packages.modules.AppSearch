@@ -48,7 +48,6 @@ public final class SearchResult {
     static final String PACKAGE_NAME_FIELD = "packageName";
     static final String DATABASE_NAME_FIELD = "databaseName";
     static final String RANKING_SIGNAL_FIELD = "rankingSignal";
-    static final String JOINED_RESULTS = "joinedResults";
 
     @NonNull private final Bundle mBundle;
 
@@ -161,35 +160,6 @@ public final class SearchResult {
         return mBundle.getDouble(RANKING_SIGNAL_FIELD);
     }
 
-    /**
-     * Gets a list of {@link SearchResult} joined from the join operation.
-     *
-     * <p>These joined documents match the outer document as specified in the {@link JoinSpec} with
-     * parentPropertyExpression and childPropertyExpression. They are ordered according to the
-     * {@link JoinSpec#getNestedSearchSpec}, and as many SearchResults as specified by {@link
-     * JoinSpec#getMaxJoinedResultCount} will be returned. If no {@link JoinSpec} was specified,
-     * this returns an empty list.
-     *
-     * <p>This method is inefficient to call repeatedly, as new {@link SearchResult} objects are
-     * created each time.
-     *
-     * @return a List of SearchResults containing joined documents.
-     */
-    @NonNull
-    @SuppressWarnings("deprecation") // Bundle#getParcelableArrayList(String) is deprecated.
-    public List<SearchResult> getJoinedResults() {
-        ArrayList<Bundle> bundles = mBundle.getParcelableArrayList(JOINED_RESULTS);
-        if (bundles == null) {
-            return new ArrayList<>();
-        }
-        List<SearchResult> res = new ArrayList<>(bundles.size());
-        for (int i = 0; i < bundles.size(); i++) {
-            res.add(new SearchResult(bundles.get(i)));
-        }
-
-        return res;
-    }
-
     /** Builder for {@link SearchResult} objects. */
     public static final class Builder {
         private final String mPackageName;
@@ -197,7 +167,6 @@ public final class SearchResult {
         private ArrayList<Bundle> mMatchInfoBundles = new ArrayList<>();
         private GenericDocument mGenericDocument;
         private double mRankingSignal;
-        private ArrayList<Bundle> mJoinedResults = new ArrayList<>();
         private boolean mBuilt = false;
 
         /**
@@ -240,18 +209,6 @@ public final class SearchResult {
             return this;
         }
 
-        /**
-         * Adds a {@link SearchResult} that was joined by the {@link JoinSpec}.
-         *
-         * @param joinedResult The joined SearchResult to add.
-         */
-        @NonNull
-        public Builder addJoinedResult(@NonNull SearchResult joinedResult) {
-            resetIfBuilt();
-            mJoinedResults.add(joinedResult.getBundle());
-            return this;
-        }
-
         /** Constructs a new {@link SearchResult}. */
         @NonNull
         public SearchResult build() {
@@ -261,7 +218,6 @@ public final class SearchResult {
             bundle.putBundle(DOCUMENT_FIELD, mGenericDocument.getBundle());
             bundle.putDouble(RANKING_SIGNAL_FIELD, mRankingSignal);
             bundle.putParcelableArrayList(MATCH_INFOS_FIELD, mMatchInfoBundles);
-            bundle.putParcelableArrayList(JOINED_RESULTS, mJoinedResults);
             mBuilt = true;
             return new SearchResult(bundle);
         }
@@ -269,7 +225,6 @@ public final class SearchResult {
         private void resetIfBuilt() {
             if (mBuilt) {
                 mMatchInfoBundles = new ArrayList<>(mMatchInfoBundles);
-                mJoinedResults = new ArrayList<>(mJoinedResults);
                 mBuilt = false;
             }
         }

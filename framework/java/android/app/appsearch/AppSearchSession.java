@@ -488,6 +488,7 @@ public final class AppSearchSession implements Closeable {
      *                 could get by using that suggestion in {@link #search}.
      *
      * @see #search(String, SearchSpec)
+     * @hide
      */
     //TODO(b/227356108) un-hide this API after fix following issues.
     // 1: support property restrict tokenization, Example: [subject:car] will return ["cart",

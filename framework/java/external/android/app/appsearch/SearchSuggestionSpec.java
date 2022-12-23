@@ -44,7 +44,8 @@ import java.util.Set;
  * This class represents the specification logic for AppSearch. It can be used to set the filter and
  * settings of search a suggestions.
  *
- * @see AppSearchSession#searchSuggestion
+ * @see AppSearchSession#searchSuggestionAsync(String, SearchSuggestionSpec)
+ * @hide
  */
 public class SearchSuggestionSpec {
     static final String NAMESPACE_FIELD = "namespace";
@@ -172,10 +173,7 @@ public class SearchSuggestionSpec {
      *
      * <p>Calling this function repeatedly is inefficient. Prefer to retain the Map returned by this
      * function, rather than calling it multiple times.
-     *
-     * @hide
      */
-    // TODO(b/228240987) migrate this API when we support property restrict for multiple terms
     @NonNull
     public Map<String, List<String>> getFilterProperties() {
         Bundle typePropertyPathsBundle = Objects.requireNonNull(mBundle.getBundle(PROPERTY_FIELD));
@@ -326,9 +324,7 @@ public class SearchSuggestionSpec {
          * @param propertyPaths The String version of {@link PropertyPath}. A dot-delimited sequence
          *     of property names indicating which property in the document these snippets correspond
          *     to.
-         * @hide
          */
-        // TODO(b/228240987) migrate this API when we support property restrict for multiple terms
         @NonNull
         public Builder addFilterProperties(
                 @NonNull String schema, @NonNull Collection<String> propertyPaths) {
@@ -358,9 +354,7 @@ public class SearchSuggestionSpec {
          *
          * @param schema the {@link AppSearchSchema} that contains the target properties
          * @param propertyPaths The {@link PropertyPath} to search suggestion over
-         * @hide
          */
-        // TODO(b/228240987) migrate this API when we support property restrict for multiple terms
         @NonNull
         public Builder addFilterPropertyPaths(
                 @NonNull String schema, @NonNull Collection<PropertyPath> propertyPaths) {

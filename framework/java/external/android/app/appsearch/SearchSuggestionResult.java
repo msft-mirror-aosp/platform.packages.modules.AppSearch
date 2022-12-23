@@ -25,7 +25,11 @@ import com.android.internal.util.Preconditions;
 
 import java.util.Objects;
 
-/** The result class of the {@link AppSearchSession#searchSuggestion}. */
+/**
+ * The result class of the {@link AppSearchSession#searchSuggestion}.
+ *
+ * @hide
+ */
 public class SearchSuggestionResult {
 
     private static final String SUGGESTED_RESULT_FIELD = "suggestedResult";
