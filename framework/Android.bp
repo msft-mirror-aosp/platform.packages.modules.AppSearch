@@ -78,3 +78,12 @@ java_sdk_library {
         "//packages/modules/AppSearch/testing:__subpackages__",
     ],
 }
+
+java_api_contribution {
+    name: "framework-appsearch-public-stubs",
+    api_surface: "public",
+    api_file: "api/current.txt",
+    visibility: [
+        "//build/orchestrator/apis",
+    ],
+}
