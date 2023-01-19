@@ -133,7 +133,8 @@ public class AppSearchManagerService extends SystemService {
     public AppSearchManagerService(Context context) {
         super(context);
         mContext = context;
-        mAppSearchEnvironment = AppSearchEnvironmentFactory.getInstance();
+        mAppSearchEnvironment = AppSearchEnvironmentFactory
+            .getEnvironmentInstance();
     }
 
     @Override
@@ -259,7 +260,7 @@ public class AppSearchManagerService extends SystemService {
                             mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                     userContext,
                                     userHandle,
-                                    FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
+                                    AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR));
                     instance.getAppSearchImpl().clearPackageData(packageName);
                     dispatchChangeNotifications(instance);
                     instance.getLogger().removeCachedUidForPackage(packageName);
@@ -285,7 +286,7 @@ public class AppSearchManagerService extends SystemService {
                             mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                     userContext,
                                     userHandle,
-                                    FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
+                                    AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR));
                     List<PackageInfo> installedPackageInfos = userContext
                             .getPackageManager()
                             .getInstalledPackages(/* flags= */ 0);
@@ -1572,7 +1573,7 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getOrCreateUserInstance(
                             targetUserContext,
                             targetUser,
-                            FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
+                            AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR));
                     ++operationSuccessCount;
                     invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
                 } catch (Throwable t) {
