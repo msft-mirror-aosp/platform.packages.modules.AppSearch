@@ -123,6 +123,7 @@ public class AppSearchManagerService extends SystemService {
 
     private final Context mContext;
     private final ExecutorManager mExecutorManager = new ExecutorManager();
+    private final AppSearchEnvironment mAppSearchEnvironment;
 
     private PackageManager mPackageManager;
     private ServiceImplHelper mServiceImplHelper;
@@ -131,6 +132,7 @@ public class AppSearchManagerService extends SystemService {
     public AppSearchManagerService(Context context) {
         super(context);
         mContext = context;
+        mAppSearchEnvironment = AppSearchEnvironmentFactory.getInstance();
     }
 
     @Override
@@ -243,10 +245,11 @@ public class AppSearchManagerService extends SystemService {
             return;
         }
         // Only clear the package's data if AppSearch exists for this user.
-        if (AppSearchModule.getAppSearchDir(userHandle).exists()) {
+        if (mAppSearchEnvironment.getAppSearchDir(mContext, userHandle).exists()) {
             mExecutorManager.getOrCreateUserExecutor(userHandle).execute(() -> {
                 try {
-                    Context userContext = mContext.createContextAsUser(userHandle, /*flags=*/ 0);
+                    Context userContext = mAppSearchEnvironment
+                      .createContextAsUser(mContext, userHandle);
                     AppSearchUserInstance instance =
                             mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                     userContext,
@@ -270,8 +273,9 @@ public class AppSearchManagerService extends SystemService {
         mExecutorManager.getOrCreateUserExecutor(userHandle).execute(() -> {
             try {
                 // Only clear the package's data if AppSearch exists for this user.
-                if (AppSearchModule.getAppSearchDir(userHandle).exists()) {
-                    Context userContext = mContext.createContextAsUser(userHandle, /*flags=*/ 0);
+                 if (mAppSearchEnvironment.getAppSearchDir(mContext, userHandle).exists()) {
+                    Context userContext = mAppSearchEnvironment
+                        .createContextAsUser(mContext, userHandle);
                     AppSearchUserInstance instance =
                             mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                     userContext,
@@ -1558,8 +1562,8 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
-                    Context targetUserContext = mContext.createContextAsUser(targetUser,
-                            /*flags=*/ 0);
+                    Context targetUserContext = mAppSearchEnvironment
+                        .createContextAsUser(mContext, userHandle);
                     instance = mAppSearchUserInstanceManager.getOrCreateUserInstance(
                             targetUserContext,
                             targetUser,
@@ -1682,9 +1686,11 @@ public class AppSearchManagerService extends SystemService {
                         mAppSearchUserInstanceManager.getUserInstanceOrNull(userHandle);
                 if (instance == null) {
                     // augment storage info from file
+                    Context userContext = mAppSearchEnvironment
+                          .createContextAsUser(mContext, userHandle);
                     UserStorageInfo userStorageInfo =
                             mAppSearchUserInstanceManager.getOrCreateUserStorageInfoInstance(
-                                    userHandle);
+                                    userContext, userHandle);
                     stats.dataSize +=
                             userStorageInfo.getSizeBytesForPackage(packageName);
                 } else {
@@ -1718,9 +1724,11 @@ public class AppSearchManagerService extends SystemService {
                         mAppSearchUserInstanceManager.getUserInstanceOrNull(userHandle);
                 if (instance == null) {
                     // augment storage info from file
+                    Context userContext = mAppSearchEnvironment
+                          .createContextAsUser(mContext, userHandle);
                     UserStorageInfo userStorageInfo =
                             mAppSearchUserInstanceManager.getOrCreateUserStorageInfoInstance(
-                                    userHandle);
+                                    userContext, userHandle);
                     for (int i = 0; i < packagesForUid.length; i++) {
                         stats.dataSize += userStorageInfo.getSizeBytesForPackage(
                                 packagesForUid[i]);
@@ -1751,9 +1759,11 @@ public class AppSearchManagerService extends SystemService {
                         mAppSearchUserInstanceManager.getUserInstanceOrNull(userHandle);
                 if (instance == null) {
                     // augment storage info from file
+                    Context userContext = mAppSearchEnvironment
+                          .createContextAsUser(mContext, userHandle);
                     UserStorageInfo userStorageInfo =
                             mAppSearchUserInstanceManager.getOrCreateUserStorageInfoInstance(
-                                    userHandle);
+                                    userContext, userHandle);
                     stats.dataSize += userStorageInfo.getTotalSizeBytes();
                 } else {
                     List<PackageInfo> packagesForUser = mPackageManager.getInstalledPackagesAsUser(
