@@ -38,6 +38,7 @@ import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
+import com.android.server.appsearch.AppSearchEnvironmentFactory;
 
 import java.util.Objects;
 import java.util.Set;
@@ -187,8 +188,8 @@ public class ServiceImplHelper {
         // Obtain the user where the client is running in. Note that this could be different from
         // the userHandle where the client wants to run the AppSearch operation in.
         UserHandle callingUserHandle = UserHandle.getUserHandleForUid(callingUid);
-        Context callingUserContext = mContext.createContextAsUser(callingUserHandle,
-                /*flags=*/ 0);
+        Context callingUserContext = AppSearchEnvironmentFactory.getInstance()
+            .createContextAsUser(mContext, callingUserHandle);
         String callingPackageName =
             Objects.requireNonNull(callerAttributionSource.getPackageName());
         verifyCallingPackage(callingUserContext, callingUid, callingPackageName);
