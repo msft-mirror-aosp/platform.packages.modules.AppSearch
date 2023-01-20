@@ -692,6 +692,10 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(executor);
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
+        if (searchSpec.getJoinSpec() != null) {
+            throw new IllegalArgumentException("JoinSpec not allowed in removeByQuery, but "
+                    + "JoinSpec was provided.");
+        }
         try {
             mService.removeByQuery(
                     mCallerAttributionSource,
