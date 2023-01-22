@@ -37,6 +37,7 @@ import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetByDocumentIdRequest;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.JoinSpec;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.SearchSpec;
@@ -1887,12 +1888,15 @@ public final class AppSearchImpl implements Closeable {
      *
      * <p>This method belongs to mutate group.
      *
+     * <p>{@link SearchSpec} objects containing a {@link JoinSpec} are not allowed here.
+     *
      * @param packageName The package name that owns the documents.
      * @param databaseName The databaseName the document is in.
      * @param queryExpression Query String to search.
      * @param searchSpec Defines what and how to remove
      * @param removeStatsBuilder builder for {@link RemoveStats} to hold stats for remove
      * @throws AppSearchException on IcingSearchEngine error.
+     * @throws IllegalArgumentException if the {@link SearchSpec} contains a {@link JoinSpec}.
      */
     public void removeByQuery(
             @NonNull String packageName,
@@ -1901,6 +1905,11 @@ public final class AppSearchImpl implements Closeable {
             @NonNull SearchSpec searchSpec,
             @Nullable RemoveStats.Builder removeStatsBuilder)
             throws AppSearchException {
+        if (searchSpec.getJoinSpec() != null) {
+            throw new IllegalArgumentException(
+                    "JoinSpec not allowed in removeByQuery, but " + "JoinSpec was provided");
+        }
+
         long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
         mReadWriteLock.writeLock().lock();
         try {

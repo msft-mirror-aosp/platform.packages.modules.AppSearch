@@ -21,6 +21,7 @@ import static com.android.server.appsearch.external.localstorage.util.PrefixUtil
 import static com.android.server.appsearch.external.localstorage.util.PrefixUtil.removePrefixesFromDocument;
 
 import android.annotation.NonNull;
+import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.SearchResult;
 import android.app.appsearch.SearchResultPage;
@@ -104,6 +105,17 @@ public class SearchResultToProtoConverter {
                     builder.addMatchInfo(matchInfo);
                 }
             }
+        }
+        for (int i = 0; i < proto.getJoinedResultsCount(); i++) {
+            SearchResultProto.ResultProto joinedResultProto = proto.getJoinedResults(i);
+
+            if (joinedResultProto.getJoinedResultsCount() != 0) {
+                throw new AppSearchException(
+                        AppSearchResult.RESULT_INTERNAL_ERROR,
+                        "Nesting joined results within joined results not allowed.");
+            }
+
+            builder.addJoinedResult(toUnprefixedSearchResult(joinedResultProto, schemaMap));
         }
         return builder.build();
     }

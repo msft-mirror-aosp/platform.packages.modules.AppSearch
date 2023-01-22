@@ -24,6 +24,7 @@ import static com.android.server.appsearch.external.localstorage.util.PrefixUtil
 
 import static com.google.common.truth.Truth.assertThat;
 
+import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.testutil.AppSearchTestUtils;
 
@@ -33,6 +34,7 @@ import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
+import com.android.server.appsearch.icing.proto.JoinSpecProto;
 import com.android.server.appsearch.icing.proto.PropertyWeight;
 import com.android.server.appsearch.icing.proto.ResultSpecProto;
 import com.android.server.appsearch.icing.proto.SchemaTypeConfigProto;
@@ -99,6 +101,84 @@ public class SearchSpecToProtoConverterTest {
                 .containsExactly(
                         "package$database1/namespace1", "package$database1/namespace2",
                         "package$database2/namespace1", "package$database2/namespace2");
+    }
+
+    @Test
+    public void testToSearchSpecProtoWithJoinSpec() throws Exception {
+        SearchSpec nestedSearchSpec =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .build();
+        SearchSpec.Builder searchSpec =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_JOIN_AGGREGATE_SCORE);
+
+        // Create a JoinSpec object and set it in the converter
+        JoinSpec joinSpec =
+                new JoinSpec.Builder("childPropertyExpression")
+                        .setNestedSearch("nestedQuery", nestedSearchSpec)
+                        .setAggregationScoringStrategy(
+                                JoinSpec.AGGREGATION_SCORING_SUM_RANKING_SIGNAL)
+                        .setMaxJoinedResultCount(10)
+                        .build();
+
+        searchSpec.setJoinSpec(joinSpec);
+        String prefix1 = PrefixUtil.createPrefix("package", "database1");
+        String prefix2 = PrefixUtil.createPrefix("package", "database2");
+
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec.build(),
+                        /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
+                        /*namespaceMap=*/ ImmutableMap.of(
+                                prefix1,
+                                        ImmutableSet.of(
+                                                prefix1 + "namespace1", prefix1 + "namespace2"),
+                                prefix2,
+                                        ImmutableSet.of(
+                                                prefix2 + "namespace1", prefix2 + "namespace2")),
+                        /*schemaMap=*/ ImmutableMap.of(
+                                prefix1,
+                                        ImmutableMap.of(
+                                                prefix1 + "typeA", configProto,
+                                                prefix1 + "typeB", configProto),
+                                prefix2,
+                                        ImmutableMap.of(
+                                                prefix2 + "typeA", configProto,
+                                                prefix2 + "typeB", configProto)));
+
+        // Convert SearchSpec to proto.
+        SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
+
+        assertThat(searchSpecProto.getQuery()).isEqualTo("query");
+        assertThat(searchSpecProto.getSchemaTypeFiltersList())
+                .containsExactly(
+                        "package$database1/typeA",
+                        "package$database1/typeB",
+                        "package$database2/typeA",
+                        "package$database2/typeB");
+        assertThat(searchSpecProto.getNamespaceFiltersList())
+                .containsExactly(
+                        "package$database1/namespace1", "package$database1/namespace2",
+                        "package$database2/namespace1", "package$database2/namespace2");
+
+        // Assert that the joinSpecProto is set correctly in the searchSpecProto
+        assertThat(searchSpecProto.hasJoinSpec()).isTrue();
+
+        JoinSpecProto joinSpecProto = searchSpecProto.getJoinSpec();
+        assertThat(joinSpecProto.hasNestedSpec()).isTrue();
+        assertThat(joinSpecProto.getParentPropertyExpression()).isEqualTo(JoinSpec.QUALIFIED_ID);
+        assertThat(joinSpecProto.getChildPropertyExpression()).isEqualTo("childPropertyExpression");
+        assertThat(joinSpecProto.getAggregationScoringStrategy())
+                .isEqualTo(JoinSpecProto.AggregationScoringStrategy.Code.SUM);
+        assertThat(joinSpecProto.getMaxJoinedChildCount()).isEqualTo(10);
+
+        JoinSpecProto.NestedSpecProto nestedSpecProto = joinSpecProto.getNestedSpec();
+        assertThat(nestedSpecProto.getSearchSpec().getQuery()).isEqualTo("nestedQuery");
+        assertThat(nestedSpecProto.getScoringSpec().getRankBy())
+                .isEqualTo(ScoringSpecProto.RankingStrategy.Code.CREATION_TIMESTAMP);
     }
 
     @Test
