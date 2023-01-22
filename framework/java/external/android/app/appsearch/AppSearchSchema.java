@@ -559,7 +559,7 @@ public final class AppSearchSchema {
         public static final int JOINABLE_VALUE_TYPE_NONE = 0;
 
         /**
-         * Content in this property will be used as string qualified id to join documents.
+         * Content in this string property will be used as a qualified id to join documents.
          *
          * <ul>
          *   <li>Qualified id: a unique identifier for a document, and this joinable value type is
