@@ -52,6 +52,7 @@ import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
+import android.app.appsearch.util.LogUtil;
 import android.content.AttributionSource;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -221,6 +222,10 @@ public class AppSearchManagerService extends SystemService {
                     if (packageName == null) {
                         Log.e(TAG, "Package name is missing in the intent: " + intent);
                         return;
+                    }
+
+                    if (LogUtil.DEBUG) {
+                        Log.d(TAG, "Received " + action + " broadcast on package: " + packageName);
                     }
 
                     int uid = intent.getIntExtra(Intent.EXTRA_UID, INVALID_UID);
