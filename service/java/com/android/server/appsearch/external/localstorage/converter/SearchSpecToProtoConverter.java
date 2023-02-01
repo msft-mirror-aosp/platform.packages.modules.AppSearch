@@ -22,6 +22,7 @@ import static com.android.server.appsearch.external.localstorage.util.PrefixUtil
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.util.ArrayMap;
@@ -33,12 +34,15 @@ import com.android.server.appsearch.external.localstorage.visibilitystore.Visibi
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityUtil;
 
+import com.google.android.icing.proto.JoinSpecProto;
+import com.google.android.icing.proto.PropertyWeight;
 import com.google.android.icing.proto.ResultSpecProto;
 import com.google.android.icing.proto.SchemaTypeConfigProto;
 import com.google.android.icing.proto.ScoringSpecProto;
 import com.google.android.icing.proto.SearchSpecProto;
 import com.google.android.icing.proto.TermMatchType;
 import com.google.android.icing.proto.TypePropertyMask;
+import com.google.android.icing.proto.TypePropertyWeights;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -69,6 +73,18 @@ public final class SearchSpecToProtoConverter {
     private final Set<String> mTargetPrefixedSchemaFilters;
 
     /**
+     * The cached Map of {@code <Prefix, Set<PrefixedNamespace>>} stores all prefixed namespace
+     * filters which are stored in AppSearch. This is a field so that we can generate nested protos.
+     */
+    private final Map<String, Set<String>> mNamespaceMap;
+    /**
+     * The cached Map of {@code <Prefix, Map<PrefixedSchemaType, schemaProto>>} stores all prefixed
+     * schema filters which are stored inAppSearch. This is a field so that we can generated nested
+     * protos.
+     */
+    private final Map<String, Map<String, SchemaTypeConfigProto>> mSchemaMap;
+
+    /**
      * Creates a {@link SearchSpecToProtoConverter} for given {@link SearchSpec}.
      *
      * @param queryExpression Query String to search.
@@ -88,8 +104,8 @@ public final class SearchSpecToProtoConverter {
         mQueryExpression = Objects.requireNonNull(queryExpression);
         mSearchSpec = Objects.requireNonNull(searchSpec);
         mPrefixes = Objects.requireNonNull(prefixes);
-        Objects.requireNonNull(namespaceMap);
-        Objects.requireNonNull(schemaMap);
+        mNamespaceMap = Objects.requireNonNull(namespaceMap);
+        mSchemaMap = Objects.requireNonNull(schemaMap);
         mTargetPrefixedNamespaceFilters =
                 SearchSpecToProtoConverterUtil.generateTargetNamespaceFilters(
                         prefixes, namespaceMap, searchSpec.getFilterNamespaces());
@@ -162,7 +178,64 @@ public final class SearchSpecToProtoConverter {
         }
         protoBuilder.setTermMatchType(termMatchCodeProto);
 
+        JoinSpec joinSpec = mSearchSpec.getJoinSpec();
+        if (joinSpec != null) {
+            SearchSpecToProtoConverter nestedConverter =
+                    new SearchSpecToProtoConverter(
+                            joinSpec.getNestedQuery(),
+                            joinSpec.getNestedSearchSpec(),
+                            mPrefixes,
+                            mNamespaceMap,
+                            mSchemaMap);
+
+            JoinSpecProto.NestedSpecProto nestedSpec =
+                    JoinSpecProto.NestedSpecProto.newBuilder()
+                            .setResultSpec(nestedConverter.toResultSpecProto(mNamespaceMap))
+                            .setScoringSpec(nestedConverter.toScoringSpecProto())
+                            .setSearchSpec(nestedConverter.toSearchSpecProto())
+                            .build();
+
+            JoinSpecProto.Builder joinSpecProtoBuilder =
+                    JoinSpecProto.newBuilder()
+                            .setNestedSpec(nestedSpec)
+                            .setParentPropertyExpression(JoinSpec.QUALIFIED_ID)
+                            .setChildPropertyExpression(joinSpec.getChildPropertyExpression())
+                            .setAggregationScoringStrategy(
+                                    toAggregationScoringStrategy(
+                                            joinSpec.getAggregationScoringStrategy()))
+                            .setMaxJoinedChildCount(joinSpec.getMaxJoinedResultCount());
+
+            protoBuilder.setJoinSpec(joinSpecProtoBuilder);
+        }
+
         return protoBuilder.build();
+    }
+
+    /**
+     * Helper to convert to JoinSpecProto.AggregationScore.
+     *
+     * <p>{@link JoinSpec#AGGREGATION_SCORING_OUTER_RESULT_RANKING_SIGNAL} will be treated as
+     * undefined, which is the default behavior.
+     *
+     * @param aggregationScoringStrategy the scoring strategy to convert.
+     */
+    @NonNull
+    public static JoinSpecProto.AggregationScoringStrategy.Code toAggregationScoringStrategy(
+            @JoinSpec.AggregationScoringStrategy int aggregationScoringStrategy) {
+        switch (aggregationScoringStrategy) {
+            case JoinSpec.AGGREGATION_SCORING_AVG_RANKING_SIGNAL:
+                return JoinSpecProto.AggregationScoringStrategy.Code.AVG;
+            case JoinSpec.AGGREGATION_SCORING_MIN_RANKING_SIGNAL:
+                return JoinSpecProto.AggregationScoringStrategy.Code.MIN;
+            case JoinSpec.AGGREGATION_SCORING_MAX_RANKING_SIGNAL:
+                return JoinSpecProto.AggregationScoringStrategy.Code.MAX;
+            case JoinSpec.AGGREGATION_SCORING_SUM_RANKING_SIGNAL:
+                return JoinSpecProto.AggregationScoringStrategy.Code.SUM;
+            case JoinSpec.AGGREGATION_SCORING_RESULT_COUNT:
+                return JoinSpecProto.AggregationScoringStrategy.Code.COUNT;
+            default:
+                return JoinSpecProto.AggregationScoringStrategy.Code.NONE;
+        }
     }
 
     /**
@@ -185,26 +258,37 @@ public final class SearchSpecToProtoConverter {
 
         // Rewrites the typePropertyMasks that exist in {@code prefixes}.
         int groupingType = mSearchSpec.getResultGroupingTypeFlags();
-        if ((groupingType & SearchSpec.GROUPING_TYPE_PER_PACKAGE) != 0
-                && (groupingType & SearchSpec.GROUPING_TYPE_PER_NAMESPACE) != 0) {
-            addPerPackagePerNamespaceResultGroupings(
-                    mPrefixes,
-                    mSearchSpec.getResultGroupingLimit(),
-                    namespaceMap,
-                    resultSpecBuilder);
-        } else if ((groupingType & SearchSpec.GROUPING_TYPE_PER_PACKAGE) != 0) {
-            addPerPackageResultGroupings(
-                    mPrefixes,
-                    mSearchSpec.getResultGroupingLimit(),
-                    namespaceMap,
-                    resultSpecBuilder);
-        } else if ((groupingType & SearchSpec.GROUPING_TYPE_PER_NAMESPACE) != 0) {
-            addPerNamespaceResultGroupings(
-                    mPrefixes,
-                    mSearchSpec.getResultGroupingLimit(),
-                    namespaceMap,
-                    resultSpecBuilder);
+        ResultSpecProto.ResultGroupingType resultGroupingType =
+                ResultSpecProto.ResultGroupingType.NONE;
+        switch (groupingType) {
+            case SearchSpec.GROUPING_TYPE_PER_PACKAGE:
+                addPerPackageResultGroupings(
+                        mPrefixes,
+                        mSearchSpec.getResultGroupingLimit(),
+                        namespaceMap,
+                        resultSpecBuilder);
+                resultGroupingType = ResultSpecProto.ResultGroupingType.NAMESPACE;
+                break;
+            case SearchSpec.GROUPING_TYPE_PER_NAMESPACE:
+                addPerNamespaceResultGroupings(
+                        mPrefixes,
+                        mSearchSpec.getResultGroupingLimit(),
+                        namespaceMap,
+                        resultSpecBuilder);
+                resultGroupingType = ResultSpecProto.ResultGroupingType.NAMESPACE;
+                break;
+            case SearchSpec.GROUPING_TYPE_PER_PACKAGE | SearchSpec.GROUPING_TYPE_PER_NAMESPACE:
+                addPerPackagePerNamespaceResultGroupings(
+                        mPrefixes,
+                        mSearchSpec.getResultGroupingLimit(),
+                        namespaceMap,
+                        resultSpecBuilder);
+                resultGroupingType = ResultSpecProto.ResultGroupingType.NAMESPACE;
+                break;
+            default:
+                break;
         }
+        resultSpecBuilder.setResultGroupType(resultGroupingType);
 
         List<TypePropertyMask.Builder> typePropertyMaskBuilders =
                 TypePropertyPathToProtoConverter.toTypePropertyMaskBuilderList(
@@ -242,6 +326,10 @@ public final class SearchSpecToProtoConverter {
                 .setOrderBy(orderCodeProto)
                 .setRankBy(toProtoRankingStrategy(mSearchSpec.getRankingStrategy()));
 
+        addTypePropertyWeights(mSearchSpec.getPropertyWeights(), protoBuilder);
+
+        protoBuilder.setAdvancedScoringExpression(mSearchSpec.getAdvancedRankingExpression());
+
         return protoBuilder.build();
     }
 
@@ -264,6 +352,10 @@ public final class SearchSpecToProtoConverter {
                 return ScoringSpecProto.RankingStrategy.Code.USAGE_TYPE2_COUNT;
             case SearchSpec.RANKING_STRATEGY_SYSTEM_USAGE_LAST_USED_TIMESTAMP:
                 return ScoringSpecProto.RankingStrategy.Code.USAGE_TYPE2_LAST_USED_TIMESTAMP;
+            case SearchSpec.RANKING_STRATEGY_ADVANCED_RANKING_EXPRESSION:
+                return ScoringSpecProto.RankingStrategy.Code.ADVANCED_SCORING_EXPRESSION;
+            case SearchSpec.RANKING_STRATEGY_JOIN_AGGREGATE_SCORE:
+                return ScoringSpecProto.RankingStrategy.Code.JOIN_AGGREGATE_SCORE;
             default:
                 throw new IllegalArgumentException(
                         "Invalid result ranking strategy: " + rankingStrategyCode);
@@ -317,10 +409,18 @@ public final class SearchSpecToProtoConverter {
             }
         }
 
-        for (List<String> namespaces : packageAndNamespaceToNamespaces.values()) {
+        for (List<String> prefixedNamespaces : packageAndNamespaceToNamespaces.values()) {
+            List<ResultSpecProto.ResultGrouping.Entry> entries =
+                    new ArrayList<>(prefixedNamespaces.size());
+            for (String namespace : prefixedNamespaces) {
+                entries.add(
+                        ResultSpecProto.ResultGrouping.Entry.newBuilder()
+                                .setNamespace(namespace)
+                                .build());
+            }
             resultSpecBuilder.addResultGroupings(
                     ResultSpecProto.ResultGrouping.newBuilder()
-                            .addAllNamespaces(namespaces)
+                            .addAllEntryGroupings(entries)
                             .setMaxResults(maxNumResults));
         }
     }
@@ -355,9 +455,17 @@ public final class SearchSpecToProtoConverter {
         }
 
         for (List<String> prefixedNamespaces : packageToNamespacesMap.values()) {
+            List<ResultSpecProto.ResultGrouping.Entry> entries =
+                    new ArrayList<>(prefixedNamespaces.size());
+            for (String namespace : prefixedNamespaces) {
+                entries.add(
+                        ResultSpecProto.ResultGrouping.Entry.newBuilder()
+                                .setNamespace(namespace)
+                                .build());
+            }
             resultSpecBuilder.addResultGroupings(
                     ResultSpecProto.ResultGrouping.newBuilder()
-                            .addAllNamespaces(prefixedNamespaces)
+                            .addAllEntryGroupings(entries)
                             .setMaxResults(maxNumResults));
         }
     }
@@ -403,11 +511,57 @@ public final class SearchSpecToProtoConverter {
             }
         }
 
-        for (List<String> namespaces : namespaceToPrefixedNamespaces.values()) {
+        for (List<String> prefixedNamespaces : namespaceToPrefixedNamespaces.values()) {
+            List<ResultSpecProto.ResultGrouping.Entry> entries =
+                    new ArrayList<>(prefixedNamespaces.size());
+            for (String namespace : prefixedNamespaces) {
+                entries.add(
+                        ResultSpecProto.ResultGrouping.Entry.newBuilder()
+                                .setNamespace(namespace)
+                                .build());
+            }
             resultSpecBuilder.addResultGroupings(
                     ResultSpecProto.ResultGrouping.newBuilder()
-                            .addAllNamespaces(namespaces)
+                            .addAllEntryGroupings(entries)
                             .setMaxResults(maxNumResults));
+        }
+    }
+
+    /**
+     * Adds {@link TypePropertyWeights} to {@link ScoringSpecProto}.
+     *
+     * <p>{@link TypePropertyWeights} are added to the {@link ScoringSpecProto} with database and
+     * package prefixing added to the schema type.
+     *
+     * @param typePropertyWeightsMap a map from unprefixed schema type to an inner-map of property
+     *     paths to weight.
+     * @param scoringSpecBuilder scoring spec to add weights to.
+     */
+    private void addTypePropertyWeights(
+            @NonNull Map<String, Map<String, Double>> typePropertyWeightsMap,
+            @NonNull ScoringSpecProto.Builder scoringSpecBuilder) {
+        Objects.requireNonNull(scoringSpecBuilder);
+        Objects.requireNonNull(typePropertyWeightsMap);
+
+        for (Map.Entry<String, Map<String, Double>> typePropertyWeight :
+                typePropertyWeightsMap.entrySet()) {
+            for (String prefix : mPrefixes) {
+                String prefixedSchemaType = prefix + typePropertyWeight.getKey();
+                if (mTargetPrefixedSchemaFilters.contains(prefixedSchemaType)) {
+                    TypePropertyWeights.Builder typePropertyWeightsBuilder =
+                            TypePropertyWeights.newBuilder().setSchemaType(prefixedSchemaType);
+
+                    for (Map.Entry<String, Double> propertyWeight :
+                            typePropertyWeight.getValue().entrySet()) {
+                        typePropertyWeightsBuilder.addPropertyWeights(
+                                PropertyWeight.newBuilder()
+                                        .setPath(propertyWeight.getKey())
+                                        .setWeight(propertyWeight.getValue()));
+                    }
+
+                    scoringSpecBuilder.addTypePropertyWeights(typePropertyWeightsBuilder);
+                }
+            }
         }
     }
 }

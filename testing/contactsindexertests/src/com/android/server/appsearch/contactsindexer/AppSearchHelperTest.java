@@ -57,8 +57,33 @@ public class AppSearchHelperTest {
     @Before
     public void setUp() throws Exception {
         mContext = ApplicationProvider.getApplicationContext();
-        mAppSearchHelper = AppSearchHelper.createAppSearchHelper(mContext, mSingleThreadedExecutor);
         mUpdateStats = new ContactsUpdateStats();
+
+        // b/258968096
+        // Internally AppSearchHelper.createAppSearchHelper will set Person and
+        // ContactPoint schema for AppSearch.
+        //
+        // Since everything is async, the fact we didn't wait until it finish is making
+        // testCreateAppSearchHelper_incompatibleSchemaChange flaky:
+        //   - In that test, it uses an AppSearchSessionShim to set
+        //   CONTACT_POINT_SCHEMA_WITH_LABEL_REPEATED
+        //   - Then, the test will create another AppSearchHelper
+        //   - For this local AppSearchHelper in the test, we are expecting an incompatible
+        //   schema change.
+        //   - But if mAppSearchHelper doesn't finish setting its schema, and
+        //   CONTACT_POINT_SCHEMA_WITH_LABEL_REPEATED is set first, mAppSearchHelper will get an
+        //   incompatible schema change, and the one created later for the test won't since it
+        //   will set the same schemas as mAppSearchHelper.
+        //
+        // To fix the flakiness, we need to wait until mAppSearchHelper finishes initialization.
+        // We choose to do it in the setup to make sure it won't create such flakiness in the
+        // future tests.
+        //
+        mAppSearchHelper = AppSearchHelper.createAppSearchHelper(mContext, mSingleThreadedExecutor);
+        // TODO(b/237115318) we need to revisit this once the contact indexer is refactored.
+        // getSession here will call get() on the future for AppSearchSession to make sure it has
+        // been initialized.
+        AppSearchSession unused = mAppSearchHelper.getSession();
     }
 
     @After

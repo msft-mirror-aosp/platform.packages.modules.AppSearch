@@ -19,6 +19,7 @@ package com.android.server.appsearch.stats;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.Context;
 import android.os.Process;
 import android.os.SystemClock;
@@ -183,7 +184,22 @@ public final class PlatformLogger implements AppSearchLogger {
 
     @Override
     public void logStats(@NonNull SetSchemaStats stats) {
-        // TODO(b/173532925): Log stats
+        Objects.requireNonNull(stats);
+        synchronized (mLock) {
+            if (shouldLogForTypeLocked(CallStats.CALL_TYPE_SET_SCHEMA)) {
+                logStatsImplLocked(stats);
+            }
+        }
+    }
+
+    @Override
+    public void logStats(@NonNull SchemaMigrationStats stats) {
+        Objects.requireNonNull(stats);
+        synchronized (mLock) {
+            if (shouldLogForTypeLocked(CallStats.CALL_TYPE_SCHEMA_MIGRATION)) {
+                logStatsImplLocked(stats);
+            }
+        }
     }
 
     /**
@@ -231,6 +247,90 @@ public final class PlatformLogger implements AppSearchLogger {
                     stats.getNumOperationsSucceeded(),
                     stats.getNumOperationsFailed(),
                     numReportedCalls);
+        } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+            // TODO(b/184204720) report hashing error to statsd
+            //  We need to set a special value(e.g. 0xFFFFFFFF) for the hashing of the database,
+            //  so in the dashboard we know there is some error for hashing.
+            //
+            // Something is wrong while calculating the hash code for database
+            // this shouldn't happen since we always use "MD5" and "UTF-8"
+            if (database != null) {
+                Log.e(TAG, "Error calculating hash code for database " + database, e);
+            }
+        }
+    }
+
+    @GuardedBy("mLock")
+    private void logStatsImplLocked(@NonNull SetSchemaStats stats) {
+        mLastPushTimeMillisLocked = SystemClock.elapsedRealtime();
+        ExtraStats extraStats = createExtraStatsLocked(stats.getPackageName(),
+                CallStats.CALL_TYPE_SET_SCHEMA);
+        String database = stats.getDatabase();
+        try {
+            int hashCodeForDatabase = calculateHashCodeMd5(database);
+            // ignore close exception
+            AppSearchStatsLog.write(AppSearchStatsLog.APP_SEARCH_SET_SCHEMA_STATS_REPORTED,
+                    extraStats.mSamplingInterval,
+                    extraStats.mSkippedSampleCount,
+                    extraStats.mPackageUid,
+                    hashCodeForDatabase,
+                    stats.getStatusCode(),
+                    stats.getTotalLatencyMillis(),
+                    stats.getNewTypeCount(),
+                    stats.getDeletedTypeCount(),
+                    stats.getCompatibleTypeChangeCount(),
+                    stats.getIndexIncompatibleTypeChangeCount(),
+                    stats.getBackwardsIncompatibleTypeChangeCount(),
+                    stats.getVerifyIncomingCallLatencyMillis(),
+                    stats.getExecutorAcquisitionLatencyMillis(),
+                    stats.getRebuildFromBundleLatencyMillis(),
+                    stats.getJavaLockAcquisitionLatencyMillis(),
+                    stats.getRewriteSchemaLatencyMillis(),
+                    stats.getTotalNativeLatencyMillis(),
+                    stats.getVisibilitySettingLatencyMillis(),
+                    stats.getDispatchChangeNotificationsLatencyMillis(),
+                    stats.getOptimizeLatencyMillis(),
+                    stats.isPackageObserved(),
+                    stats.getGetOldSchemaLatencyMillis(),
+                    stats.getGetObserverLatencyMillis(),
+                    stats.getPreparingChangeNotificationLatencyMillis(),
+                    stats.getSchemaMigrationCallType());
+        } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+            // TODO(b/184204720) report hashing error to statsd
+            //  We need to set a special value(e.g. 0xFFFFFFFF) for the hashing of the database,
+            //  so in the dashboard we know there is some error for hashing.
+            //
+            // Something is wrong while calculating the hash code for database
+            // this shouldn't happen since we always use "MD5" and "UTF-8"
+            if (database != null) {
+                Log.e(TAG, "Error calculating hash code for database " + database, e);
+            }
+        }
+    }
+
+    @GuardedBy("mLock")
+    private void logStatsImplLocked(@NonNull SchemaMigrationStats stats) {
+        mLastPushTimeMillisLocked = SystemClock.elapsedRealtime();
+        ExtraStats extraStats = createExtraStatsLocked(stats.getPackageName(),
+                CallStats.CALL_TYPE_SET_SCHEMA);
+        String database = stats.getDatabase();
+        try {
+            int hashCodeForDatabase = calculateHashCodeMd5(database);
+            // ignore close exception
+            AppSearchStatsLog.write(AppSearchStatsLog.APP_SEARCH_SET_SCHEMA_STATS_REPORTED,
+                    extraStats.mSamplingInterval,
+                    extraStats.mSkippedSampleCount,
+                    extraStats.mPackageUid,
+                    hashCodeForDatabase,
+                    stats.getTotalLatencyMillis(),
+                    stats.getGetSchemaLatencyMillis(),
+                    stats.getQueryAndTransformLatencyMillis(),
+                    stats.getFirstSetSchemaLatencyMillis(),
+                    stats.getSecondSetSchemaLatencyMillis(),
+                    stats.getSaveDocumentLatencyMillis(),
+                    stats.getTotalNeedMigratedDocumentCount(),
+                    stats.getTotalSuccessMigratedDocumentCount(),
+                    stats.getMigrationFailureCount());
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
             // TODO(b/184204720) report hashing error to statsd
             //  We need to set a special value(e.g. 0xFFFFFFFF) for the hashing of the database,
@@ -313,7 +413,12 @@ public final class PlatformLogger implements AppSearchLogger {
                     stats.getScoringLatencyMillis(),
                     stats.getRankingLatencyMillis(),
                     stats.getDocumentRetrievingLatencyMillis(),
-                    stats.getResultWithSnippetsCount());
+                    stats.getResultWithSnippetsCount(),
+                    stats.getJavaLockAcquisitionLatencyMillis(),
+                    stats.getAclCheckLatencyMillis(),
+                    stats.getNativeLockAcquisitionLatencyMillis(),
+                    stats.getJavaToNativeJniLatencyMillis(),
+                    stats.getNativeToJavaJniLatencyMillis());
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
             // TODO(b/184204720) report hashing error to statsd
             //  We need to set a special value(e.g. 0xFFFFFFFF) for the hashing of the database,

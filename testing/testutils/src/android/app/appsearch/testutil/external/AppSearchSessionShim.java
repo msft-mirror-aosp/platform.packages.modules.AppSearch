@@ -57,17 +57,6 @@ public interface AppSearchSessionShim extends Closeable {
     ListenableFuture<SetSchemaResponse> setSchemaAsync(@NonNull SetSchemaRequest request);
 
     /**
-     * @deprecated use {@link #setSchema}
-     * @param request the schema to set or update the AppSearch database to.
-     * @return a {@link ListenableFuture} which resolves to a {@link SetSchemaResponse} object.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<SetSchemaResponse> setSchema(@NonNull SetSchemaRequest request) {
-        return setSchemaAsync(request);
-    }
-
-    /**
      * Retrieves the schema most recently successfully provided to {@link #setSchema}.
      *
      * @return The pending {@link GetSchemaResponse} of performing this operation.
@@ -78,34 +67,12 @@ public interface AppSearchSessionShim extends Closeable {
     ListenableFuture<GetSchemaResponse> getSchemaAsync();
 
     /**
-     * @deprecated use {@link #getSchema}
-     * @return The pending {@link GetSchemaResponse} of performing this operation.
-     */
-    // This call hits disk; async API prevents us from treating these calls as properties.
-    @SuppressLint("KotlinPropertyAccess")
-    @NonNull
-    @Deprecated
-    default ListenableFuture<GetSchemaResponse> getSchema() {
-        return getSchemaAsync();
-    }
-
-    /**
      * Retrieves the set of all namespaces in the current database with at least one document.
      *
      * @return The pending result of performing this operation.
      */
     @NonNull
     ListenableFuture<Set<String>> getNamespacesAsync();
-
-    /**
-     * @deprecated use {@link #getNamespacesAsync()}
-     * @return The pending result of performing this operation.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<Set<String>> getNamespaces() {
-        return getNamespacesAsync();
-    }
 
     /**
      * Indexes documents into the {@link AppSearchSessionShim} database.
@@ -125,21 +92,6 @@ public interface AppSearchSessionShim extends Closeable {
             @NonNull PutDocumentsRequest request);
 
     /**
-     * @deprecated use {@link #put}
-     * @param request containing documents to be indexed.
-     * @return a {@link ListenableFuture} which resolves to an {@link AppSearchBatchResult}. The
-     *     keys of the returned {@link AppSearchBatchResult} are the IDs of the input documents. The
-     *     values are either {@code null} if the corresponding document was successfully indexed, or
-     *     a failed {@link AppSearchResult} otherwise.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<AppSearchBatchResult<String, Void>> put(
-            @NonNull PutDocumentsRequest request) {
-        return putAsync(request);
-    }
-
-    /**
      * Gets {@link GenericDocument} objects by document IDs in a namespace from the {@link
      * AppSearchSessionShim} database.
      *
@@ -155,24 +107,6 @@ public interface AppSearchSessionShim extends Closeable {
     @NonNull
     ListenableFuture<AppSearchBatchResult<String, GenericDocument>> getByDocumentIdAsync(
             @NonNull GetByDocumentIdRequest request);
-
-    /**
-     * @deprecated use {@link #getByDocumentId}
-     * @param request a request containing a namespace and IDs to get documents for.
-     * @return A {@link ListenableFuture} which resolves to an {@link AppSearchBatchResult}. The
-     *     keys of the {@link AppSearchBatchResult} represent the input document IDs from the {@link
-     *     GetByDocumentIdRequest} object. The values are either the corresponding {@link
-     *     GenericDocument} object for the ID on success, or an {@link AppSearchResult} object on
-     *     failure. For example, if an ID is not found, the value for that ID will be set to an
-     *     {@link AppSearchResult} object with result code: {@link
-     *     AppSearchResult#RESULT_NOT_FOUND}.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<AppSearchBatchResult<String, GenericDocument>> getByDocumentId(
-            @NonNull GetByDocumentIdRequest request) {
-        return getByDocumentIdAsync(request);
-    }
 
     /**
      * Retrieves documents from the open {@link AppSearchSessionShim} that match a given query
@@ -294,15 +228,18 @@ public interface AppSearchSessionShim extends Closeable {
      *   <li>"f " - Ending in trailing space.
      * </ul>
      *
+     * <p>Property restrict query like "subject:f" is not supported in suggestion API. It will
+     * return suggested String starting with "f" even if the term appears other than "subject"
+     * property.
+     *
      * @param suggestionQueryExpression the non empty query string to search suggestions
      * @param searchSuggestionSpec spec for setting document filters
      * @return The pending result of performing this operation which resolves to a List of {@link
      *     SearchSuggestionResult} on success. The returned suggestion Strings are ordered by the
      *     number of {@link SearchResult} you could get by using that suggestion in {@link #search}.
      * @see #search(String, SearchSpec)
-     * @hide
      */
-    // TODO(b/227356108) un-hide this API after fix following issues.
+    // TODO(b/227356108) Change the comment in this API after fix following issues.
     // 1: support property restrict tokenization, Example: [subject:car] will return ["cart",
     // "carburetor"] if AppSearch has documents contain those terms.
     // 2: support multiple terms, Example: [bar f] will return suggestions [bar foo] that could
@@ -332,18 +269,6 @@ public interface AppSearchSessionShim extends Closeable {
     ListenableFuture<Void> reportUsageAsync(@NonNull ReportUsageRequest request);
 
     /**
-     * @deprecated use {@link #reportUsage}
-     * @param request The usage reporting request.
-     * @return The pending result of performing this operation which resolves to {@code null} on
-     *     success.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<Void> reportUsage(@NonNull ReportUsageRequest request) {
-        return reportUsageAsync(request);
-    }
-
-    /**
      * Removes {@link GenericDocument} objects by document IDs in a namespace from the {@link
      * AppSearchSessionShim} database.
      *
@@ -366,23 +291,6 @@ public interface AppSearchSessionShim extends Closeable {
             @NonNull RemoveByDocumentIdRequest request);
 
     /**
-     * @deprecated use {@link #remove}
-     * @param request {@link RemoveByDocumentIdRequest} with IDs in a namespace to remove from the
-     *     index.
-     * @return a {@link ListenableFuture} which resolves to an {@link AppSearchBatchResult}. The
-     *     keys of the {@link AppSearchBatchResult} represent the input IDs from the {@link
-     *     RemoveByDocumentIdRequest} object. The values are either {@code null} on success, or a
-     *     failed {@link AppSearchResult} otherwise. IDs that are not found will return a failed
-     *     {@link AppSearchResult} with a result code of {@link AppSearchResult#RESULT_NOT_FOUND}.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<AppSearchBatchResult<String, Void>> remove(
-            @NonNull RemoveByDocumentIdRequest request) {
-        return removeAsync(request);
-    }
-
-    /**
      * Removes {@link GenericDocument}s from the index by Query. Documents will be removed if they
      * match the {@code queryExpression} in given namespaces and schemaTypes which is set via {@link
      * SearchSpec.Builder#addFilterNamespaces} and {@link SearchSpec.Builder#addFilterSchemas}.
@@ -397,25 +305,13 @@ public interface AppSearchSessionShim extends Closeable {
      *     document will be removed. All specific about how to scoring, ordering, snippeting and
      *     resulting will be ignored.
      * @return The pending result of performing this operation.
+     * @throws IllegalArgumentException if the {@link SearchSpec} contains a {@link JoinSpec}.
+     *     {@link JoinSpec} lets you join docs that are not owned by the caller, so the semantics of
+     *     failures from this method would be complex.
      */
     @NonNull
     ListenableFuture<Void> removeAsync(
             @NonNull String queryExpression, @NonNull SearchSpec searchSpec);
-
-    /**
-     * @deprecated use {@link #remove}
-     * @param queryExpression Query String to search.
-     * @param searchSpec Spec containing schemaTypes, namespaces and query expression indicates how
-     *     document will be removed. All specific about how to scoring, ordering, snippeting and
-     *     resulting will be ignored.
-     * @return The pending result of performing this operation.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<Void> remove(
-            @NonNull String queryExpression, @NonNull SearchSpec searchSpec) {
-        return removeAsync(queryExpression, searchSpec);
-    }
 
     /**
      * Gets the storage info for this {@link AppSearchSessionShim} database.
@@ -427,16 +323,6 @@ public interface AppSearchSessionShim extends Closeable {
      */
     @NonNull
     ListenableFuture<StorageInfo> getStorageInfoAsync();
-
-    /**
-     * @deprecated use {@link #getStorageInfoAsync()}
-     * @return a {@link ListenableFuture} which resolves to a {@link StorageInfo} object.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<StorageInfo> getStorageInfo() {
-        return getStorageInfoAsync();
-    }
 
     /**
      * Flush all schema and document updates, additions, and deletes to disk if possible.
@@ -451,19 +337,6 @@ public interface AppSearchSessionShim extends Closeable {
      */
     @NonNull
     ListenableFuture<Void> requestFlushAsync();
-
-    /**
-     * @deprecated use {@link #requestFlushAsync()}
-     * @return The pending result of performing this operation. {@link
-     *     android.app.appsearch.exceptions.AppSearchException} with {@link
-     *     AppSearchResult#RESULT_INTERNAL_ERROR} will be set to the future if we hit error when
-     *     save to disk.
-     */
-    @NonNull
-    @Deprecated
-    default ListenableFuture<Void> requestFlush() {
-        return requestFlushAsync();
-    }
 
     /**
      * Returns the {@link Features} to check for the availability of certain features for this
