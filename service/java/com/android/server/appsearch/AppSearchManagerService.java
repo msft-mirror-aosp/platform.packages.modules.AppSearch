@@ -158,8 +158,8 @@ public class AppSearchManagerService extends SystemService {
         mContext.registerReceiverForAllUsers(
                 new UserActionReceiver(),
                 new IntentFilter(Intent.ACTION_USER_REMOVED),
-                /*broadcastPermission=*/ null,
-                /*scheduler=*/ null);
+                /* broadcastPermission= */ null,
+                /* scheduler= */ null);
 
         //TODO(b/145759910) Add a direct callback when user clears the data instead of relying on
         // broadcasts
@@ -171,8 +171,8 @@ public class AppSearchManagerService extends SystemService {
         mContext.registerReceiverForAllUsers(
                 new PackageChangedReceiver(),
                 packageChangedFilter,
-                /*broadcastPermission=*/ null,
-                /*scheduler=*/ null);
+                /* broadcastPermission= */ null,
+                /* scheduler= */ null);
     }
 
     private class UserActionReceiver extends BroadcastReceiver {
@@ -288,7 +288,7 @@ public class AppSearchManagerService extends SystemService {
                                     FrameworkAppSearchConfig.getInstance(SHARED_EXECUTOR));
                     List<PackageInfo> installedPackageInfos = userContext
                             .getPackageManager()
-                            .getInstalledPackages(/*flags=*/0);
+                            .getInstalledPackages(/* flags= */ 0);
                     Set<String> packagesToKeep = new ArraySet<>(installedPackageInfos.size());
                     for (int i = 0; i < installedPackageInfos.size(); i++) {
                         packagesToKeep.add(installedPackageInfos.get(i).packageName);
@@ -568,9 +568,9 @@ public class AppSearchManagerService extends SystemService {
                                     callingPackageName,
                                     databaseName,
                                     document,
-                                    /*sendChangeNotifications=*/ true,
+                                    /* sendChangeNotifications= */ true,
                                     instance.getLogger());
-                            resultBuilder.setSuccess(document.getId(), /*value=*/ null);
+                            resultBuilder.setSuccess(document.getId(), /* value= */ null);
                             ++operationSuccessCount;
                         } catch (Throwable t) {
                             resultBuilder.setResult(document.getId(), throwableToFailedResult(t));
@@ -593,7 +593,7 @@ public class AppSearchManagerService extends SystemService {
                     // The existing documents with same ID will be deleted, so there may be some
                     // resources that could be released after optimize().
                     checkForOptimize(
-                            targetUser, instance, /*mutateBatchSize=*/ documents.size());
+                            targetUser, instance, /* mutateBatchSize= */ documents.size());
                 } catch (Throwable t) {
                     ++operationFailureCount;
                     statusCode = throwableToFailedResult(t).getResultCode();
@@ -981,7 +981,7 @@ public class AppSearchManagerService extends SystemService {
                                 databaseName,
                                 queryExpression,
                                 new SearchSpec(searchSpecBundle),
-                                /*logger=*/ null);
+                                /* logger= */ null);
                         while (!searchResultPage.getResults().isEmpty()) {
                             for (int i = 0; i < searchResultPage.getResults().size(); i++) {
                                 AppSearchMigrationHelper.writeBundleToOutputStream(
@@ -992,7 +992,7 @@ public class AppSearchManagerService extends SystemService {
                             searchResultPage = instance.getAppSearchImpl().getNextPage(
                                     callingPackageName,
                                     searchResultPage.getNextPageToken(),
-                                    /*statsBuilder=*/ null);
+                                    /* sStatsBuilder= */ null);
                         }
                     }
                     invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
@@ -1053,8 +1053,8 @@ public class AppSearchManagerService extends SystemService {
                                         callingPackageName,
                                         databaseName,
                                         document,
-                                        /*sendChangeNotifications=*/ false,
-                                        /*logger=*/ null);
+                                        /* sendChangeNotifications= */ false,
+                                        /* logger= */ null);
                                 ++totalSuccessMigratedDocumentCount;
                             } catch (Throwable t) {
                                 migrationFailureBundles.add(new SetSchemaResponse.MigrationFailure(
@@ -1198,7 +1198,7 @@ public class AppSearchManagerService extends SystemService {
                     instance.getAppSearchImpl().reportUsage(targetPackageName, databaseName,
                             namespace, documentId, usageTimeMillis, systemUsage);
                     invokeCallbackOnResult(
-                            callback, AppSearchResult.newSuccessfulResult(/*value=*/ null));
+                            callback, AppSearchResult.newSuccessfulResult(/* value= */ null));
                 } catch (Throwable t) {
                     invokeCallbackOnResult(callback, throwableToFailedResult(t));
                 }
@@ -1246,7 +1246,7 @@ public class AppSearchManagerService extends SystemService {
                                     databaseName,
                                     namespace,
                                     id,
-                                    /*removeStatsBuilder=*/ null);
+                                    /* removeStatsBuilder= */ null);
                             ++operationSuccessCount;
                             resultBuilder.setSuccess(id, /*result= */ null);
                         } catch (Throwable t) {
@@ -1333,7 +1333,7 @@ public class AppSearchManagerService extends SystemService {
                             databaseName,
                             queryExpression,
                             new SearchSpec(searchSpecBundle),
-                            /*removeStatsBuilder=*/ null);
+                            /* removeStatsBuilder= */ null);
                     // Now that the batch has been written. Persist the newly written data.
                     instance.getAppSearchImpl().persistToDisk(PersistType.Code.LITE);
                     ++operationSuccessCount;
@@ -1491,7 +1491,7 @@ public class AppSearchManagerService extends SystemService {
                     observerProxyStub.asBinder().linkToDeath(
                             () -> instance.getAppSearchImpl()
                                     .unregisterObserverCallback(targetPackageName, observerProxy),
-                            /*flags=*/ 0);
+                            /* flags= */ 0);
 
                     // Register the observer.
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
@@ -1772,7 +1772,7 @@ public class AppSearchManagerService extends SystemService {
                     stats.dataSize += userStorageInfo.getTotalSizeBytes();
                 } else {
                     List<PackageInfo> packagesForUser = mPackageManager.getInstalledPackagesAsUser(
-                            /*flags=*/0, userHandle.getIdentifier());
+                            /* flags= */ 0, userHandle.getIdentifier());
                     if (packagesForUser != null) {
                         for (int i = 0; i < packagesForUser.size(); i++) {
                             String packageName = packagesForUser.get(i).packageName;
