@@ -48,8 +48,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The helper class for {@link AppSearchSchema} migration.
@@ -104,7 +105,8 @@ public class AppSearchMigrationHelper implements Closeable {
         File queryFile = File.createTempFile(/*prefix=*/"appsearch", /*suffix=*/null);
         try (ParcelFileDescriptor fileDescriptor =
                      ParcelFileDescriptor.open(queryFile, MODE_WRITE_ONLY)) {
-            CompletableFuture<AppSearchResult<Void>> future = new CompletableFuture<>();
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicReference<AppSearchResult<Void>> resultReference = new AtomicReference<>();
             mService.writeQueryResultsToFile(mCallerAttributionSource, mDatabaseName,
                     fileDescriptor,
                     /*queryExpression=*/ "",
@@ -116,10 +118,12 @@ public class AppSearchMigrationHelper implements Closeable {
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
-                            future.complete(resultParcel.getResult());
+                            resultReference.set(resultParcel.getResult());
+                            latch.countDown();
                         }
                     });
-            AppSearchResult<Void> result = future.get();
+            latch.await();
+            AppSearchResult<Void> result = resultReference.get();
             if (!result.isSuccess()) {
                 throw new AppSearchException(result.getResultCode(), result.getErrorMessage());
             }
@@ -158,11 +162,10 @@ public class AppSearchMigrationHelper implements Closeable {
         }
         try (ParcelFileDescriptor fileDescriptor =
                      ParcelFileDescriptor.open(mMigratedFile, MODE_READ_ONLY)) {
-            CompletableFuture<AppSearchResult<List<Bundle>>> future = new CompletableFuture<>();
-            mService.putDocumentsFromFile(
-                    mCallerAttributionSource,
-                    mDatabaseName,
-                    fileDescriptor,
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicReference<AppSearchResult<List<Bundle>>> resultReference =
+                    new AtomicReference<>();
+            mService.putDocumentsFromFile(mCallerAttributionSource, mDatabaseName, fileDescriptor,
                     mUserHandle,
                     schemaMigrationStatsBuilder.build().getBundle(),
                     totalLatencyStartTimeMillis,
@@ -170,10 +173,12 @@ public class AppSearchMigrationHelper implements Closeable {
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
-                            future.complete(resultParcel.getResult());
+                            resultReference.set(resultParcel.getResult());
+                            latch.countDown();
                         }
                     });
-            AppSearchResult<List<Bundle>> result = future.get();
+            latch.await();
+            AppSearchResult<List<Bundle>> result = resultReference.get();
             if (!result.isSuccess()) {
                 return AppSearchResult.newFailedResult(result);
             }
