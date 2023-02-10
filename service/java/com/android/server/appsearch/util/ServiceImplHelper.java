@@ -328,8 +328,8 @@ public class ServiceImplHelper {
             } else {
                 executor.execute(lambda);
             }
-        } catch (Throwable t) {
-            invokeCallbackOnResult(errorCallback, throwableToFailedResult(t));
+        } catch (RuntimeException e) {
+            invokeCallbackOnResult(errorCallback, throwableToFailedResult(e));
         }
         return true;
     }
@@ -375,8 +375,8 @@ public class ServiceImplHelper {
             } else {
                 executor.execute(lambda);
             }
-        } catch (Throwable t) {
-            invokeCallbackOnError(errorCallback, t);
+        } catch (RuntimeException e) {
+            invokeCallbackOnError(errorCallback, e);
         }
         return true;
     }
