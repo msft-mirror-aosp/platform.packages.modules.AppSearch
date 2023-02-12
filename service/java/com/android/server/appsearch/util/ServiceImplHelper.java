@@ -188,7 +188,8 @@ public class ServiceImplHelper {
         // Obtain the user where the client is running in. Note that this could be different from
         // the userHandle where the client wants to run the AppSearch operation in.
         UserHandle callingUserHandle = UserHandle.getUserHandleForUid(callingUid);
-        Context callingUserContext = AppSearchEnvironmentFactory.getInstance()
+        Context callingUserContext = AppSearchEnvironmentFactory
+            .getEnvironmentInstance()
             .createContextAsUser(mContext, callingUserHandle);
         String callingPackageName =
             Objects.requireNonNull(callerAttributionSource.getPackageName());

@@ -180,7 +180,8 @@ public final class AppSearchUserInstanceManager {
         synchronized (mStorageInfoLocked) {
             UserStorageInfo userStorageInfo = mStorageInfoLocked.get(userHandle);
             if (userStorageInfo == null) {
-                File appSearchDir = AppSearchEnvironmentFactory.getInstance()
+                File appSearchDir = AppSearchEnvironmentFactory
+                    .getEnvironmentInstance()
                     .getAppSearchDir(userContext, userHandle);
                 userStorageInfo = new UserStorageInfo(appSearchDir);
                 mStorageInfoLocked.put(userHandle, userStorageInfo);
@@ -213,7 +214,8 @@ public final class AppSearchUserInstanceManager {
         // Initialize the classes that make up AppSearchUserInstance
         PlatformLogger logger = new PlatformLogger(userContext, config);
 
-        File appSearchDir = AppSearchEnvironmentFactory.getInstance()
+        File appSearchDir = AppSearchEnvironmentFactory
+            .getEnvironmentInstance()
             .getAppSearchDir(userContext, userHandle);
         File icingDir = new File(appSearchDir, "icing");
         Log.i(TAG, "Creating new AppSearch instance at: " + icingDir);
