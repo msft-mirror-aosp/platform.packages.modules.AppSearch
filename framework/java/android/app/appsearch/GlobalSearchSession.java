@@ -427,20 +427,6 @@ public class GlobalSearchSession implements Closeable {
     }
 
     /**
-     * @deprecated use #registerObserverCallback.
-     * @hide
-     */
-    @UnsupportedAppUsage
-    @Deprecated
-    public void addObserver(
-            @NonNull String observedPackage,
-            @NonNull ObserverSpec spec,
-            @NonNull Executor executor,
-            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
-        registerObserverCallback(observedPackage, spec, executor, observer);
-    }
-
-    /**
      * Removes previously registered {@link ObserverCallback} instances from the system.
      *
      * <p>All instances of {@link ObserverCallback} which are registered to observe
@@ -495,19 +481,6 @@ public class GlobalSearchSession implements Closeable {
                 mObserverCallbacksLocked.remove(targetPackageName);
             }
         }
-    }
-
-
-    /**
-     * @deprecated use #unregisterObserverCallback.
-     * @hide
-     */
-    @UnsupportedAppUsage
-    @Deprecated
-    public void removeObserver(
-            @NonNull String targetPackageName,
-            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
-        unregisterObserverCallback(targetPackageName, observer);
     }
 
     /**
