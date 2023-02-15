@@ -44,8 +44,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -863,10 +864,15 @@ public final class AppSearchSession implements Closeable {
                 // Migration process
                 // 1. Validate and retrieve all active migrators.
                 long getSchemaLatencyStartTimeMillis = SystemClock.elapsedRealtime();
-                CompletableFuture<AppSearchResult<GetSchemaResponse>> getSchemaFuture =
-                        new CompletableFuture<>();
-                getSchema(callbackExecutor, getSchemaFuture::complete);
-                AppSearchResult<GetSchemaResponse> getSchemaResult = getSchemaFuture.get();
+                CountDownLatch getSchemaLatch = new CountDownLatch(1);
+                AtomicReference<AppSearchResult<GetSchemaResponse>> getSchemaResultRef =
+                        new AtomicReference<>();
+                getSchema(callbackExecutor, (result) -> {
+                    getSchemaResultRef.set(result);
+                    getSchemaLatch.countDown();
+                });
+                getSchemaLatch.await();
+                AppSearchResult<GetSchemaResponse> getSchemaResult = getSchemaResultRef.get();
                 if (!getSchemaResult.isSuccess()) {
                     // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                     safeExecute(
@@ -895,8 +901,10 @@ public final class AppSearchSession implements Closeable {
                 // 2. SetSchema with forceOverride=false, to retrieve the list of
                 // incompatible/deleted types.
                 long firstSetSchemaLatencyStartMillis = SystemClock.elapsedRealtime();
-                CompletableFuture<AppSearchResult<Bundle>> setSchemaFuture =
-                        new CompletableFuture<>();
+                CountDownLatch setSchemaLatch = new CountDownLatch(1);
+                AtomicReference<AppSearchResult<Bundle>> setSchemaResultRef =
+                        new AtomicReference<>();
+
                 mService.setSchema(
                         mCallerAttributionSource,
                         mDatabaseName,
@@ -910,10 +918,12 @@ public final class AppSearchSession implements Closeable {
                         new IAppSearchResultCallback.Stub() {
                             @Override
                             public void onResult(AppSearchResultParcel resultParcel) {
-                                setSchemaFuture.complete(resultParcel.getResult());
+                                setSchemaResultRef.set(resultParcel.getResult());
+                                setSchemaLatch.countDown();
                             }
                         });
-                AppSearchResult<Bundle> setSchemaResult = setSchemaFuture.get();
+                setSchemaLatch.await();
+                AppSearchResult<Bundle> setSchemaResult = setSchemaResultRef.get();
                 if (!setSchemaResult.isSuccess()) {
                     // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                     safeExecute(
@@ -953,8 +963,9 @@ public final class AppSearchSession implements Closeable {
                     if (internalSetSchemaResponse1.isSuccess()) {
                         internalSetSchemaResponse = internalSetSchemaResponse1;
                     } else {
-                        CompletableFuture<AppSearchResult<Bundle>> setSchema2Future =
-                                new CompletableFuture<>();
+                        CountDownLatch setSchema2Latch = new CountDownLatch(1);
+                        AtomicReference<AppSearchResult<Bundle>> setSchema2ResultRef =
+                                new AtomicReference<>();
                         // only trigger second setSchema() call if the first one is fail.
                         mService.setSchema(
                                 mCallerAttributionSource,
@@ -969,10 +980,12 @@ public final class AppSearchSession implements Closeable {
                                 new IAppSearchResultCallback.Stub() {
                                     @Override
                                     public void onResult(AppSearchResultParcel resultParcel) {
-                                        setSchema2Future.complete(resultParcel.getResult());
+                                        setSchema2ResultRef.set(resultParcel.getResult());
+                                        setSchema2Latch.countDown();
                                     }
                                 });
-                        AppSearchResult<Bundle> setSchema2Result = setSchema2Future.get();
+                        setSchema2Latch.await();
+                        AppSearchResult<Bundle> setSchema2Result = setSchema2ResultRef.get();
                         if (!setSchema2Result.isSuccess()) {
                             // we failed to set the schema in second time with forceOverride = true,
                             // which is an impossible case. Since we only swallow the incompatible

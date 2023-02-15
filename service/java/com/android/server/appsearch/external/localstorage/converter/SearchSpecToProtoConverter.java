@@ -216,7 +216,7 @@ public final class SearchSpecToProtoConverter {
                     callerAccess,
                     visibilityStore,
                     inaccessibleSchemaPrefixes,
-                    mTargetPrefixedSchemaFilters,
+                    accessibleSchemaPrefixes,
                     visibilityChecker);
         }
     }
