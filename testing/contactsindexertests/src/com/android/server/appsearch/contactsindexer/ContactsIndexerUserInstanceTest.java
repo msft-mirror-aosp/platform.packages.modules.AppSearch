@@ -60,6 +60,7 @@ import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -591,6 +592,12 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mContactsDeleteSucceededCount).isEqualTo(4);
     }
 
+    // TODO(b/243542728) This tests whether a full update job will be run to prune the person
+    //  corpus when AppSearch reaches its max document limit. So we do want to change the device
+    //  config on the system to make the max document limit 100. And after we try to index 250
+    //  documents, the full update can be triggered. Disable this test for now as the asked
+    //  permissions are always denied.
+    @Ignore
     @Test
     public void testDeltaUpdate_outOfSpaceError_fullUpdateScheduled() throws Exception {
         UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
