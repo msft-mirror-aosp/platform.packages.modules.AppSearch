@@ -18,6 +18,7 @@ package android.app.appsearch;
 
 import android.annotation.CurrentTimeMillisLong;
 import android.annotation.NonNull;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 
 import java.util.Objects;
 
@@ -91,6 +92,7 @@ public final class ReportUsageRequest {
          * <p>If unset, this defaults to the current timestamp at the time that the {@link
          * ReportUsageRequest} is constructed.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public ReportUsageRequest.Builder setUsageTimestampMillis(
                 @CurrentTimeMillisLong long usageTimestampMillis) {
