@@ -382,12 +382,17 @@ public class FrameworkAppSearchConfigTest {
                 FrameworkAppSearchConfig.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
                 Integer.toString(369369),
                 false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                Integer.toString(1000),
+                false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
         assertThat(appSearchConfig.getCachedBytesOptimizeThreshold()).isEqualTo(147147);
         assertThat(appSearchConfig.getCachedTimeOptimizeThresholdMs()).isEqualTo(258258);
         assertThat(appSearchConfig.getCachedDocCountOptimizeThreshold()).isEqualTo(369369);
+        assertThat(appSearchConfig.getCachedMinTimeOptimizeThresholdMs()).isEqualTo(1000);
     }
 
     @Test
@@ -403,6 +408,10 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
                 Integer.toString(369369),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                Integer.toString(1000),
                 false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
@@ -420,10 +429,15 @@ public class FrameworkAppSearchConfigTest {
                 FrameworkAppSearchConfig.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
                 Integer.toString(963963),
                 false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                Integer.toString(2000),
+                false);
 
         assertThat(appSearchConfig.getCachedBytesOptimizeThreshold()).isEqualTo(741741);
         assertThat(appSearchConfig.getCachedTimeOptimizeThresholdMs()).isEqualTo(852852);
         assertThat(appSearchConfig.getCachedDocCountOptimizeThreshold()).isEqualTo(963963);
+        assertThat(appSearchConfig.getCachedMinTimeOptimizeThresholdMs()).isEqualTo(2000);
     }
 
     @Test
