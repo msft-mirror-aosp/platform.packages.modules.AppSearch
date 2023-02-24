@@ -73,8 +73,7 @@ public class AppSearchException extends Exception {
      *
      * @return One of the constants documented in {@link AppSearchResult#getResultCode}.
      */
-    @AppSearchResult.ResultCode
-    public int getResultCode() {
+    public @AppSearchResult.ResultCode int getResultCode() {
         return mResultCode;
     }
 

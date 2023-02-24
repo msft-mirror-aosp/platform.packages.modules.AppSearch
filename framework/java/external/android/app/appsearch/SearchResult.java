@@ -18,7 +18,6 @@ package android.app.appsearch;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Bundle;
 
 import com.android.internal.util.Preconditions;
@@ -213,7 +212,6 @@ public final class SearchResult {
         }
 
         /** Sets the document which matched. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setGenericDocument(@NonNull GenericDocument document) {
             Objects.requireNonNull(document);
@@ -223,7 +221,6 @@ public final class SearchResult {
         }
 
         /** Adds another match to this SearchResult. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addMatchInfo(@NonNull MatchInfo matchInfo) {
             Preconditions.checkState(
@@ -236,7 +233,6 @@ public final class SearchResult {
         }
 
         /** Sets the ranking signal of the matched document in this SearchResult. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setRankingSignal(double rankingSignal) {
             resetIfBuilt();
@@ -249,7 +245,6 @@ public final class SearchResult {
          *
          * @param joinedResult The joined SearchResult to add.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addJoinedResult(@NonNull SearchResult joinedResult) {
             resetIfBuilt();
@@ -608,7 +603,6 @@ public final class SearchResult {
             }
 
             /** Sets the exact {@link MatchRange} corresponding to the given entry. */
-            @CanIgnoreReturnValue
             @NonNull
             public Builder setExactMatchRange(@NonNull MatchRange matchRange) {
                 mExactMatchRange = Objects.requireNonNull(matchRange);
@@ -616,7 +610,6 @@ public final class SearchResult {
             }
 
             /** Sets the submatch {@link MatchRange} corresponding to the given entry. */
-            @CanIgnoreReturnValue
             @NonNull
             public Builder setSubmatchRange(@NonNull MatchRange matchRange) {
                 mSubmatchRange = Objects.requireNonNull(matchRange);
@@ -624,7 +617,6 @@ public final class SearchResult {
             }
 
             /** Sets the snippet {@link MatchRange} corresponding to the given entry. */
-            @CanIgnoreReturnValue
             @NonNull
             public Builder setSnippetRange(@NonNull MatchRange matchRange) {
                 mSnippetRange = Objects.requireNonNull(matchRange);

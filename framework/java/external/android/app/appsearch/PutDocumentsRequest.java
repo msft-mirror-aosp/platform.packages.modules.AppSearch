@@ -18,7 +18,6 @@ package android.app.appsearch;
 
 
 import android.annotation.NonNull;
-import android.app.appsearch.annotation.CanIgnoreReturnValue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,7 +50,6 @@ public final class PutDocumentsRequest {
         private boolean mBuilt = false;
 
         /** Adds one or more {@link GenericDocument} objects to the request. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addGenericDocuments(@NonNull GenericDocument... documents) {
             Objects.requireNonNull(documents);
@@ -60,7 +58,6 @@ public final class PutDocumentsRequest {
         }
 
         /** Adds a collection of {@link GenericDocument} objects to the request. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addGenericDocuments(
                 @NonNull Collection<? extends GenericDocument> documents) {

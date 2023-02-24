@@ -17,7 +17,6 @@ package android.app.appsearch;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Bundle;
 import android.util.ArraySet;
 
@@ -169,14 +168,12 @@ public class VisibilityDocument extends GenericDocument {
         }
 
         /** Sets whether this schema has opted out of platform surfacing. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setNotDisplayedBySystem(boolean notDisplayedBySystem) {
             return setPropertyBoolean(NOT_DISPLAYED_BY_SYSTEM_PROPERTY, notDisplayedBySystem);
         }
 
         /** Add {@link PackageIdentifier} of packages which has access to this schema. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addVisibleToPackages(@NonNull Set<PackageIdentifier> packageIdentifiers) {
             Objects.requireNonNull(packageIdentifiers);
@@ -185,7 +182,6 @@ public class VisibilityDocument extends GenericDocument {
         }
 
         /** Add {@link PackageIdentifier} of packages which has access to this schema. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addVisibleToPackage(@NonNull PackageIdentifier packageIdentifier) {
             Objects.requireNonNull(packageIdentifier);
@@ -200,7 +196,6 @@ public class VisibilityDocument extends GenericDocument {
          * <p>The querier could have access if they holds ALL required permissions of ANY of the
          * individual value sets.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setVisibleToPermissions(@NonNull Set<Set<Integer>> visibleToPermissions) {
             Objects.requireNonNull(visibleToPermissions);

@@ -17,7 +17,6 @@
 package android.app.appsearch;
 
 import android.annotation.NonNull;
-import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Bundle;
 
 import java.util.Objects;
@@ -78,7 +77,6 @@ public class StorageInfo {
         private int mAliveNamespacesCount;
 
         /** Sets the size in bytes. */
-        @CanIgnoreReturnValue
         @NonNull
         public StorageInfo.Builder setSizeBytes(long sizeBytes) {
             mSizeBytes = sizeBytes;
@@ -86,7 +84,6 @@ public class StorageInfo {
         }
 
         /** Sets the number of alive documents. */
-        @CanIgnoreReturnValue
         @NonNull
         public StorageInfo.Builder setAliveDocumentsCount(int aliveDocumentsCount) {
             mAliveDocumentsCount = aliveDocumentsCount;
@@ -94,7 +91,6 @@ public class StorageInfo {
         }
 
         /** Sets the number of alive namespaces. */
-        @CanIgnoreReturnValue
         @NonNull
         public StorageInfo.Builder setAliveNamespacesCount(int aliveNamespacesCount) {
             mAliveNamespacesCount = aliveNamespacesCount;

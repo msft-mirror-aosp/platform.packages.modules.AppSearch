@@ -120,7 +120,6 @@ package android.app.appsearch {
   }
 
   public static final class AppSearchSchema.StringPropertyConfig extends android.app.appsearch.AppSearchSchema.PropertyConfig {
-    method public boolean getDeletionPropagation();
     method public int getIndexingType();
     method public int getJoinableValueType();
     method public int getTokenizerType();
@@ -139,7 +138,6 @@ package android.app.appsearch {
     ctor public AppSearchSchema.StringPropertyConfig.Builder(@NonNull String);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig build();
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setCardinality(int);
-    method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setDeletionPropagation(boolean);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setIndexingType(int);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setJoinableValueType(int);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setTokenizerType(int);
@@ -418,9 +416,6 @@ package android.app.appsearch {
     method public int getSnippetCount();
     method public int getSnippetCountPerProperty();
     method public int getTermMatch();
-    method public boolean isListFilterQueryLanguageEnabled();
-    method public boolean isNumericSearchEnabled();
-    method public boolean isVerbatimSearchEnabled();
     field public static final int GROUPING_TYPE_PER_NAMESPACE = 2; // 0x2
     field public static final int GROUPING_TYPE_PER_PACKAGE = 1; // 0x1
     field public static final int ORDER_ASCENDING = 1; // 0x1
@@ -452,9 +447,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSpec.Builder addProjectionPaths(@NonNull String, @NonNull java.util.Collection<android.app.appsearch.PropertyPath>);
     method @NonNull public android.app.appsearch.SearchSpec build();
     method @NonNull public android.app.appsearch.SearchSpec.Builder setJoinSpec(@NonNull android.app.appsearch.JoinSpec);
-    method @NonNull public android.app.appsearch.SearchSpec.Builder setListFilterQueryLanguageEnabled(boolean);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setMaxSnippetSize(@IntRange(from=0, to=0x2710) int);
-    method @NonNull public android.app.appsearch.SearchSpec.Builder setNumericSearchEnabled(boolean);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setOrder(int);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setPropertyWeightPaths(@NonNull String, @NonNull java.util.Map<android.app.appsearch.PropertyPath,java.lang.Double>);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setPropertyWeights(@NonNull String, @NonNull java.util.Map<java.lang.String,java.lang.Double>);
@@ -465,7 +458,6 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSpec.Builder setSnippetCount(@IntRange(from=0, to=0x2710) int);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setSnippetCountPerProperty(@IntRange(from=0, to=0x2710) int);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setTermMatch(int);
-    method @NonNull public android.app.appsearch.SearchSpec.Builder setVerbatimSearchEnabled(boolean);
   }
 
   public class SearchSuggestionResult {

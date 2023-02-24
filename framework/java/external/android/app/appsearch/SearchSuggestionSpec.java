@@ -21,7 +21,6 @@ import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
-import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.util.BundleUtil;
 import android.os.Bundle;
@@ -144,8 +143,7 @@ public class SearchSuggestionSpec {
     }
 
     /** Returns the ranking strategy. */
-    @SuggestionRankingStrategy
-    public int getRankingStrategy() {
+    public @SuggestionRankingStrategy int getRankingStrategy() {
         return mBundle.getInt(RANKING_STRATEGY_FIELD);
     }
 
@@ -223,10 +221,8 @@ public class SearchSuggestionSpec {
         private Bundle mTypePropertyFilters = new Bundle();
         private Bundle mDocumentIds = new Bundle();
         private final int mTotalResultCount;
-
-        @SuggestionRankingStrategy
-        private int mRankingStrategy = SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT;
-
+        private @SuggestionRankingStrategy int mRankingStrategy =
+                SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT;
         private boolean mBuilt = false;
 
         /**
@@ -246,7 +242,6 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all namespaces.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterNamespaces(@NonNull String... namespaces) {
             Objects.requireNonNull(namespaces);
@@ -260,7 +255,6 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all namespaces.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterNamespaces(@NonNull Collection<String> namespaces) {
             Objects.requireNonNull(namespaces);
@@ -275,7 +269,6 @@ public class SearchSuggestionSpec {
          * <p>The default value {@link #SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT} will be used if
          * this method is never called.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setRankingStrategy(@SuggestionRankingStrategy int rankingStrategy) {
             Preconditions.checkArgumentInRange(
@@ -294,7 +287,6 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all schema.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull String... schemaTypes) {
             Objects.requireNonNull(schemaTypes);
@@ -308,7 +300,6 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all schema.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull Collection<String> schemaTypes) {
             Objects.requireNonNull(schemaTypes);
@@ -388,7 +379,6 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all documents.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterDocumentIds(
                 @NonNull String namespace, @NonNull String... documentIds) {
@@ -404,7 +394,6 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all documents.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterDocumentIds(
                 @NonNull String namespace, @NonNull Collection<String> documentIds) {

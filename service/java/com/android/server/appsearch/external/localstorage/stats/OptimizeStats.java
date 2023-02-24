@@ -18,7 +18,6 @@ package com.android.server.appsearch.external.localstorage.stats;
 
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
-import android.app.appsearch.annotation.CanIgnoreReturnValue;
 
 import java.util.Objects;
 
@@ -156,7 +155,6 @@ public final class OptimizeStats {
         long mNativeTimeSinceLastOptimizeMillis;
 
         /** Sets the status code. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setStatusCode(@AppSearchResult.ResultCode int statusCode) {
             mStatusCode = statusCode;
@@ -164,7 +162,6 @@ public final class OptimizeStats {
         }
 
         /** Sets total latency in millis. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setTotalLatencyMillis(int totalLatencyMillis) {
             mTotalLatencyMillis = totalLatencyMillis;
@@ -172,7 +169,6 @@ public final class OptimizeStats {
         }
 
         /** Sets native latency in millis. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeLatencyMillis(int nativeLatencyMillis) {
             mNativeLatencyMillis = nativeLatencyMillis;
@@ -180,7 +176,6 @@ public final class OptimizeStats {
         }
 
         /** Sets time used to optimize the document store. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setDocumentStoreOptimizeLatencyMillis(
                 int documentStoreOptimizeLatencyMillis) {
@@ -189,7 +184,6 @@ public final class OptimizeStats {
         }
 
         /** Sets time used to restore the index. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setIndexRestorationLatencyMillis(int indexRestorationLatencyMillis) {
             mNativeIndexRestorationLatencyMillis = indexRestorationLatencyMillis;
@@ -197,7 +191,6 @@ public final class OptimizeStats {
         }
 
         /** Sets number of documents before the optimization. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setOriginalDocumentCount(int originalDocumentCount) {
             mNativeOriginalDocumentCount = originalDocumentCount;
@@ -205,7 +198,6 @@ public final class OptimizeStats {
         }
 
         /** Sets number of documents deleted during the optimization. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setDeletedDocumentCount(int deletedDocumentCount) {
             mNativeDeletedDocumentCount = deletedDocumentCount;
@@ -213,7 +205,6 @@ public final class OptimizeStats {
         }
 
         /** Sets number of documents expired during the optimization. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setExpiredDocumentCount(int expiredDocumentCount) {
             mNativeExpiredDocumentCount = expiredDocumentCount;
@@ -221,7 +212,6 @@ public final class OptimizeStats {
         }
 
         /** Sets Storage size in bytes before optimization. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setStorageSizeBeforeBytes(long storageSizeBeforeBytes) {
             mNativeStorageSizeBeforeBytes = storageSizeBeforeBytes;
@@ -229,7 +219,6 @@ public final class OptimizeStats {
         }
 
         /** Sets storage size in bytes after optimization. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setStorageSizeAfterBytes(long storageSizeAfterBytes) {
             mNativeStorageSizeAfterBytes = storageSizeAfterBytes;
@@ -239,7 +228,6 @@ public final class OptimizeStats {
         /**
          * Sets the amount the time since the last optimize ran calculated using wall clock time.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setTimeSinceLastOptimizeMillis(long timeSinceLastOptimizeMillis) {
             mNativeTimeSinceLastOptimizeMillis = timeSinceLastOptimizeMillis;

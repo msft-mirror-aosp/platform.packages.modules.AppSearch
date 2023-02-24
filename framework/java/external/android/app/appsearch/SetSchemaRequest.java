@@ -20,7 +20,6 @@ import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
-import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 
@@ -284,7 +283,6 @@ public final class SetSchemaRequest {
          *
          * <p>Any documents of these types will be displayed on system UI surfaces by default.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addSchemas(@NonNull AppSearchSchema... schemas) {
             Objects.requireNonNull(schemas);
@@ -297,7 +295,6 @@ public final class SetSchemaRequest {
          *
          * <p>An {@link AppSearchSchema} object represents one type of structured data.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addSchemas(@NonNull Collection<AppSearchSchema> schemas) {
             Objects.requireNonNull(schemas);
@@ -321,7 +318,6 @@ public final class SetSchemaRequest {
          * @param displayed Whether documents of this type will be displayed on system UI surfaces.
          */
         // Merged list available from getSchemasNotDisplayedBySystem
-        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setSchemaTypeDisplayedBySystem(
@@ -362,7 +358,6 @@ public final class SetSchemaRequest {
          * @throws IllegalArgumentException – if input unsupported permission.
          */
         // Merged list available from getRequiredPermissionsForSchemaTypeVisibility
-        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addRequiredPermissionsForSchemaTypeVisibility(
@@ -414,7 +409,6 @@ public final class SetSchemaRequest {
          * @param packageIdentifier Represents the package that will be granted visibility.
          */
         // Merged list available from getSchemasVisibleToPackages
-        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setSchemaTypeVisibilityForPackage(
@@ -469,7 +463,6 @@ public final class SetSchemaRequest {
          * @see SetSchemaRequest.Builder#addSchemas
          * @see AppSearchSession#setSchema
          */
-        @CanIgnoreReturnValue
         @NonNull
         @SuppressLint("MissingGetterMatchingBuilder") // Getter return plural objects.
         public Builder setMigrator(@NonNull String schemaType, @NonNull Migrator migrator) {
@@ -504,7 +497,6 @@ public final class SetSchemaRequest {
          * @see SetSchemaRequest.Builder#addSchemas
          * @see AppSearchSession#setSchema
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setMigrators(@NonNull Map<String, Migrator> migrators) {
             Objects.requireNonNull(migrators);
@@ -524,7 +516,6 @@ public final class SetSchemaRequest {
          *
          * <p>By default, this is {@code false}.
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setForceOverride(boolean forceOverride) {
             resetIfBuilt();
@@ -558,7 +549,6 @@ public final class SetSchemaRequest {
          * @see Migrator
          * @see SetSchemaRequest.Builder#setMigrator
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setVersion(@IntRange(from = 1) int version) {
             Preconditions.checkArgument(version >= 1, "Version must be a positive number.");

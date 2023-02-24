@@ -115,8 +115,7 @@ public final class AppSearchResult<ValueType> {
     }
 
     /** Returns one of the {@code RESULT} constants defined in {@link AppSearchResult}. */
-    @ResultCode
-    public int getResultCode() {
+    public @ResultCode int getResultCode() {
         return mResultCode;
     }
 

@@ -20,7 +20,6 @@ import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
-import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Bundle;
 import android.util.ArrayMap;
 import android.util.ArraySet;
@@ -259,7 +258,6 @@ public final class GetSchemaResponse {
          *
          * <p>Default version is 0
          */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder setVersion(@IntRange(from = 0) int version) {
             resetIfBuilt();
@@ -268,7 +266,6 @@ public final class GetSchemaResponse {
         }
 
         /** Adds one {@link AppSearchSchema} to the schema list. */
-        @CanIgnoreReturnValue
         @NonNull
         public Builder addSchema(@NonNull AppSearchSchema schema) {
             Objects.requireNonNull(schema);
@@ -285,7 +282,6 @@ public final class GetSchemaResponse {
          *     GetSchemaResponse}, which won't be displayed by system.
          */
         // Getter getSchemaTypesNotDisplayedBySystem returns plural objects.
-        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addSchemaTypeNotDisplayedBySystem(@NonNull String schemaType) {
@@ -317,7 +313,6 @@ public final class GetSchemaResponse {
          *     type.
          */
         // Getter getSchemaTypesVisibleToPackages returns a map contains all schema types.
-        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setSchemaTypeVisibleToPackages(
@@ -363,7 +358,6 @@ public final class GetSchemaResponse {
          *     given schema.
          */
         // Getter getRequiredPermissionsForSchemaTypeVisibility returns a map for all schemaTypes.
-        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setRequiredPermissionsForSchemaTypeVisibility(

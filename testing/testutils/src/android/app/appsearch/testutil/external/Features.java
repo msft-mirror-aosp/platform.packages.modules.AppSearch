@@ -77,7 +77,7 @@ public interface Features {
      * AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE} and all other numeric search
      * features.
      */
-    String NUMERIC_SEARCH = FeatureConstants.NUMERIC_SEARCH;
+    String NUMERIC_SEARCH = "NUMERIC_SEARCH";
 
     /**
      * Feature for {@link #isFeatureSupported(String)}. This feature covers {@link
@@ -87,7 +87,7 @@ public interface Features {
      *
      * <p>Ex. '"foo/bar" OR baz' will ensure that 'foo/bar' is treated as a single 'verbatim' token.
      */
-    String VERBATIM_SEARCH = FeatureConstants.VERBATIM_SEARCH;
+    String VERBATIM_SEARCH = "VERBATIM_SEARCH";
 
     /**
      * Feature for {@link #isFeatureSupported(String)}. This feature covers the expansion of the
@@ -116,7 +116,7 @@ public interface Features {
      * "(subject:foo OR body:foo) (subject:bar OR body:bar)" could be rewritten as "termSearch(\"foo
      * bar\", createList(\"subject\", \"bar\"))"
      */
-    String LIST_FILTER_QUERY_LANGUAGE = FeatureConstants.LIST_FILTER_QUERY_LANGUAGE;
+    String LIST_FILTER_QUERY_LANGUAGE = "LIST_FILTER_QUERY_LANGUAGE";
 
     /**
      * Feature for {@link #isFeatureSupported(String)}. This feature covers {@link
