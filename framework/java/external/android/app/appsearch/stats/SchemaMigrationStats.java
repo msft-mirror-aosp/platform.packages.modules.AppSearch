@@ -20,6 +20,7 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.SetSchemaRequest;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.util.BundleUtil;
 import android.os.Bundle;
 
@@ -215,6 +216,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets status code for the schema migration action. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setStatusCode(@AppSearchResult.ResultCode int statusCode) {
             mBundle.putInt(STATUS_CODE_FIELD, statusCode);
@@ -222,6 +224,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets the latency for waiting the executor. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setExecutorAcquisitionLatencyMillis(int executorAcquisitionLatencyMillis) {
             mBundle.putInt(EXECUTOR_ACQUISITION_MILLIS_FIELD, executorAcquisitionLatencyMillis);
@@ -229,6 +232,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets total latency for the schema migration action in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setTotalLatencyMillis(int totalLatencyMillis) {
             mBundle.putInt(TOTAL_LATENCY_MILLIS_FIELD, totalLatencyMillis);
@@ -236,6 +240,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets latency for the GetSchema action in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setGetSchemaLatencyMillis(int getSchemaLatencyMillis) {
             mBundle.putInt(GET_SCHEMA_LATENCY_MILLIS_FIELD, getSchemaLatencyMillis);
@@ -246,6 +251,7 @@ public final class SchemaMigrationStats {
          * Sets latency for querying all documents that need to be migrated to new version and
          * transforming documents to new version in milliseconds.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setQueryAndTransformLatencyMillis(int queryAndTransformLatencyMillis) {
             mBundle.putInt(
@@ -254,6 +260,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets latency of first SetSchema action in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setFirstSetSchemaLatencyMillis(int firstSetSchemaLatencyMillis) {
             mBundle.putInt(FIRST_SET_SCHEMA_LATENCY_MILLIS_FIELD, firstSetSchemaLatencyMillis);
@@ -261,6 +268,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Returns status of the first SetSchema action. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setIsFirstSetSchemaSuccess(boolean isFirstSetSchemaSuccess) {
             mBundle.putBoolean(IS_FIRST_SET_SCHEMA_SUCCESS_FIELD, isFirstSetSchemaSuccess);
@@ -268,6 +276,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets latency of second SetSchema action in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setSecondSetSchemaLatencyMillis(int secondSetSchemaLatencyMillis) {
             mBundle.putInt(SECOND_SET_SCHEMA_LATENCY_MILLIS_FIELD, secondSetSchemaLatencyMillis);
@@ -275,6 +284,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets latency for putting migrated document to Icing lib in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setSaveDocumentLatencyMillis(int saveDocumentLatencyMillis) {
             mBundle.putInt(SAVE_DOCUMENT_LATENCY_MILLIS_FIELD, saveDocumentLatencyMillis);
@@ -282,6 +292,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets number of document that need to be migrated to another version. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setTotalNeedMigratedDocumentCount(int migratedDocumentCount) {
             mBundle.putInt(TOTAL_NEED_MIGRATED_DOCUMENT_COUNT_FIELD, migratedDocumentCount);
@@ -289,6 +300,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets total document count of successfully migrated and saved in Icing. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setTotalSuccessMigratedDocumentCount(int totalSuccessMigratedDocumentCount) {
             mBundle.putInt(
@@ -297,6 +309,7 @@ public final class SchemaMigrationStats {
         }
 
         /** Sets number of {@link android.app.appsearch.SetSchemaResponse.MigrationFailure}. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setMigrationFailureCount(int migrationFailureCount) {
             mBundle.putInt(MIGRATION_FAILURE_COUNT_FIELD, migrationFailureCount);

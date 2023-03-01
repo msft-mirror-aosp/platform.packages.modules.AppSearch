@@ -22,6 +22,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.appsearch.PropertyPath.PathSegment;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.util.BundleUtil;
 import android.app.appsearch.util.IndentingStringBuilder;
 import android.os.Bundle;
@@ -1064,6 +1065,7 @@ public class GenericDocument {
          *
          * @hide
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setNamespace(@NonNull String namespace) {
             Objects.requireNonNull(namespace);
@@ -1080,6 +1082,7 @@ public class GenericDocument {
          *
          * @hide
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setId(@NonNull String id) {
             Objects.requireNonNull(id);
@@ -1096,6 +1099,7 @@ public class GenericDocument {
          *
          * @hide
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setSchemaType(@NonNull String schemaType) {
             Objects.requireNonNull(schemaType);
@@ -1117,6 +1121,7 @@ public class GenericDocument {
          *
          * @param score any non-negative {@code int} representing the document's score.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setScore(@IntRange(from = 0, to = Integer.MAX_VALUE) int score) {
             if (score < 0) {
@@ -1137,6 +1142,7 @@ public class GenericDocument {
          *
          * @param creationTimestampMillis a creation timestamp in milliseconds.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setCreationTimestampMillis(
                 @CurrentTimeMillisLong long creationTimestampMillis) {
@@ -1158,6 +1164,7 @@ public class GenericDocument {
          *
          * @param ttlMillis a non-negative duration in milliseconds.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setTtlMillis(long ttlMillis) {
             if (ttlMillis < 0) {
@@ -1177,6 +1184,7 @@ public class GenericDocument {
          * @throws IllegalArgumentException if no values are provided, or if a passed in {@code
          *     String} is {@code null} or "".
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setPropertyString(@NonNull String name, @NonNull String... values) {
             Objects.requireNonNull(name);
@@ -1195,6 +1203,7 @@ public class GenericDocument {
          * @param values the {@code boolean} values of the property.
          * @throws IllegalArgumentException if the name is empty or {@code null}.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setPropertyBoolean(@NonNull String name, @NonNull boolean... values) {
             Objects.requireNonNull(name);
@@ -1212,6 +1221,7 @@ public class GenericDocument {
          * @param values the {@code long} values of the property.
          * @throws IllegalArgumentException if the name is empty or {@code null}.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setPropertyLong(@NonNull String name, @NonNull long... values) {
             Objects.requireNonNull(name);
@@ -1229,6 +1239,7 @@ public class GenericDocument {
          * @param values the {@code double} values of the property.
          * @throws IllegalArgumentException if the name is empty or {@code null}.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setPropertyDouble(@NonNull String name, @NonNull double... values) {
             Objects.requireNonNull(name);
@@ -1247,6 +1258,7 @@ public class GenericDocument {
          * @throws IllegalArgumentException if no values are provided, or if a passed in {@code
          *     byte[]} is {@code null}, or if name is empty.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setPropertyBytes(@NonNull String name, @NonNull byte[]... values) {
             Objects.requireNonNull(name);
@@ -1266,6 +1278,7 @@ public class GenericDocument {
          * @throws IllegalArgumentException if no values are provided, or if a passed in {@link
          *     GenericDocument} is {@code null}, or if name is empty.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType setPropertyDocument(
                 @NonNull String name, @NonNull GenericDocument... values) {
@@ -1284,6 +1297,7 @@ public class GenericDocument {
          * @param name The name of the property to clear.
          * @hide
          */
+        @CanIgnoreReturnValue
         @NonNull
         public BuilderType clearProperty(@NonNull String name) {
             Objects.requireNonNull(name);
