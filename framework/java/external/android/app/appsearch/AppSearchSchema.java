@@ -19,6 +19,7 @@ package android.app.appsearch;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.exceptions.IllegalSchemaException;
 import android.app.appsearch.util.BundleUtil;
 import android.app.appsearch.util.IndentingStringBuilder;
@@ -169,6 +170,7 @@ public final class AppSearchSchema {
         }
 
         /** Adds a property to the given type. */
+        @CanIgnoreReturnValue
         @NonNull
         public AppSearchSchema.Builder addProperty(@NonNull PropertyConfig propertyConfig) {
             Objects.requireNonNull(propertyConfig);
@@ -213,10 +215,11 @@ public final class AppSearchSchema {
         /**
          * Physical data-types of the contents of the property.
          *
+         * <p>NOTE: The integer values of these constants must match the proto enum constants in
+         * com.google.android.icing.proto.PropertyConfigProto.DataType.Code.
+         *
          * @hide
          */
-        // NOTE: The integer values of these constants must match the proto enum constants in
-        // com.google.android.icing.proto.PropertyConfigProto.DataType.Code.
         @IntDef(
                 value = {
                     DATA_TYPE_STRING,
@@ -260,10 +263,11 @@ public final class AppSearchSchema {
         /**
          * The cardinality of the property (whether it is required, optional or repeated).
          *
+         * <p>NOTE: The integer values of these constants must match the proto enum constants in
+         * com.google.android.icing.proto.PropertyConfigProto.Cardinality.Code.
+         *
          * @hide
          */
-        // NOTE: The integer values of these constants must match the proto enum constants in
-        // com.google.android.icing.proto.PropertyConfigProto.Cardinality.Code.
         @IntDef(
                 value = {
                     CARDINALITY_REPEATED,
@@ -370,14 +374,16 @@ public final class AppSearchSchema {
          *
          * @hide
          */
-        public @DataType int getDataType() {
+        @DataType
+        public int getDataType() {
             return mBundle.getInt(DATA_TYPE_FIELD, -1);
         }
 
         /**
          * Returns the cardinality of the property (whether it is optional, required or repeated).
          */
-        public @Cardinality int getCardinality() {
+        @Cardinality
+        public int getCardinality() {
             return mBundle.getInt(CARDINALITY_FIELD, CARDINALITY_OPTIONAL);
         }
 
@@ -441,6 +447,7 @@ public final class AppSearchSchema {
         private static final String INDEXING_TYPE_FIELD = "indexingType";
         private static final String TOKENIZER_TYPE_FIELD = "tokenizerType";
         private static final String JOINABLE_VALUE_TYPE_FIELD = "joinableValueType";
+        private static final String DELETION_PROPAGATION_FIELD = "deletionPropagation";
 
         /**
          * Encapsulates the configurations on how AppSearch should query/index these terms.
@@ -478,10 +485,11 @@ public final class AppSearchSchema {
         /**
          * Configures how tokens should be extracted from this property.
          *
+         * <p>NOTE: The integer values of these constants must match the proto enum constants in
+         * com.google.android.icing.proto.IndexingConfig.TokenizerType.Code.
+         *
          * @hide
          */
-        // NOTE: The integer values of these constants must match the proto enum constants in
-        // com.google.android.icing.proto.IndexingConfig.TokenizerType.Code.
         @IntDef(
                 value = {
                     TOKENIZER_TYPE_NONE,
@@ -577,29 +585,43 @@ public final class AppSearchSchema {
         }
 
         /** Returns how the property is indexed. */
-        public @IndexingType int getIndexingType() {
+        @IndexingType
+        public int getIndexingType() {
             return mBundle.getInt(INDEXING_TYPE_FIELD);
         }
 
         /** Returns how this property is tokenized (split into words). */
-        public @TokenizerType int getTokenizerType() {
+        @TokenizerType
+        public int getTokenizerType() {
             return mBundle.getInt(TOKENIZER_TYPE_FIELD);
         }
 
         /**
          * Returns how this property is going to be used to join documents from other schema types.
          */
-        public @JoinableValueType int getJoinableValueType() {
+        @JoinableValueType
+        public int getJoinableValueType() {
             return mBundle.getInt(JOINABLE_VALUE_TYPE_FIELD, JOINABLE_VALUE_TYPE_NONE);
+        }
+
+        /**
+         * Returns whether or not documents in this schema should be deleted when the document
+         * referenced by this field is deleted.
+         *
+         * @see JoinSpec
+         */
+        public boolean getDeletionPropagation() {
+            return mBundle.getBoolean(DELETION_PROPAGATION_FIELD, false);
         }
 
         /** Builder for {@link StringPropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
-            private @Cardinality int mCardinality = CARDINALITY_OPTIONAL;
-            private @IndexingType int mIndexingType = INDEXING_TYPE_NONE;
-            private @TokenizerType int mTokenizerType = TOKENIZER_TYPE_NONE;
-            private @JoinableValueType int mJoinableValueType = JOINABLE_VALUE_TYPE_NONE;
+            @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
+            @IndexingType private int mIndexingType = INDEXING_TYPE_NONE;
+            @TokenizerType private int mTokenizerType = TOKENIZER_TYPE_NONE;
+            @JoinableValueType private int mJoinableValueType = JOINABLE_VALUE_TYPE_NONE;
+            private boolean mDeletionPropagation = false;
 
             /** Creates a new {@link StringPropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -612,6 +634,7 @@ public final class AppSearchSchema {
              * <p>If this method is not called, the default cardinality is {@link
              * PropertyConfig#CARDINALITY_OPTIONAL}.
              */
+            @CanIgnoreReturnValue
             @SuppressWarnings("MissingGetterMatchingBuilder") // getter defined in superclass
             @NonNull
             public StringPropertyConfig.Builder setCardinality(@Cardinality int cardinality) {
@@ -627,6 +650,7 @@ public final class AppSearchSchema {
              * <p>If this method is not called, the default indexing type is {@link
              * StringPropertyConfig#INDEXING_TYPE_NONE}, so that it cannot be matched by queries.
              */
+            @CanIgnoreReturnValue
             @NonNull
             public StringPropertyConfig.Builder setIndexingType(@IndexingType int indexingType) {
                 Preconditions.checkArgumentInRange(
@@ -646,6 +670,7 @@ public final class AppSearchSchema {
              * #setIndexingType} has been called with a value other than {@link
              * StringPropertyConfig#INDEXING_TYPE_NONE}).
              */
+            @CanIgnoreReturnValue
             @NonNull
             public StringPropertyConfig.Builder setTokenizerType(@TokenizerType int tokenizerType) {
                 Preconditions.checkArgumentInRange(
@@ -660,6 +685,7 @@ public final class AppSearchSchema {
              * <p>If this method is not called, the default joinable value type is {@link
              * StringPropertyConfig#JOINABLE_VALUE_TYPE_NONE}, so that it is not joinable.
              */
+            @CanIgnoreReturnValue
             @NonNull
             public StringPropertyConfig.Builder setJoinableValueType(
                     @JoinableValueType int joinableValueType) {
@@ -669,6 +695,19 @@ public final class AppSearchSchema {
                         JOINABLE_VALUE_TYPE_QUALIFIED_ID,
                         "joinableValueType");
                 mJoinableValueType = joinableValueType;
+                return this;
+            }
+
+            /**
+             * Configures whether or not documents in this schema will be removed when the document
+             * referred to by this property is deleted.
+             *
+             * <p>Requires that a joinable value type is set.
+             */
+            @SuppressWarnings("MissingGetterMatchingBuilder") // getDeletionPropagation
+            @NonNull
+            public Builder setDeletionPropagation(boolean deletionPropagation) {
+                mDeletionPropagation = deletionPropagation;
                 return this;
             }
 
@@ -691,6 +730,11 @@ public final class AppSearchSchema {
                             mCardinality != CARDINALITY_REPEATED,
                             "Cannot set JOINABLE_VALUE_TYPE_QUALIFIED_ID with"
                                 + " CARDINALITY_REPEATED.");
+                } else {
+                    Preconditions.checkState(
+                            !mDeletionPropagation,
+                            "Cannot set deletion "
+                                    + "propagation without setting a joinable value type");
                 }
                 Bundle bundle = new Bundle();
                 bundle.putString(NAME_FIELD, mPropertyName);
@@ -699,6 +743,7 @@ public final class AppSearchSchema {
                 bundle.putInt(INDEXING_TYPE_FIELD, mIndexingType);
                 bundle.putInt(TOKENIZER_TYPE_FIELD, mTokenizerType);
                 bundle.putInt(JOINABLE_VALUE_TYPE_FIELD, mJoinableValueType);
+                bundle.putBoolean(DELETION_PROPAGATION_FIELD, mDeletionPropagation);
                 return new StringPropertyConfig(bundle);
             }
         }
@@ -786,15 +831,16 @@ public final class AppSearchSchema {
         }
 
         /** Returns how the property is indexed. */
-        public @IndexingType int getIndexingType() {
+        @IndexingType
+        public int getIndexingType() {
             return mBundle.getInt(INDEXING_TYPE_FIELD, INDEXING_TYPE_NONE);
         }
 
         /** Builder for {@link LongPropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
-            private @Cardinality int mCardinality = CARDINALITY_OPTIONAL;
-            private @IndexingType int mIndexingType = INDEXING_TYPE_NONE;
+            @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
+            @IndexingType private int mIndexingType = INDEXING_TYPE_NONE;
 
             /** Creates a new {@link LongPropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -807,6 +853,7 @@ public final class AppSearchSchema {
              * <p>If this method is not called, the default cardinality is {@link
              * PropertyConfig#CARDINALITY_OPTIONAL}.
              */
+            @CanIgnoreReturnValue
             @SuppressWarnings("MissingGetterMatchingBuilder") // getter defined in superclass
             @NonNull
             public LongPropertyConfig.Builder setCardinality(@Cardinality int cardinality) {
@@ -823,6 +870,7 @@ public final class AppSearchSchema {
              * LongPropertyConfig#INDEXING_TYPE_NONE}, so that it will not be indexed and cannot be
              * matched by queries.
              */
+            @CanIgnoreReturnValue
             @NonNull
             public LongPropertyConfig.Builder setIndexingType(@IndexingType int indexingType) {
                 Preconditions.checkArgumentInRange(
@@ -874,7 +922,7 @@ public final class AppSearchSchema {
         /** Builder for {@link DoublePropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
-            private @Cardinality int mCardinality = CARDINALITY_OPTIONAL;
+            @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
 
             /** Creates a new {@link DoublePropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -887,6 +935,7 @@ public final class AppSearchSchema {
              * <p>If this method is not called, the default cardinality is {@link
              * PropertyConfig#CARDINALITY_OPTIONAL}.
              */
+            @CanIgnoreReturnValue
             @SuppressWarnings("MissingGetterMatchingBuilder") // getter defined in superclass
             @NonNull
             public DoublePropertyConfig.Builder setCardinality(@Cardinality int cardinality) {
@@ -917,7 +966,7 @@ public final class AppSearchSchema {
         /** Builder for {@link BooleanPropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
-            private @Cardinality int mCardinality = CARDINALITY_OPTIONAL;
+            @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
 
             /** Creates a new {@link BooleanPropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -930,6 +979,7 @@ public final class AppSearchSchema {
              * <p>If this method is not called, the default cardinality is {@link
              * PropertyConfig#CARDINALITY_OPTIONAL}.
              */
+            @CanIgnoreReturnValue
             @SuppressWarnings("MissingGetterMatchingBuilder") // getter defined in superclass
             @NonNull
             public BooleanPropertyConfig.Builder setCardinality(@Cardinality int cardinality) {
@@ -960,7 +1010,7 @@ public final class AppSearchSchema {
         /** Builder for {@link BytesPropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
-            private @Cardinality int mCardinality = CARDINALITY_OPTIONAL;
+            @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
 
             /** Creates a new {@link BytesPropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -973,6 +1023,7 @@ public final class AppSearchSchema {
              * <p>If this method is not called, the default cardinality is {@link
              * PropertyConfig#CARDINALITY_OPTIONAL}.
              */
+            @CanIgnoreReturnValue
             @SuppressWarnings("MissingGetterMatchingBuilder") // getter defined in superclass
             @NonNull
             public BytesPropertyConfig.Builder setCardinality(@Cardinality int cardinality) {
@@ -1024,7 +1075,7 @@ public final class AppSearchSchema {
         public static final class Builder {
             private final String mPropertyName;
             private final String mSchemaType;
-            private @Cardinality int mCardinality = CARDINALITY_OPTIONAL;
+            @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
             private boolean mShouldIndexNestedProperties = false;
 
             /**
@@ -1047,6 +1098,7 @@ public final class AppSearchSchema {
              * <p>If this method is not called, the default cardinality is {@link
              * PropertyConfig#CARDINALITY_OPTIONAL}.
              */
+            @CanIgnoreReturnValue
             @SuppressWarnings("MissingGetterMatchingBuilder") // getter defined in superclass
             @NonNull
             public DocumentPropertyConfig.Builder setCardinality(@Cardinality int cardinality) {
@@ -1063,6 +1115,7 @@ public final class AppSearchSchema {
              * <p>If false, the nested document's properties are not indexed regardless of its own
              * schema.
              */
+            @CanIgnoreReturnValue
             @NonNull
             public DocumentPropertyConfig.Builder setShouldIndexNestedProperties(
                     boolean indexNestedProperties) {
