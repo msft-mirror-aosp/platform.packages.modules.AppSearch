@@ -18,6 +18,7 @@ package android.app.appsearch;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Bundle;
 import android.util.ArraySet;
 
@@ -185,6 +186,7 @@ public class SetSchemaResponse {
         private boolean mBuilt = false;
 
         /** Adds {@link MigrationFailure}s to the list of migration failures. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addMigrationFailures(
                 @NonNull Collection<MigrationFailure> migrationFailures) {
@@ -195,6 +197,7 @@ public class SetSchemaResponse {
         }
 
         /** Adds a {@link MigrationFailure} to the list of migration failures. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addMigrationFailure(@NonNull MigrationFailure migrationFailure) {
             Objects.requireNonNull(migrationFailure);
@@ -204,6 +207,7 @@ public class SetSchemaResponse {
         }
 
         /** Adds deletedTypes to the list of deleted schema types. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addDeletedTypes(@NonNull Collection<String> deletedTypes) {
             Objects.requireNonNull(deletedTypes);
@@ -213,6 +217,7 @@ public class SetSchemaResponse {
         }
 
         /** Adds one deletedType to the list of deleted schema types. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addDeletedType(@NonNull String deletedType) {
             Objects.requireNonNull(deletedType);
@@ -222,6 +227,7 @@ public class SetSchemaResponse {
         }
 
         /** Adds incompatibleTypes to the list of incompatible schema types. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addIncompatibleTypes(@NonNull Collection<String> incompatibleTypes) {
             Objects.requireNonNull(incompatibleTypes);
@@ -231,6 +237,7 @@ public class SetSchemaResponse {
         }
 
         /** Adds one incompatibleType to the list of incompatible schema types. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addIncompatibleType(@NonNull String incompatibleType) {
             Objects.requireNonNull(incompatibleType);
@@ -240,6 +247,7 @@ public class SetSchemaResponse {
         }
 
         /** Adds migratedTypes to the list of migrated schema types. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addMigratedTypes(@NonNull Collection<String> migratedTypes) {
             Objects.requireNonNull(migratedTypes);
@@ -249,6 +257,7 @@ public class SetSchemaResponse {
         }
 
         /** Adds one migratedType to the list of migrated schema types. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addMigratedType(@NonNull String migratedType) {
             Objects.requireNonNull(migratedType);

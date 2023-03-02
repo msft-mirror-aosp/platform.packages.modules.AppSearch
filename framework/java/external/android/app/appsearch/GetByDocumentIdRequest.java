@@ -17,6 +17,7 @@
 package android.app.appsearch;
 
 import android.annotation.NonNull;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 
@@ -134,6 +135,7 @@ public final class GetByDocumentIdRequest {
         }
 
         /** Adds one or more document IDs to the request. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addIds(@NonNull String... ids) {
             Objects.requireNonNull(ids);
@@ -142,6 +144,7 @@ public final class GetByDocumentIdRequest {
         }
 
         /** Adds a collection of IDs to the request. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addIds(@NonNull Collection<String> ids) {
             Objects.requireNonNull(ids);
@@ -166,6 +169,7 @@ public final class GetByDocumentIdRequest {
          *
          * @see SearchSpec.Builder#addProjectionPaths
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addProjection(
                 @NonNull String schemaType, @NonNull Collection<String> propertyPaths) {
@@ -197,6 +201,7 @@ public final class GetByDocumentIdRequest {
          *
          * @see SearchSpec.Builder#addProjectionPaths
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addProjectionPaths(
                 @NonNull String schemaType, @NonNull Collection<PropertyPath> propertyPaths) {
