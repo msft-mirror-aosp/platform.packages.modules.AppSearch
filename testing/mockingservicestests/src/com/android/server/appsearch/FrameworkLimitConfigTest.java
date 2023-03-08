@@ -46,6 +46,8 @@ public class FrameworkLimitConfigTest {
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES);
         assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentCount()).isEqualTo(
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT);
+        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(
+                AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT);
     }
 
     @Test
@@ -62,8 +64,14 @@ public class FrameworkLimitConfigTest {
                 FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
                 "2002",
                 /*makeDefault=*/ false);
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
+                "2003",
+                /*makeDefault=*/ false);
 
         assertThat(config.getMaxDocumentSizeBytes()).isEqualTo(2001);
-        assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentCount()).isEqualTo(2002);
+        assertThat(config.getMaxDocumentCount()).isEqualTo(2002);
+        assertThat(config.getMaxSuggestionCount()).isEqualTo(2003);
     }
 }
