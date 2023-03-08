@@ -84,6 +84,7 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             KEY_SAMPLING_INTERVAL_FOR_OPTIMIZE_STATS,
             KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
             KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
+            KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
             KEY_BYTES_OPTIMIZE_THRESHOLD,
             KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS,
             KEY_DOC_COUNT_OPTIMIZE_THRESHOLD
@@ -98,7 +99,6 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
      */
     @GuardedBy("mLock")
     private final Bundle mBundleLocked = new Bundle();
-
 
     @GuardedBy("mLock")
     private boolean mIsClosedLocked = false;
@@ -367,6 +367,13 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                     mBundleLocked.putInt(
                             key,
                             properties.getInt(key, DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT));
+                }
+                break;
+            case KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT:
+                synchronized (mLock) {
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(key, DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT));
                 }
                 break;
             case KEY_BYTES_OPTIMIZE_THRESHOLD:

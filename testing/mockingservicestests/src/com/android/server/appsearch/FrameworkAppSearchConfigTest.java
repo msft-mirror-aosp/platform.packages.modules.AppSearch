@@ -57,6 +57,8 @@ public class FrameworkAppSearchConfigTest {
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES);
         assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentCount()).isEqualTo(
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT);
+        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(
+                AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT);
         assertThat(appSearchConfig.getCachedBytesOptimizeThreshold()).isEqualTo(
                 AppSearchConfig.DEFAULT_BYTES_OPTIMIZE_THRESHOLD);
         assertThat(appSearchConfig.getCachedTimeOptimizeThresholdMs()).isEqualTo(
@@ -366,6 +368,25 @@ public class FrameworkAppSearchConfigTest {
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
         assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentSizeBytes()).isEqualTo(2001);
         assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentCount()).isEqualTo(2002);
+    }
+
+    @Test
+    public void testCustomizedValueOverride_maxSuggestionCount() {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
+                Integer.toString(2003),
+                /*makeDefault=*/ false);
+
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(2003);
+
+        // Override
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
+                Integer.toString(1777),
+                /*makeDefault=*/ false);
+
+        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(1777);
     }
 
     @Test
