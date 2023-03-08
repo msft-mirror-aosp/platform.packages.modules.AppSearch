@@ -120,6 +120,12 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
         return DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD;
     }
 
+    @Override
+    public int getCachedMinTimeOptimizeThresholdMs() {
+        throwIfClosed();
+        return DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS;
+    }
+
     private void throwIfClosed() {
         if (mIsClosed.get()) {
             throw new IllegalStateException("Trying to use a closed AppSearchConfig instance.");
