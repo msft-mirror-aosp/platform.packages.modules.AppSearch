@@ -25,13 +25,10 @@ import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.exceptions.AppSearchException;
-import android.app.appsearch.observer.AppSearchObserverCallback;
 import android.app.appsearch.observer.DocumentChangeInfo;
 import android.app.appsearch.observer.ObserverCallback;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.observer.SchemaChangeInfo;
-import android.app.search.SearchSession;
-import android.compat.annotation.UnsupportedAppUsage;
 import android.content.AttributionSource;
 import android.os.Bundle;
 import android.os.RemoteException;
@@ -427,20 +424,6 @@ public class GlobalSearchSession implements Closeable {
     }
 
     /**
-     * @deprecated use #registerObserverCallback.
-     * @hide
-     */
-    @UnsupportedAppUsage
-    @Deprecated
-    public void addObserver(
-            @NonNull String observedPackage,
-            @NonNull ObserverSpec spec,
-            @NonNull Executor executor,
-            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
-        registerObserverCallback(observedPackage, spec, executor, observer);
-    }
-
-    /**
      * Removes previously registered {@link ObserverCallback} instances from the system.
      *
      * <p>All instances of {@link ObserverCallback} which are registered to observe
@@ -495,19 +478,6 @@ public class GlobalSearchSession implements Closeable {
                 mObserverCallbacksLocked.remove(targetPackageName);
             }
         }
-    }
-
-
-    /**
-     * @deprecated use #unregisterObserverCallback.
-     * @hide
-     */
-    @UnsupportedAppUsage
-    @Deprecated
-    public void removeObserver(
-            @NonNull String targetPackageName,
-            @NonNull AppSearchObserverCallback observer) throws AppSearchException {
-        unregisterObserverCallback(targetPackageName, observer);
     }
 
     /**

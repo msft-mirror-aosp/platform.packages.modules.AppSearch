@@ -18,6 +18,7 @@ package android.app.appsearch;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Bundle;
 
 import com.android.internal.util.Preconditions;
@@ -200,7 +201,8 @@ public final class JoinSpec {
      *
      * @see SearchSpec#RANKING_STRATEGY_JOIN_AGGREGATE_SCORE
      */
-    public @AggregationScoringStrategy int getAggregationScoringStrategy() {
+    @AggregationScoringStrategy
+    public int getAggregationScoringStrategy() {
         return mBundle.getInt(AGGREGATION_SCORING_STRATEGY);
     }
 
@@ -214,8 +216,9 @@ public final class JoinSpec {
         private SearchSpec mNestedSearchSpec = EMPTY_SEARCH_SPEC;
         private final String mChildPropertyExpression;
         private int mMaxJoinedResultCount = DEFAULT_MAX_JOINED_RESULT_COUNT;
-        private @AggregationScoringStrategy int mAggregationScoringStrategy =
-                AGGREGATION_SCORING_OUTER_RESULT_RANKING_SIGNAL;
+
+        @AggregationScoringStrategy
+        private int mAggregationScoringStrategy = AGGREGATION_SCORING_OUTER_RESULT_RANKING_SIGNAL;
 
         /**
          * Create a specification for the joining operation in search.
@@ -257,6 +260,7 @@ public final class JoinSpec {
          */
         @SuppressWarnings("MissingGetterMatchingBuilder")
         // See getNestedQuery & getNestedSearchSpec
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNestedSearch(
                 @NonNull String nestedQuery, @NonNull SearchSpec nestedSearchSpec) {
@@ -272,6 +276,7 @@ public final class JoinSpec {
          * Sets the max amount of {@link SearchResults} to join to the parent document, with a
          * default of 10 SearchResults.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setMaxJoinedResultCount(int maxJoinedResultCount) {
             mMaxJoinedResultCount = maxJoinedResultCount;
@@ -287,6 +292,7 @@ public final class JoinSpec {
          *
          * @see SearchSpec#RANKING_STRATEGY_JOIN_AGGREGATE_SCORE
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setAggregationScoringStrategy(
                 @AggregationScoringStrategy int aggregationScoringStrategy) {

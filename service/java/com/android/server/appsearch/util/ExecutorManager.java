@@ -20,13 +20,13 @@ import android.annotation.NonNull;
 import android.os.UserHandle;
 import android.util.ArrayMap;
 
+import com.android.server.appsearch.AppSearchEnvironmentFactory;
 import com.android.internal.annotations.GuardedBy;
 
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -51,9 +51,14 @@ public class ExecutorManager {
      */
     @NonNull
     public static ExecutorService createDefaultExecutorService() {
-        return new ThreadPoolExecutor(/*corePoolSize=*/1,
-                Runtime.getRuntime().availableProcessors(), /*keepAliveTime*/ 60L, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>());
+        return AppSearchEnvironmentFactory.getEnvironmentInstance()
+          .createExecutorService(
+              /*corePoolSize=*/ 1,
+              /*maxConcurrency=*/ Runtime.getRuntime().availableProcessors(),
+              /*keepAliveTime=*/ 60L,
+              /*unit=*/ TimeUnit.SECONDS,
+              /*workQueue=*/ new LinkedBlockingQueue<>(),
+              /*priority=*/ 0); // priority is unused.
     }
 
     /**

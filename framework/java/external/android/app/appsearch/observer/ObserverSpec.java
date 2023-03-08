@@ -18,6 +18,7 @@ package android.app.appsearch.observer;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Bundle;
 import android.util.ArraySet;
 
@@ -86,6 +87,7 @@ public final class ObserverSpec {
          *
          * <p>If unset, the observer will match documents of all types.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull String... schemas) {
             Objects.requireNonNull(schemas);
@@ -99,6 +101,7 @@ public final class ObserverSpec {
          *
          * <p>If unset, the observer will match documents of all types.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull Collection<String> schemas) {
             Objects.requireNonNull(schemas);

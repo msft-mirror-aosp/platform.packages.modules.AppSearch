@@ -30,6 +30,7 @@ import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.appsearch.AppSearchEnvironmentFactory;
 import com.android.server.appsearch.stats.AppSearchStatsLog;
 
 import java.io.File;
@@ -41,7 +42,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -104,7 +104,8 @@ public final class ContactsIndexerUserInstance {
         Objects.requireNonNull(contactsDir);
         Objects.requireNonNull(contactsIndexerConfig);
 
-        ExecutorService singleThreadedExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService singleThreadedExecutor = AppSearchEnvironmentFactory
+            .getEnvironmentInstance().createSingleThreadExecutor();
         return createInstance(userContext, contactsDir, contactsIndexerConfig,
                 singleThreadedExecutor);
     }
