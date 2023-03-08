@@ -17,6 +17,7 @@
 package com.android.server.appsearch.contactsindexer;
 
 import android.annotation.UserIdInt;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.util.LogUtil;
 import android.app.job.JobInfo;
 import android.app.job.JobParameters;
@@ -30,6 +31,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.GuardedBy;
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.LocalManagerRegistry;
 
 import java.util.concurrent.Executor;
@@ -139,18 +141,45 @@ public class ContactsIndexerMaintenanceService extends JobService {
         synchronized (mSignals) {
             mSignals.put(userId, signal);
         }
-        EXECUTOR.execute(() -> {
+        EXECUTOR.execute(() -> doFullUpdateForUser(params, userId, signal));
+        return true;
+    }
+
+    /**
+     * Triggers full update from a background job for the given device-user using
+     * {@link ContactsIndexerManagerService.LocalService} manager.
+     *
+     * @param params Parameters from the job that triggered the full update.
+     * @param userId Device user id for whom the full update job should be triggered.
+     * @param signal Used to indicate if the full update task should be cancelled.
+     * @return A boolean representing whether the update operation
+     * completed or encountered an issue. This return value is only used for testing purposes.
+     */
+    @VisibleForTesting
+    @CanIgnoreReturnValue
+    protected boolean doFullUpdateForUser(JobParameters params, int userId,
+            CancellationSignal signal) {
+        try {
             ContactsIndexerManagerService.LocalService service =
                     LocalManagerRegistry.getManager(
                             ContactsIndexerManagerService.LocalService.class);
+            if (service == null) {
+                Log.e(TAG, "Background job failed to trigger FullUpdate because "
+                        + "ContactsIndexerManagerService.LocalService is not available.");
+                return false;
+            }
             service.doFullUpdateForUser(userId, signal);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Background job failed to trigger FullUpdate because ", e);
+            return false;
+        } finally {
             jobFinished(params, signal.isCanceled());
             synchronized (mSignals) {
                 if (signal == mSignals.get(userId)) {
                     mSignals.remove(userId);
                 }
             }
-        });
+        }
         return true;
     }
 
