@@ -366,7 +366,14 @@ public class ServiceImplHelper {
      */
     public static void invokeCallbackOnError(
             @NonNull IAppSearchBatchResultCallback callback, @NonNull Throwable throwable) {
-        AppSearchResult<?> result = throwableToFailedResult(throwable);
+        invokeCallbackOnError(callback, throwableToFailedResult(throwable));
+    }
+
+    /**
+     * Invokes the {@link IAppSearchBatchResultCallback} with the error result.
+     */
+    public static void invokeCallbackOnError(
+            @NonNull IAppSearchBatchResultCallback callback, @NonNull AppSearchResult<?> result) {
         try {
             callback.onSystemError(new AppSearchResultParcel<>(result));
         } catch (RemoteException e) {
