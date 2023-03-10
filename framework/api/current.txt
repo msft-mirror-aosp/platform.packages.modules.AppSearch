@@ -497,7 +497,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSuggestionSpec.Builder addFilterNamespaces(@NonNull java.util.Collection<java.lang.String>);
     method @NonNull public android.app.appsearch.SearchSuggestionSpec.Builder addFilterSchemas(@NonNull java.lang.String...);
     method @NonNull public android.app.appsearch.SearchSuggestionSpec.Builder addFilterSchemas(@NonNull java.util.Collection<java.lang.String>);
-    method @NonNull public android.app.appsearch.SearchSuggestionSpec build() throws android.app.appsearch.exceptions.AppSearchException;
+    method @NonNull public android.app.appsearch.SearchSuggestionSpec build();
     method @NonNull public android.app.appsearch.SearchSuggestionSpec.Builder setRankingStrategy(int);
   }
 
