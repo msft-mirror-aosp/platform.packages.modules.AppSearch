@@ -300,6 +300,10 @@ public final class AppSearchImpl implements Closeable {
             IcingSearchEngineOptions options =
                     IcingSearchEngineOptions.newBuilder()
                             .setBaseDir(icingDir.getAbsolutePath())
+                            .setDocumentStoreNamespaceIdFingerprint(
+                                    mLimitConfig.getDocumentStoreNamespaceIdFingerprint())
+                            .setOptimizeRebuildIndexThreshold(
+                                    mLimitConfig.getOptimizeRebuildIndexThreshold())
                             .build();
             LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
             mIcingSearchEngineLocked = new IcingSearchEngine(options);
@@ -1491,7 +1495,7 @@ public final class AppSearchImpl implements Closeable {
         long rewriteSearchSpecLatencyStartMillis = SystemClock.elapsedRealtime();
         SearchSpecProto finalSearchSpec = searchSpecToProtoConverter.toSearchSpecProto();
         ResultSpecProto finalResultSpec =
-                searchSpecToProtoConverter.toResultSpecProto(mNamespaceMapLocked);
+                searchSpecToProtoConverter.toResultSpecProto(mNamespaceMapLocked, mSchemaMapLocked);
         ScoringSpecProto scoringSpec = searchSpecToProtoConverter.toScoringSpecProto();
         if (sStatsBuilder != null) {
             sStatsBuilder.setRewriteSearchSpecLatencyMillis(
