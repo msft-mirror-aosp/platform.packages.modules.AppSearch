@@ -286,6 +286,16 @@ public class ContactsIndexerMaintenanceTest {
         assertThat(jobInfo).isNull();
     }
 
+    @Test
+    public void test_onStartJob_handlesExceptionGracefully() {
+        mContactsIndexerMaintenanceService.onStartJob(null);
+    }
+
+    @Test
+    public void test_onStopJob_handlesExceptionGracefully() {
+        mContactsIndexerMaintenanceService.onStopJob(null);
+    }
+
     @Nullable
     private JobInfo getPendingFullUpdateJob(@UserIdInt int userId) {
         int jobId = MIN_INDEXER_JOB_ID + userId;
