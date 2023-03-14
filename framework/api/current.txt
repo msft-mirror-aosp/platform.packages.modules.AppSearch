@@ -120,7 +120,6 @@ package android.app.appsearch {
   }
 
   public static final class AppSearchSchema.StringPropertyConfig extends android.app.appsearch.AppSearchSchema.PropertyConfig {
-    method public boolean getDeletionPropagation();
     method public int getIndexingType();
     method public int getJoinableValueType();
     method public int getTokenizerType();
@@ -139,7 +138,6 @@ package android.app.appsearch {
     ctor public AppSearchSchema.StringPropertyConfig.Builder(@NonNull String);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig build();
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setCardinality(int);
-    method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setDeletionPropagation(boolean);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setIndexingType(int);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setJoinableValueType(int);
     method @NonNull public android.app.appsearch.AppSearchSchema.StringPropertyConfig.Builder setTokenizerType(int);
