@@ -23,14 +23,12 @@ package {
 
 filegroup {
     name: "framework-appsearch-sources",
+    defaults: ["framework-sources-module-defaults"],
     srcs: [
         ":framework-appsearch-internal-sources",
         ":framework-appsearch-external-sources",
     ],
-    visibility: [
-        "//frameworks/base",
-        "//packages/modules/AppSearch:__subpackages__"
-    ],
+    visibility: ["//packages/modules/AppSearch:__subpackages__"],
 }
 
 filegroup {
