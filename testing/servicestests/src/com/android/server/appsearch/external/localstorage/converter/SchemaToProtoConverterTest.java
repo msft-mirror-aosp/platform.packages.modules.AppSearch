@@ -161,14 +161,12 @@ public class SchemaToProtoConverterTest {
                                         .setJoinableValueType(
                                                 AppSearchSchema.StringPropertyConfig
                                                         .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
-                                        .setDeletionPropagation(true)
                                         .build())
                         .build();
 
         JoinableConfig joinableConfig =
                 JoinableConfig.newBuilder()
                         .setValueType(JoinableConfig.ValueType.Code.QUALIFIED_ID)
-                        .setPropagateDelete(true)
                         .build();
 
         SchemaTypeConfigProto expectedAlbumProto =
