@@ -73,6 +73,7 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
     public static final String KEY_DOC_COUNT_OPTIMIZE_THRESHOLD = "doc_count_optimize_threshold";
     public static final String KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS =
             "min_time_optimize_threshold";
+    public static final String KEY_API_CALL_STATS_LIMIT = "api_call_stats_limit";
 
     // Array contains all the corresponding keys for the cached values.
     private static final String[] KEYS_TO_ALL_CACHED_VALUES = {
@@ -90,7 +91,8 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             KEY_BYTES_OPTIMIZE_THRESHOLD,
             KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS,
             KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
-            KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS
+            KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+            KEY_API_CALL_STATS_LIMIT
     };
 
     // Lock needed for all the operations in this class.
@@ -321,6 +323,15 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
         }
     }
 
+    @Override
+    public int getCachedApiCallStatsLimit() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getInt(KEY_API_CALL_STATS_LIMIT,
+                    DEFAULT_API_CALL_STATS_LIMIT);
+        }
+    }
+
     @GuardedBy("mLock")
     private void throwIfClosedLocked() {
         if (mIsClosedLocked) {
@@ -410,6 +421,12 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                 synchronized (mLock) {
                     mBundleLocked.putInt(key, properties.getInt(key,
                             DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS));
+                }
+                break;
+            case KEY_API_CALL_STATS_LIMIT:
+                synchronized (mLock) {
+                    mBundleLocked.putInt(key,
+                            properties.getInt(key, DEFAULT_API_CALL_STATS_LIMIT));
                 }
                 break;
             default:

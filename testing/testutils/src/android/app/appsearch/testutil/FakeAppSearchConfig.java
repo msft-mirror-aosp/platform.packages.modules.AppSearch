@@ -126,6 +126,12 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
         return DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS;
     }
 
+    @Override
+    public int getCachedApiCallStatsLimit() {
+        throwIfClosed();
+        return DEFAULT_API_CALL_STATS_LIMIT;
+    }
+
     private void throwIfClosed() {
         if (mIsClosed.get()) {
             throw new IllegalStateException("Trying to use a closed AppSearchConfig instance.");
