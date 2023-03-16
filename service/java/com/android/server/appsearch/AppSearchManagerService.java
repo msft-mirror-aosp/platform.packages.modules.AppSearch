@@ -79,6 +79,7 @@ import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
+import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.AdbDumpUtil;
 import com.android.server.appsearch.util.ExecutorManager;
 import com.android.server.appsearch.util.ServiceImplHelper;
@@ -1440,7 +1441,12 @@ public class AppSearchManagerService extends SystemService {
                             int totalLatencyMillis =
                                     (int) (SystemClock.elapsedRealtime()
                                             - totalLatencyStartTimeMillis);
-                            instance.getLogger().logStats(new CallStats.Builder()
+                            String packageName = callerAttributionSource.getPackageName();
+                            CallStats.Builder callStatsBuilder = new CallStats.Builder();
+                            if (packageName != null) {
+                                callStatsBuilder.setPackageName(packageName);
+                            }
+                            instance.getLogger().logStats(callStatsBuilder
                                     .setStatusCode(statusCode)
                                     .setTotalLatencyMillis(totalLatencyMillis)
                                     .setCallType(CallStats.CALL_TYPE_FLUSH)
@@ -1610,6 +1616,17 @@ public class AppSearchManagerService extends SystemService {
             try {
                 AppSearchUserInstance instance = mAppSearchUserInstanceManager.getUserInstance(
                         currentUser);
+
+                // Print out the recorded last called APIs.
+                List<ApiCallRecord> lastCalledApis = instance.getLogger().getLastCalledApis();
+                if (!lastCalledApis.isEmpty()) {
+                    pw.println("Last Called APIs:");
+                    for (int i = 0; i < lastCalledApis.size(); i++) {
+                        pw.println(lastCalledApis.get(i));
+                    }
+                    pw.println();
+                }
+
                 DebugInfoProto debugInfo = instance.getAppSearchImpl().getRawDebugInfoProto(
                         verbose ? DebugInfoVerbosity.Code.DETAILED
                                 : DebugInfoVerbosity.Code.BASIC);
@@ -1647,7 +1664,7 @@ public class AppSearchManagerService extends SystemService {
             boolean verbose = false;
             boolean appSearch = false;
             boolean unknownArg = false;
-            if (args != null) {
+            if (args != null && args.length > 0) {
                 for (int i = 0; i < args.length; i++) {
                     String arg = args[i];
                     if ("-v".equalsIgnoreCase(arg)) {
@@ -1659,6 +1676,9 @@ public class AppSearchManagerService extends SystemService {
                         break;
                     }
                 }
+            } else {
+                // When there is no argument provided, dump appsearch by default.
+                appSearch = true;
             }
             verbose = verbose && AdbDumpUtil.DEBUG;
             if (appSearch && !unknownArg) {
