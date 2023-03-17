@@ -1,4 +1,3 @@
-
 /*
  * Copyright (C) 2021 The Android Open Source Project
  *
@@ -47,6 +46,8 @@ public interface AppSearchConfig extends AutoCloseable {
     int DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS = Integer.MAX_VALUE;
     int DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD = 10_000;
     int DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS = 0;
+    // Cached API Call Stats is disabled by default
+    int DEFAULT_API_CALL_STATS_LIMIT = 0;
 
     /** Returns cached value for minTimeIntervalBetweenSamplesMillis. */
     long getCachedMinTimeIntervalBetweenSamplesMillis();
@@ -141,6 +142,11 @@ public interface AppSearchConfig extends AutoCloseable {
      * this threshold.
      */
     int getCachedMinTimeOptimizeThresholdMs();
+
+    /**
+     * Returns the maximum number of last API calls' statistics that can be included in dumpsys.
+     */
+    int getCachedApiCallStatsLimit();
 
     /**
      * Closes this {@link AppSearchConfig}.
