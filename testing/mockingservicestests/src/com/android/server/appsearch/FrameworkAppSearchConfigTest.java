@@ -65,6 +65,8 @@ public class FrameworkAppSearchConfigTest {
                 AppSearchConfig.DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS);
         assertThat(appSearchConfig.getCachedDocCountOptimizeThreshold()).isEqualTo(
                 AppSearchConfig.DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD);
+        assertThat(appSearchConfig.getCachedApiCallStatsLimit()).isEqualTo(
+                AppSearchConfig.DEFAULT_API_CALL_STATS_LIMIT);
     }
 
     @Test
@@ -462,6 +464,34 @@ public class FrameworkAppSearchConfigTest {
     }
 
     @Test
+    public void testCustomizedValue_dumpsysStatsLimit() {
+        final long dumpsysStatsLimit = 10;
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_API_CALL_STATS_LIMIT, Long.toString(dumpsysStatsLimit),
+                false);
+
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+
+        assertThat(appSearchConfig.getCachedApiCallStatsLimit()).isEqualTo(dumpsysStatsLimit);
+    }
+
+    @Test
+    public void testCustomizedValueOverride_dumpsysStatsLimit() {
+        long dumpsysStatsLimit = 10;
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_API_CALL_STATS_LIMIT, Long.toString(dumpsysStatsLimit),
+                false);
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+
+        long newDumpsysStatsLimit = 20;
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_API_CALL_STATS_LIMIT,
+                Long.toString(newDumpsysStatsLimit), false);
+
+        assertThat(appSearchConfig.getCachedApiCallStatsLimit()).isEqualTo(newDumpsysStatsLimit);
+    }
+
+    @Test
     public void testNotUsable_afterClose() {
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
@@ -500,5 +530,8 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getCachedDocCountOptimizeThreshold());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getCachedApiCallStatsLimit());
     }
 }

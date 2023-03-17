@@ -38,11 +38,15 @@ import com.android.server.appsearch.external.localstorage.stats.PutDocumentStats
 import com.android.server.appsearch.external.localstorage.stats.RemoveStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
+import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.PackageUtil;
 
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
@@ -98,6 +102,14 @@ public final class PlatformLogger implements AppSearchLogger {
     private long mLastPushTimeMillisLocked = 0;
 
     /**
+     * Record the last n API calls used by dumpsys to print debugging information about the
+     * sequence of the API calls, where n is specified by
+     * {@link AppSearchConfig#getCachedApiCallStatsLimit()}.
+     */
+    @GuardedBy("mLock")
+    private ArrayDeque<ApiCallRecord> mLastNCalls = new ArrayDeque<>();
+
+    /**
      * Helper class to hold platform specific stats for statsd.
      */
     static final class ExtraStats {
@@ -130,6 +142,11 @@ public final class PlatformLogger implements AppSearchLogger {
     public void logStats(@NonNull CallStats stats) {
         Objects.requireNonNull(stats);
         synchronized (mLock) {
+            if (mConfig.getCachedApiCallStatsLimit() > 0) {
+                addStatsToQueueLocked(new ApiCallRecord(stats));
+            } else {
+                mLastNCalls.clear();
+            }
             if (shouldLogForTypeLocked(stats.getCallType())) {
                 logStatsImplLocked(stats);
             }
@@ -176,6 +193,13 @@ public final class PlatformLogger implements AppSearchLogger {
     public void logStats(@NonNull OptimizeStats stats) {
         Objects.requireNonNull(stats);
         synchronized (mLock) {
+            if (mConfig.getCachedApiCallStatsLimit() > 0) {
+                // Unlike most other API calls, Optimize does not produce a CallStats, so we
+                // record OptimizeStats in the queue.
+                addStatsToQueueLocked(new ApiCallRecord(stats));
+            } else {
+                mLastNCalls.clear();
+            }
             if (shouldLogForTypeLocked(CallStats.CALL_TYPE_OPTIMIZE)) {
                 logStatsImplLocked(stats);
             }
@@ -214,6 +238,17 @@ public final class PlatformLogger implements AppSearchLogger {
         synchronized (mLock) {
             Integer uid = mPackageUidCacheLocked.remove(packageName);
             return uid != null ? uid : Process.INVALID_UID;
+        }
+    }
+
+    /**
+     * Return a copy of the recorded {@link ApiCallRecord}.
+     */
+    @NonNull
+    public List<ApiCallRecord> getLastCalledApis() {
+        synchronized (mLock) {
+            trimExcessStatsQueueLocked();
+            return new ArrayList<>(mLastNCalls);
         }
     }
 
@@ -479,6 +514,35 @@ public final class PlatformLogger implements AppSearchLogger {
                 stats.getStorageSizeBeforeBytes(),
                 stats.getStorageSizeAfterBytes(),
                 stats.getTimeSinceLastOptimizeMillis());
+    }
+
+    /**
+     * This method will drop the earliest stats in the queue when the number of calls is at the
+     * capacity specified by {@link AppSearchConfig#getCachedApiCallStatsLimit()}.
+     */
+    @GuardedBy("mLock")
+    private void trimExcessStatsQueueLocked() {
+        final int n = mConfig.getCachedApiCallStatsLimit();
+        if (n <= 0) {
+            mLastNCalls.clear();
+            return;
+        }
+        while (mLastNCalls.size() > n) {
+            mLastNCalls.removeFirst();
+        }
+    }
+
+    /**
+     * Record {@link ApiCallRecord} to {@link #mLastNCalls} for dumpsys.
+     *
+     * <p> This method will automatically drop the earliest stats when the number of calls is at the
+     * capacity specified by {@link AppSearchConfig#getCachedApiCallStatsLimit()}.
+     */
+    @GuardedBy("mLock")
+    @VisibleForTesting
+    void addStatsToQueueLocked(@NonNull ApiCallRecord stats) {
+        mLastNCalls.addLast(stats);
+        trimExcessStatsQueueLocked();
     }
 
     /**
