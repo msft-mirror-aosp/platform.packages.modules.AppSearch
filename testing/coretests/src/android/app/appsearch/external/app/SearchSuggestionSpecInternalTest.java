@@ -56,16 +56,15 @@ public class SearchSuggestionSpecInternalTest {
 
     @Test
     public void testPropertyFilterMustMatchSchemaFilter() throws Exception {
-        AppSearchException e =
+        IllegalStateException e =
                 assertThrows(
-                        AppSearchException.class,
+                        IllegalStateException.class,
                         () ->
                                 new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 123)
                                         .addFilterSchemas("Person")
                                         .addFilterProperties(
                                                 "Email", ImmutableList.of("Subject", "body"))
                                         .build());
-        assertThat(e.getResultCode()).isEqualTo(RESULT_INVALID_ARGUMENT);
         assertThat(e)
                 .hasMessageThat()
                 .contains(
