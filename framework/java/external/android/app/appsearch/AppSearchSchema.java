@@ -704,6 +704,7 @@ public final class AppSearchSchema {
              * referred to by this property is deleted.
              *
              * <p>Requires that a joinable value type is set.
+             *
              * @hide
              */
             @SuppressWarnings("MissingGetterMatchingBuilder") // getDeletionPropagation
