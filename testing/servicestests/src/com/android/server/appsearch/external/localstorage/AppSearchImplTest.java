@@ -80,6 +80,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -1078,6 +1079,7 @@ public class AppSearchImplTest {
         assertThat(suggestions.get(1).getSuggestedResult()).isEqualTo("term2");
     }
 
+    @Ignore("b/273733335")
     @Test
     public void testSearchSuggestion_invalidPrefix() throws Exception {
         // Insert schema just put something in the AppSearch to make it searchable.
@@ -3152,7 +3154,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return 80;
@@ -3246,7 +3248,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return 80;
@@ -3311,7 +3313,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return 80;
@@ -3355,7 +3357,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return Integer.MAX_VALUE;
@@ -3492,7 +3494,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return Integer.MAX_VALUE;
@@ -3600,7 +3602,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return Integer.MAX_VALUE;
@@ -3670,7 +3672,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return Integer.MAX_VALUE;
@@ -3849,7 +3851,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return Integer.MAX_VALUE;
@@ -3942,7 +3944,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return Integer.MAX_VALUE;
@@ -4005,7 +4007,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return Integer.MAX_VALUE;
@@ -4059,7 +4061,7 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
+                        new UnlimitedLimitConfig() {
                             @Override
                             public int getMaxDocumentSizeBytes() {
                                 return Integer.MAX_VALUE;

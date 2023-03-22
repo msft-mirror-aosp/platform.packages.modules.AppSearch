@@ -43,4 +43,14 @@ class FrameworkLimitConfig implements LimitConfig {
     public int getMaxSuggestionCount() {
         return mAppSearchConfig.getCachedLimitConfigMaxSuggestionCount();
     }
+
+    @Override
+    public boolean getDocumentStoreNamespaceIdFingerprint() {
+        return false;   // Off by default. Populate with flag value in followup
+    }
+
+    @Override
+    public float getOptimizeRebuildIndexThreshold() {
+        return 0;  // Off by default. Populate with flag value in followup
+    }
 }
