@@ -350,7 +350,8 @@ public class SearchSpecToProtoConverterTest {
                         /*namespaceMap=*/ ImmutableMap.of(),
                         /*schemaMap=*/ ImmutableMap.of());
         ResultSpecProto resultSpecProto =
-                convert.toResultSpecProto(/*namespaceMap=*/ ImmutableMap.of());
+                convert.toResultSpecProto(
+                        /*namespaceMap=*/ ImmutableMap.of(), /*schemaMap=*/ ImmutableMap.of());
 
         assertThat(resultSpecProto.getNumPerPage()).isEqualTo(123);
         assertThat(resultSpecProto.getSnippetSpec().getNumToSnippet()).isEqualTo(234);
@@ -381,7 +382,8 @@ public class SearchSpecToProtoConverterTest {
                                                 prefix1 + "namespaceA", prefix1 + "namespaceB"),
                                 prefix2,
                                         ImmutableSet.of(
-                                                prefix2 + "namespaceA", prefix2 + "namespaceB")));
+                                                prefix2 + "namespaceA", prefix2 + "namespaceB")),
+                        /*schemaMap=*/ ImmutableMap.of());
 
         assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(2);
         // First grouping should have same package name.
@@ -422,7 +424,8 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         namespaceMap,
                         /*schemaMap=*/ ImmutableMap.of());
-        ResultSpecProto resultSpecProto = converter.toResultSpecProto(namespaceMap);
+        ResultSpecProto resultSpecProto =
+                converter.toResultSpecProto(namespaceMap, /*schemaMap=*/ ImmutableMap.of());
 
         assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(2);
         // First grouping should have same namespace.
@@ -461,7 +464,8 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         namespaceMap,
                         /*schemaMap=*/ ImmutableMap.of());
-        ResultSpecProto resultSpecProto = converter.toResultSpecProto(namespaceMap);
+        ResultSpecProto resultSpecProto =
+                converter.toResultSpecProto(namespaceMap, /*schemaMap=*/ ImmutableMap.of());
 
         // All namespace should be separated.
         assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(4);
