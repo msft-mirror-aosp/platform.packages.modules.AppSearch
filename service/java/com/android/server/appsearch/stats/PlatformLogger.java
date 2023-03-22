@@ -347,7 +347,7 @@ public final class PlatformLogger implements AppSearchLogger {
     private void logStatsImplLocked(@NonNull SchemaMigrationStats stats) {
         mLastPushTimeMillisLocked = SystemClock.elapsedRealtime();
         ExtraStats extraStats = createExtraStatsLocked(stats.getPackageName(),
-                CallStats.CALL_TYPE_SET_SCHEMA);
+                CallStats.CALL_TYPE_SCHEMA_MIGRATION);
         String database = stats.getDatabase();
         try {
             int hashCodeForDatabase = calculateHashCodeMd5(database);
@@ -698,6 +698,19 @@ public final class PlatformLogger implements AppSearchLogger {
             case CallStats.CALL_TYPE_FLUSH:
             case CallStats.CALL_TYPE_REMOVE_DOCUMENT_BY_SEARCH:
             case CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID:
+            case CallStats.CALL_TYPE_GLOBAL_GET_SCHEMA:
+            case CallStats.CALL_TYPE_GET_SCHEMA:
+            case CallStats.CALL_TYPE_GET_NAMESPACES:
+            case CallStats.CALL_TYPE_GET_NEXT_PAGE:
+            case CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN:
+            case CallStats.CALL_TYPE_WRITE_QUERY_RESULTS_TO_FILE:
+            case CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE:
+            case CallStats.CALL_TYPE_SEARCH_SUGGESTION:
+            case CallStats.CALL_TYPE_REPORT_SYSTEM_USAGE:
+            case CallStats.CALL_TYPE_REPORT_USAGE:
+            case CallStats.CALL_TYPE_GET_STORAGE_INFO:
+            case CallStats.CALL_TYPE_REGISTER_OBSERVER_CALLBACK:
+            case CallStats.CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK:
                 // TODO(b/173532925) Some of them above will have dedicated sampling ratio config
             default:
                 return mConfig.getCachedSamplingIntervalDefault();
