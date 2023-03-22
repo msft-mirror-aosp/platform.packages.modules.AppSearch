@@ -466,7 +466,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSpec.Builder setVerbatimSearchEnabled(boolean);
   }
 
-  public class SearchSuggestionResult {
+  public final class SearchSuggestionResult {
     method @NonNull public String getSuggestedResult();
   }
 
@@ -476,7 +476,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSuggestionResult.Builder setSuggestedResult(@NonNull String);
   }
 
-  public class SearchSuggestionSpec {
+  public final class SearchSuggestionSpec {
     method @NonNull public java.util.Map<java.lang.String,java.util.List<java.lang.String>> getFilterDocumentIds();
     method @NonNull public java.util.List<java.lang.String> getFilterNamespaces();
     method @NonNull public java.util.List<java.lang.String> getFilterSchemas();
