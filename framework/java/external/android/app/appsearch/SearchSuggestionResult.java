@@ -27,7 +27,7 @@ import com.android.internal.util.Preconditions;
 import java.util.Objects;
 
 /** The result class of the {@link AppSearchSession#searchSuggestion}. */
-public class SearchSuggestionResult {
+public final class SearchSuggestionResult {
 
     private static final String SUGGESTED_RESULT_FIELD = "suggestedResult";
     private final Bundle mBundle;
