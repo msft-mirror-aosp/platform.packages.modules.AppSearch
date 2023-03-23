@@ -205,6 +205,7 @@ public final class AppSearchSession implements Closeable {
                     targetPackageName,
                     mDatabaseName,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -242,6 +243,7 @@ public final class AppSearchSession implements Closeable {
                     mCallerAttributionSource,
                     mDatabaseName,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -579,6 +581,7 @@ public final class AppSearchSession implements Closeable {
                     request.getUsageTimestampMillis(),
                     /*systemUsage=*/ false,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -732,6 +735,7 @@ public final class AppSearchSession implements Closeable {
                     mCallerAttributionSource,
                     mDatabaseName,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
