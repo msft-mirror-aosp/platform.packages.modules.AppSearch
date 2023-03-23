@@ -110,9 +110,9 @@ public class SearchResults implements Closeable {
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "SearchResults has already been closed");
         try {
+            long binderCallStartTimeMillis = SystemClock.elapsedRealtime();
             if (mIsFirstLoad) {
                 mIsFirstLoad = false;
-                long binderCallStartTimeMillis = SystemClock.elapsedRealtime();
                 if (mDatabaseName == null) {
                     // Global query, there's no one package-database combination to check.
                     mService.globalQuery(mAttributionSource, mQueryExpression,
@@ -127,7 +127,7 @@ public class SearchResults implements Closeable {
                 }
             } else {
                 mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken,
-                        mUserHandle, wrapCallback(executor, callback));
+                        mUserHandle, binderCallStartTimeMillis, wrapCallback(executor, callback));
             }
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -138,7 +138,8 @@ public class SearchResults implements Closeable {
     public void close() {
         if (!mIsClosed) {
             try {
-                mService.invalidateNextPageToken(mAttributionSource, mNextPageToken, mUserHandle);
+                mService.invalidateNextPageToken(mAttributionSource, mNextPageToken,
+                        mUserHandle, /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime());
                 mIsClosed = true;
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to close the SearchResults", e);
@@ -166,7 +167,7 @@ public class SearchResults implements Closeable {
         if (searchResultPageResult.isSuccess()) {
             try {
                 SearchResultPage searchResultPage = new SearchResultPage
-                    (Objects.requireNonNull(searchResultPageResult.getResultValue()));
+                        (Objects.requireNonNull(searchResultPageResult.getResultValue()));
                 mNextPageToken = searchResultPage.getNextPageToken();
                 callback.accept(AppSearchResult.newSuccessfulResult(
                         searchResultPage.getResults()));
