@@ -46,7 +46,7 @@ import java.util.Set;
  *
  * @see AppSearchSession#searchSuggestion
  */
-public class SearchSuggestionSpec {
+public final class SearchSuggestionSpec {
     static final String NAMESPACE_FIELD = "namespace";
     static final String SCHEMA_FIELD = "schema";
     static final String PROPERTY_FIELD = "property";
