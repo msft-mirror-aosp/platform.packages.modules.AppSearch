@@ -16,6 +16,7 @@
 
 package com.android.server.appsearch.contactsindexer;
 
+import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.Manifest.permission.RECEIVE_BOOT_COMPLETED;
 
 import static com.android.server.appsearch.contactsindexer.ContactsIndexerMaintenanceService.MIN_INDEXER_JOB_ID;
@@ -42,14 +43,11 @@ import android.content.pm.UserInfo;
 import android.os.UserHandle;
 import android.provider.ContactsContract;
 import android.test.ProviderTestCase2;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
-import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
-import static android.Manifest.permission.READ_DEVICE_CONFIG;
 
 import com.android.compatibility.common.util.SystemUtil;
 import com.android.server.SystemService;
@@ -59,6 +57,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -66,11 +66,9 @@ import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
 public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeContactsProvider> {
-
     private static final String TAG = "ContactsIndexerManagerServiceTest";
 
     private final ExecutorService mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
-
     private ContactsIndexerManagerService mContactsIndexerManagerService;
     private UiAutomation mUiAutomation;
 
@@ -85,7 +83,6 @@ public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeCon
         Context context = ApplicationProvider.getApplicationContext();
         mUiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         mContext = new ContextWrapper(context) {
-
             @Override
             public Context getApplicationContext() {
                 return this;
@@ -104,6 +101,16 @@ public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeCon
         // INTERACT_ACROSS_USERS_FULL: needed when we do registerReceiverForAllUsers for getting
         // package change notifications.
         mUiAutomation.adoptShellPermissionIdentity(INTERACT_ACROSS_USERS_FULL);
+
+        // TODO(b/276401961) right now we can't have more than one test in this class because in
+        //  ContactsIndexerManagerService.onStart we register a local service, and it will throw
+        //  an exception if we try to register another one in a 2nd test.
+        //  Unfortunately catching the exception doesn't work because the registered
+        //  manager/LocalService will still point to the previous ContactsIndexerManagerService,
+        //  making the 2nd test fail.
+        //  If I make ContactsIndexerManagerService static and only initialize it once in setUp
+        //  by checking nullness, it seems working. However, it will make the tests run 3X slower,
+        //  and we need to investigate that.
         mContactsIndexerManagerService = new ContactsIndexerManagerService(mContext,
                 new TestContactsIndexerConfig());
         mContactsIndexerManagerService.onStart();
@@ -123,7 +130,7 @@ public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeCon
 
     @Test
     public void testCP2Clear_runsFullUpdate() throws Exception {
-        int userId = mContext.getUser().getIdentifier();
+        int userId = mContext.getUserId();
 
         // Populate fake CP2 with 100 contacts.
         ContentResolver resolver = mContext.getContentResolver();
@@ -145,17 +152,52 @@ public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeCon
             mUiAutomation.dropShellPermissionIdentity();
         }
 
-        // Clear fake CP2.
-        for (int i = 0; i < 100; i++) {
+        long prevTimestampMillis = System.currentTimeMillis();
+        // Clear fake CP2 first 50 contacts.
+        for (int i = 0; i < 50; i++) {
             resolver.delete(ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, i),
                     /*extras=*/ null);
         }
-        CountDownLatch fullUpdateLatch = countDownAppSearchDocumentChanges(100);
+        CountDownLatch fullUpdateLatch = countDownAppSearchDocumentChanges(50);
         SystemUtil.runShellCommand("pm clear --user " + userId + " com.android.providers.contacts");
         // Wait for full-update to run and delete all 100 contacts.
         fullUpdateLatch.await(30L, TimeUnit.SECONDS);
+
+        // Clear fake CP2 last 50 contacts.
+        // We trigger the 2nd update so the timestamps for the 1st update can be persisted.
+        for (int i = 50; i < 100; i++) {
+            resolver.delete(ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, i),
+                    /*extras=*/ null);
+        }
+        fullUpdateLatch = countDownAppSearchDocumentChanges(50);
+        SystemUtil.runShellCommand("pm clear --user " + userId + " com.android.providers.contacts");
+        // Wait for full-update to run and delete all 100 contacts.
+        fullUpdateLatch.await(30L, TimeUnit.SECONDS);
+
         // Verify that a periodic full-update job is scheduled still.
         assertThat(getJobState(MIN_INDEXER_JOB_ID + userId)).contains("waiting");
+
+        // Verify the stats for the ContactsIndexer. Two full updates are triggered at this
+        // point, and the timestamps for 1st update must have been persisted.
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter pw = new PrintWriter(stringWriter);
+        mContactsIndexerManagerService.dumpContactsIndexerForUser(
+                mContext.getUser(), pw, /* verbose= */ false);
+        String[] output = stringWriter.toString().split(System.lineSeparator());
+
+        assertThat(output).hasLength(3);
+        // DeltaDeleteTimestamp
+        assertThat(getTimestampOutOfDump(output[0])).isGreaterThan(prevTimestampMillis);
+        // DeltaUpdateTimestamp
+        assertThat(getTimestampOutOfDump(output[1])).isGreaterThan(prevTimestampMillis);
+        // FullUpdateTimestamp
+        assertThat(getTimestampOutOfDump(output[2])).isGreaterThan(prevTimestampMillis);
+    }
+
+    private long getTimestampOutOfDump(String dumpOutputOneLine) {
+        String[] arrs = dumpOutputOneLine.split(" ");
+        assertThat(arrs.length).isAtLeast(2);
+        return Long.parseLong(arrs[arrs.length - 2]);
     }
 
     /**
