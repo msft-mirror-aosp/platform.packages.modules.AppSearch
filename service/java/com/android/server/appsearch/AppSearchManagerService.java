@@ -131,11 +131,16 @@ public class AppSearchManagerService extends SystemService {
     private ServiceImplHelper mServiceImplHelper;
     private AppSearchUserInstanceManager mAppSearchUserInstanceManager;
 
-    public AppSearchManagerService(Context context) {
+    // Keep a reference for the lifecycle instance, so we can access other services like
+    // ContactsIndexer for dumpsys purpose.
+    private final AppSearchModule.Lifecycle mLifecycle;
+
+    public AppSearchManagerService(Context context, AppSearchModule.Lifecycle lifecycle) {
         super(context);
         mContext = context;
         mAppSearchEnvironment = AppSearchEnvironmentFactory
                 .getEnvironmentInstance();
+        mLifecycle = lifecycle;
     }
 
     @Override
@@ -1935,6 +1940,22 @@ public class AppSearchManagerService extends SystemService {
         }
 
         @BinderThread
+        private void dumpContactsIndexer(@NonNull PrintWriter pw, boolean verbose) {
+            Objects.requireNonNull(pw);
+            UserHandle currentUser = UserHandle.getUserHandleForUid(Binder.getCallingUid());
+            try {
+                pw.println("ContactsIndexer stats for " + currentUser);
+                mLifecycle.dumpContactsIndexerForUser(currentUser, pw, verbose);
+            } catch (Exception e) {
+                String errorMessage =
+                        "Unable to dump the internal contacts indexer state for the user: "
+                                + currentUser;
+                Log.e(TAG, errorMessage, e);
+                pw.println(errorMessage);
+            }
+        }
+
+        @BinderThread
         private void dumpAppSearch(@NonNull PrintWriter pw, boolean verbose) {
             Objects.requireNonNull(pw);
 
@@ -1989,6 +2010,7 @@ public class AppSearchManagerService extends SystemService {
             }
             boolean verbose = false;
             boolean appSearch = false;
+            boolean contactsIndexer = false;
             boolean unknownArg = false;
             if (args != null && args.length > 0) {
                 for (int i = 0; i < args.length; i++) {
@@ -1997,26 +2019,37 @@ public class AppSearchManagerService extends SystemService {
                         verbose = true;
                     } else if ("-a".equalsIgnoreCase(arg)) {
                         appSearch = true;
+                    } else if ("-c".equalsIgnoreCase(arg)) {
+                        contactsIndexer = true;
                     } else {
                         unknownArg = true;
                         break;
                     }
                 }
             } else {
-                // When there is no argument provided, dump appsearch by default.
+                // When there is no argument provided, dump appsearch and ContactsIndexer
+                // by default.
                 appSearch = true;
+                contactsIndexer = true;
             }
             verbose = verbose && AdbDumpUtil.DEBUG;
-            if (appSearch && !unknownArg) {
-                dumpAppSearch(pw, verbose);
-            } else {
+            if (unknownArg) {
                 pw.printf("Invalid args: %s\n", Arrays.toString(args));
                 pw.println(
                         "-a, dump the internal state of AppSearch platform storage for the "
                                 + "current user.");
+                pw.println(
+                        "-c, dump the internal state of AppSearch Contacts Indexer for the "
+                                + "current user.");
                 if (AdbDumpUtil.DEBUG) {
                     pw.println("-v, verbose mode");
                 }
+            }
+            if (appSearch) {
+                dumpAppSearch(pw, verbose);
+            }
+            if (contactsIndexer) {
+                dumpContactsIndexer(pw, verbose);
             }
         }
     }

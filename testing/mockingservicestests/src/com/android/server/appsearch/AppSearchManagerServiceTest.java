@@ -107,7 +107,8 @@ public class AppSearchManagerServiceTest {
             }
         };
         // Start the service
-        mAppSearchManagerService = new AppSearchManagerService(mContext);
+        mAppSearchManagerService = new AppSearchManagerService(
+                mContext, new AppSearchModule.Lifecycle(mContext));
         mAppSearchManagerService.onStart();
         mAppSearchManagerServiceStub = mMockServiceManager.mStubCaptor.getValue();
         assertThat(mAppSearchManagerServiceStub).isNotNull();
