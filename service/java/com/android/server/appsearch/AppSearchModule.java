@@ -16,15 +16,20 @@
 
 package com.android.server.appsearch;
 
+import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
+import android.os.UserHandle;
 import android.util.Log;
 
 import com.android.server.SystemService;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.FrameworkContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerManagerService;
+
+import java.io.PrintWriter;
+import java.util.Objects;
 
 public class AppSearchModule {
     private static final String TAG = "AppSearchModule";
@@ -40,7 +45,8 @@ public class AppSearchModule {
 
         @Override
         public void onStart() {
-            mAppSearchManagerService = new AppSearchManagerService(getContext());
+            mAppSearchManagerService = new AppSearchManagerService(
+                    getContext(), /* lifecycle= */ this);
 
             try {
                 mAppSearchManagerService.onStart();
@@ -67,6 +73,17 @@ public class AppSearchModule {
                 }
             } else {
                 Log.i(TAG, "ContactsIndexer service is disabled.");
+            }
+        }
+
+        /** Dumps ContactsIndexer internal state for the user. */
+        @BinderThread
+        void dumpContactsIndexerForUser(
+                @NonNull UserHandle userHandle, @NonNull PrintWriter pw, boolean verbose) {
+            if (mContactsIndexerManagerService != null) {
+                mContactsIndexerManagerService.dumpContactsIndexerForUser(userHandle, pw, verbose);
+            } else {
+                pw.println("No dumpsys for ContactsIndexer as it is disabled.");
             }
         }
 
