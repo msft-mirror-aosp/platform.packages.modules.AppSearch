@@ -37,6 +37,7 @@ import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetByDocumentIdRequest;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.JoinSpec;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.SearchSpec;
@@ -299,6 +300,10 @@ public final class AppSearchImpl implements Closeable {
             IcingSearchEngineOptions options =
                     IcingSearchEngineOptions.newBuilder()
                             .setBaseDir(icingDir.getAbsolutePath())
+                            .setDocumentStoreNamespaceIdFingerprint(
+                                    mLimitConfig.getDocumentStoreNamespaceIdFingerprint())
+                            .setOptimizeRebuildIndexThreshold(
+                                    mLimitConfig.getOptimizeRebuildIndexThreshold())
                             .build();
             LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
             mIcingSearchEngineLocked = new IcingSearchEngine(options);
@@ -1490,7 +1495,7 @@ public final class AppSearchImpl implements Closeable {
         long rewriteSearchSpecLatencyStartMillis = SystemClock.elapsedRealtime();
         SearchSpecProto finalSearchSpec = searchSpecToProtoConverter.toSearchSpecProto();
         ResultSpecProto finalResultSpec =
-                searchSpecToProtoConverter.toResultSpecProto(mNamespaceMapLocked);
+                searchSpecToProtoConverter.toResultSpecProto(mNamespaceMapLocked, mSchemaMapLocked);
         ScoringSpecProto scoringSpec = searchSpecToProtoConverter.toScoringSpecProto();
         if (sStatsBuilder != null) {
             sStatsBuilder.setRewriteSearchSpecLatencyMillis(
@@ -1887,12 +1892,15 @@ public final class AppSearchImpl implements Closeable {
      *
      * <p>This method belongs to mutate group.
      *
+     * <p>{@link SearchSpec} objects containing a {@link JoinSpec} are not allowed here.
+     *
      * @param packageName The package name that owns the documents.
      * @param databaseName The databaseName the document is in.
      * @param queryExpression Query String to search.
      * @param searchSpec Defines what and how to remove
      * @param removeStatsBuilder builder for {@link RemoveStats} to hold stats for remove
      * @throws AppSearchException on IcingSearchEngine error.
+     * @throws IllegalArgumentException if the {@link SearchSpec} contains a {@link JoinSpec}.
      */
     public void removeByQuery(
             @NonNull String packageName,
@@ -1901,6 +1909,11 @@ public final class AppSearchImpl implements Closeable {
             @NonNull SearchSpec searchSpec,
             @Nullable RemoveStats.Builder removeStatsBuilder)
             throws AppSearchException {
+        if (searchSpec.getJoinSpec() != null) {
+            throw new IllegalArgumentException(
+                    "JoinSpec not allowed in removeByQuery, but " + "JoinSpec was provided");
+        }
+
         long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
         mReadWriteLock.writeLock().lock();
         try {
@@ -2271,6 +2284,9 @@ public final class AppSearchImpl implements Closeable {
         mReadWriteLock.writeLock().lock();
         try {
             throwIfClosedLocked();
+            if (LogUtil.DEBUG) {
+                Log.d(TAG, "Clear data for package: " + packageName);
+            }
             // TODO(b/193494000): We are calling getPackageToDatabases here and in several other
             //  places within AppSearchImpl. This method is not efficient and does a lot of string
             //  manipulation. We should find a way to cache the package to database map so it can

@@ -57,12 +57,16 @@ public class FrameworkAppSearchConfigTest {
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES);
         assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentCount()).isEqualTo(
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT);
+        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(
+                AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT);
         assertThat(appSearchConfig.getCachedBytesOptimizeThreshold()).isEqualTo(
                 AppSearchConfig.DEFAULT_BYTES_OPTIMIZE_THRESHOLD);
         assertThat(appSearchConfig.getCachedTimeOptimizeThresholdMs()).isEqualTo(
                 AppSearchConfig.DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS);
         assertThat(appSearchConfig.getCachedDocCountOptimizeThreshold()).isEqualTo(
                 AppSearchConfig.DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD);
+        assertThat(appSearchConfig.getCachedApiCallStatsLimit()).isEqualTo(
+                AppSearchConfig.DEFAULT_API_CALL_STATS_LIMIT);
     }
 
     @Test
@@ -369,6 +373,25 @@ public class FrameworkAppSearchConfigTest {
     }
 
     @Test
+    public void testCustomizedValueOverride_maxSuggestionCount() {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
+                Integer.toString(2003),
+                /*makeDefault=*/ false);
+
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(2003);
+
+        // Override
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
+                Integer.toString(1777),
+                /*makeDefault=*/ false);
+
+        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(1777);
+    }
+
+    @Test
     public void testCustomizedValue_optimizeThreshold() {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_BYTES_OPTIMIZE_THRESHOLD,
@@ -382,12 +405,17 @@ public class FrameworkAppSearchConfigTest {
                 FrameworkAppSearchConfig.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
                 Integer.toString(369369),
                 false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                Integer.toString(1000),
+                false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
         assertThat(appSearchConfig.getCachedBytesOptimizeThreshold()).isEqualTo(147147);
         assertThat(appSearchConfig.getCachedTimeOptimizeThresholdMs()).isEqualTo(258258);
         assertThat(appSearchConfig.getCachedDocCountOptimizeThreshold()).isEqualTo(369369);
+        assertThat(appSearchConfig.getCachedMinTimeOptimizeThresholdMs()).isEqualTo(1000);
     }
 
     @Test
@@ -403,6 +431,10 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
                 Integer.toString(369369),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                Integer.toString(1000),
                 false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
@@ -420,10 +452,43 @@ public class FrameworkAppSearchConfigTest {
                 FrameworkAppSearchConfig.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
                 Integer.toString(963963),
                 false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                Integer.toString(2000),
+                false);
 
         assertThat(appSearchConfig.getCachedBytesOptimizeThreshold()).isEqualTo(741741);
         assertThat(appSearchConfig.getCachedTimeOptimizeThresholdMs()).isEqualTo(852852);
         assertThat(appSearchConfig.getCachedDocCountOptimizeThreshold()).isEqualTo(963963);
+        assertThat(appSearchConfig.getCachedMinTimeOptimizeThresholdMs()).isEqualTo(2000);
+    }
+
+    @Test
+    public void testCustomizedValue_dumpsysStatsLimit() {
+        final long dumpsysStatsLimit = 10;
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_API_CALL_STATS_LIMIT, Long.toString(dumpsysStatsLimit),
+                false);
+
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+
+        assertThat(appSearchConfig.getCachedApiCallStatsLimit()).isEqualTo(dumpsysStatsLimit);
+    }
+
+    @Test
+    public void testCustomizedValueOverride_dumpsysStatsLimit() {
+        long dumpsysStatsLimit = 10;
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_API_CALL_STATS_LIMIT, Long.toString(dumpsysStatsLimit),
+                false);
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+
+        long newDumpsysStatsLimit = 20;
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_API_CALL_STATS_LIMIT,
+                Long.toString(newDumpsysStatsLimit), false);
+
+        assertThat(appSearchConfig.getCachedApiCallStatsLimit()).isEqualTo(newDumpsysStatsLimit);
     }
 
     @Test
@@ -465,5 +530,8 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getCachedDocCountOptimizeThreshold());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getCachedApiCallStatsLimit());
     }
 }

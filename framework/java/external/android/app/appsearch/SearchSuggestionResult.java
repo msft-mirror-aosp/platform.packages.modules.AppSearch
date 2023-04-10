@@ -18,6 +18,7 @@ package android.app.appsearch;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.util.BundleUtil;
 import android.os.Bundle;
 
@@ -26,7 +27,7 @@ import com.android.internal.util.Preconditions;
 import java.util.Objects;
 
 /** The result class of the {@link AppSearchSession#searchSuggestion}. */
-public class SearchSuggestionResult {
+public final class SearchSuggestionResult {
 
     private static final String SUGGESTED_RESULT_FIELD = "suggestedResult";
     private final Bundle mBundle;
@@ -89,6 +90,7 @@ public class SearchSuggestionResult {
          *
          * <p>The suggested result should only contain lowercase or special characters.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setSuggestedResult(@NonNull String suggestedResult) {
             Objects.requireNonNull(suggestedResult);

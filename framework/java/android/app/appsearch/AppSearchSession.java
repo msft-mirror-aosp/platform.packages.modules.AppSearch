@@ -44,8 +44,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -204,6 +205,7 @@ public final class AppSearchSession implements Closeable {
                     targetPackageName,
                     mDatabaseName,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -241,6 +243,7 @@ public final class AppSearchSession implements Closeable {
                     mCallerAttributionSource,
                     mDatabaseName,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -458,17 +461,14 @@ public final class AppSearchSession implements Closeable {
      *
      * <p>Search suggestions with the multiple term {@code suggestionQueryExpression} "org t", the
      * suggested result will be "org term1" - The last token is completed by the suggested
-     * String, even if it won't return any result.
+     * String.
      *
-     * <p>Search suggestions with operators. All operators will be considered as a normal term.
-     * <ul>
-     *     <li>Search suggestions with the {@code suggestionQueryExpression} "term1 OR", the
-     *     suggested result is "term1 org".
-     *     <li>Search suggestions with the {@code suggestionQueryExpression} "term3 OR t", the
-     *     suggested result is "term3 OR term1".
-     *     <li>Search suggestions with the {@code suggestionQueryExpression} "content:t", the
-     *     suggested result is empty. It cannot find a document that contains the term "content:t".
-     * </ul>
+     * <p>Operators in {@link #search} are supported.
+     * <p><b>NOTE:</b> Exclusion and Grouped Terms in the last term is not supported.
+     * <p>example: "apple -f": This Api will throw an
+     * {@link android.app.appsearch.exceptions.AppSearchException} with
+     * {@link AppSearchResult#RESULT_INVALID_ARGUMENT}.
+     * <p>example: "apple (f)": This Api will return an empty results.
      *
      * <p>Invalid example: All these input {@code suggestionQueryExpression} don't have a valid
      * last token, AppSearch will return an empty result list.
@@ -489,11 +489,6 @@ public final class AppSearchSession implements Closeable {
      *
      * @see #search(String, SearchSpec)
      */
-    //TODO(b/227356108) un-hide this API after fix following issues.
-    // 1: support property restrict tokenization, Example: [subject:car] will return ["cart",
-    // "carburetor"] if AppSearch has documents contain those terms.
-    // 2: support multiple terms, Example: [bar f] will return suggestions [bar foo] that could
-    // be used to retrieve documents that contain both terms "bar" and "foo".
     public void searchSuggestion(
             @NonNull String suggestionQueryExpression,
             @NonNull SearchSuggestionSpec searchSuggestionSpec,
@@ -586,6 +581,7 @@ public final class AppSearchSession implements Closeable {
                     request.getUsageTimestampMillis(),
                     /*systemUsage=*/ false,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -692,6 +688,10 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(executor);
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
+        if (searchSpec.getJoinSpec() != null) {
+            throw new IllegalArgumentException("JoinSpec not allowed in removeByQuery, but "
+                    + "JoinSpec was provided.");
+        }
         try {
             mService.removeByQuery(
                     mCallerAttributionSource,
@@ -735,6 +735,7 @@ public final class AppSearchSession implements Closeable {
                     mCallerAttributionSource,
                     mDatabaseName,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -859,10 +860,15 @@ public final class AppSearchSession implements Closeable {
                 // Migration process
                 // 1. Validate and retrieve all active migrators.
                 long getSchemaLatencyStartTimeMillis = SystemClock.elapsedRealtime();
-                CompletableFuture<AppSearchResult<GetSchemaResponse>> getSchemaFuture =
-                        new CompletableFuture<>();
-                getSchema(callbackExecutor, getSchemaFuture::complete);
-                AppSearchResult<GetSchemaResponse> getSchemaResult = getSchemaFuture.get();
+                CountDownLatch getSchemaLatch = new CountDownLatch(1);
+                AtomicReference<AppSearchResult<GetSchemaResponse>> getSchemaResultRef =
+                        new AtomicReference<>();
+                getSchema(callbackExecutor, (result) -> {
+                    getSchemaResultRef.set(result);
+                    getSchemaLatch.countDown();
+                });
+                getSchemaLatch.await();
+                AppSearchResult<GetSchemaResponse> getSchemaResult = getSchemaResultRef.get();
                 if (!getSchemaResult.isSuccess()) {
                     // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                     safeExecute(
@@ -891,8 +897,10 @@ public final class AppSearchSession implements Closeable {
                 // 2. SetSchema with forceOverride=false, to retrieve the list of
                 // incompatible/deleted types.
                 long firstSetSchemaLatencyStartMillis = SystemClock.elapsedRealtime();
-                CompletableFuture<AppSearchResult<Bundle>> setSchemaFuture =
-                        new CompletableFuture<>();
+                CountDownLatch setSchemaLatch = new CountDownLatch(1);
+                AtomicReference<AppSearchResult<Bundle>> setSchemaResultRef =
+                        new AtomicReference<>();
+
                 mService.setSchema(
                         mCallerAttributionSource,
                         mDatabaseName,
@@ -906,10 +914,12 @@ public final class AppSearchSession implements Closeable {
                         new IAppSearchResultCallback.Stub() {
                             @Override
                             public void onResult(AppSearchResultParcel resultParcel) {
-                                setSchemaFuture.complete(resultParcel.getResult());
+                                setSchemaResultRef.set(resultParcel.getResult());
+                                setSchemaLatch.countDown();
                             }
                         });
-                AppSearchResult<Bundle> setSchemaResult = setSchemaFuture.get();
+                setSchemaLatch.await();
+                AppSearchResult<Bundle> setSchemaResult = setSchemaResultRef.get();
                 if (!setSchemaResult.isSuccess()) {
                     // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                     safeExecute(
@@ -949,8 +959,9 @@ public final class AppSearchSession implements Closeable {
                     if (internalSetSchemaResponse1.isSuccess()) {
                         internalSetSchemaResponse = internalSetSchemaResponse1;
                     } else {
-                        CompletableFuture<AppSearchResult<Bundle>> setSchema2Future =
-                                new CompletableFuture<>();
+                        CountDownLatch setSchema2Latch = new CountDownLatch(1);
+                        AtomicReference<AppSearchResult<Bundle>> setSchema2ResultRef =
+                                new AtomicReference<>();
                         // only trigger second setSchema() call if the first one is fail.
                         mService.setSchema(
                                 mCallerAttributionSource,
@@ -965,10 +976,12 @@ public final class AppSearchSession implements Closeable {
                                 new IAppSearchResultCallback.Stub() {
                                     @Override
                                     public void onResult(AppSearchResultParcel resultParcel) {
-                                        setSchema2Future.complete(resultParcel.getResult());
+                                        setSchema2ResultRef.set(resultParcel.getResult());
+                                        setSchema2Latch.countDown();
                                     }
                                 });
-                        AppSearchResult<Bundle> setSchema2Result = setSchema2Future.get();
+                        setSchema2Latch.await();
+                        AppSearchResult<Bundle> setSchema2Result = setSchema2ResultRef.get();
                         if (!setSchema2Result.isSuccess()) {
                             // we failed to set the schema in second time with forceOverride = true,
                             // which is an impossible case. Since we only swallow the incompatible
