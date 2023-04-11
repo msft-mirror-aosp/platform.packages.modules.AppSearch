@@ -259,7 +259,6 @@ package android.app.appsearch {
     field public static final int AGGREGATION_SCORING_OUTER_RESULT_RANKING_SIGNAL = 0; // 0x0
     field public static final int AGGREGATION_SCORING_RESULT_COUNT = 1; // 0x1
     field public static final int AGGREGATION_SCORING_SUM_RANKING_SIGNAL = 5; // 0x5
-    field public static final String QUALIFIED_ID = "this.qualifiedId()";
   }
 
   public static final class JoinSpec.Builder {
@@ -466,7 +465,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSpec.Builder setVerbatimSearchEnabled(boolean);
   }
 
-  public class SearchSuggestionResult {
+  public final class SearchSuggestionResult {
     method @NonNull public String getSuggestedResult();
   }
 
@@ -476,7 +475,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSuggestionResult.Builder setSuggestedResult(@NonNull String);
   }
 
-  public class SearchSuggestionSpec {
+  public final class SearchSuggestionSpec {
     method @NonNull public java.util.Map<java.lang.String,java.util.List<java.lang.String>> getFilterDocumentIds();
     method @NonNull public java.util.List<java.lang.String> getFilterNamespaces();
     method @NonNull public java.util.List<java.lang.String> getFilterSchemas();
