@@ -18,6 +18,7 @@ package com.android.server.appsearch.contactsindexer;
 
 import static android.os.Process.INVALID_UID;
 
+import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.UserIdInt;
 import android.app.appsearch.util.LogUtil;
@@ -27,6 +28,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
+import android.os.Binder;
 import android.os.CancellationSignal;
 import android.os.PatternMatcher;
 import android.os.UserHandle;
@@ -38,8 +40,15 @@ import com.android.server.LocalManagerRegistry;
 import com.android.server.SystemService;
 import com.android.server.appsearch.AppSearchEnvironment;
 import com.android.server.appsearch.AppSearchEnvironmentFactory;
+import com.android.server.appsearch.AppSearchUserInstance;
+import com.android.server.appsearch.util.AdbDumpUtil;
+
+import com.google.android.icing.proto.DebugInfoProto;
+import com.google.android.icing.proto.DebugInfoVerbosity;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.List;
 import java.util.Objects;
 
@@ -127,6 +136,23 @@ public final class ContactsIndexerManagerService extends SystemService {
                 } catch (InterruptedException e) {
                     Log.w(TAG, "Failed to shutdown contacts indexer for " + userHandle, e);
                 }
+            }
+        }
+    }
+
+    /** Dumps ContactsIndexer internal state for the user. */
+    @BinderThread
+    public void dumpContactsIndexerForUser(
+            @NonNull UserHandle userHandle, @NonNull PrintWriter pw, boolean verbose) {
+        Objects.requireNonNull(userHandle);
+        Objects.requireNonNull(pw);
+        int userId = userHandle.getIdentifier();
+        synchronized (mContactsIndexersLocked) {
+            ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
+            if (instance != null) {
+                instance.dump(pw, verbose);
+            } else {
+                pw.println("ContactsIndexerUserInstance is not created for " + userHandle);
             }
         }
     }

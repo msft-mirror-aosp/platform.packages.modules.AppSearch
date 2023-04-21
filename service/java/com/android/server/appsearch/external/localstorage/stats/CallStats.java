@@ -20,6 +20,7 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -57,6 +58,19 @@ public class CallStats {
                 CALL_TYPE_REMOVE_DOCUMENT_BY_SEARCH,
                 CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID,
                 CALL_TYPE_SCHEMA_MIGRATION,
+                CALL_TYPE_GLOBAL_GET_SCHEMA,
+                CALL_TYPE_GET_SCHEMA,
+                CALL_TYPE_GET_NAMESPACES,
+                CALL_TYPE_GET_NEXT_PAGE,
+                CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN,
+                CALL_TYPE_WRITE_QUERY_RESULTS_TO_FILE,
+                CALL_TYPE_PUT_DOCUMENTS_FROM_FILE,
+                CALL_TYPE_SEARCH_SUGGESTION,
+                CALL_TYPE_REPORT_SYSTEM_USAGE,
+                CALL_TYPE_REPORT_USAGE,
+                CALL_TYPE_GET_STORAGE_INFO,
+                CALL_TYPE_REGISTER_OBSERVER_CALLBACK,
+                CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK,
             })
     @Retention(RetentionPolicy.SOURCE)
     public @interface CallType {}
@@ -78,6 +92,19 @@ public class CallStats {
     public static final int CALL_TYPE_REMOVE_DOCUMENT_BY_SEARCH = 14;
     public static final int CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID = 15;
     public static final int CALL_TYPE_SCHEMA_MIGRATION = 16;
+    public static final int CALL_TYPE_GLOBAL_GET_SCHEMA = 17;
+    public static final int CALL_TYPE_GET_SCHEMA = 18;
+    public static final int CALL_TYPE_GET_NAMESPACES = 19;
+    public static final int CALL_TYPE_GET_NEXT_PAGE = 20;
+    public static final int CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN = 21;
+    public static final int CALL_TYPE_WRITE_QUERY_RESULTS_TO_FILE = 22;
+    public static final int CALL_TYPE_PUT_DOCUMENTS_FROM_FILE = 23;
+    public static final int CALL_TYPE_SEARCH_SUGGESTION = 24;
+    public static final int CALL_TYPE_REPORT_SYSTEM_USAGE = 25;
+    public static final int CALL_TYPE_REPORT_USAGE = 26;
+    public static final int CALL_TYPE_GET_STORAGE_INFO = 27;
+    public static final int CALL_TYPE_REGISTER_OBSERVER_CALLBACK = 28;
+    public static final int CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK = 29;
 
     @Nullable private final String mPackageName;
     @Nullable private final String mDatabase;
@@ -182,6 +209,7 @@ public class CallStats {
         int mNumOperationsFailed;
 
         /** Sets the PackageName used by the session. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setPackageName(@NonNull String packageName) {
             mPackageName = Objects.requireNonNull(packageName);
@@ -189,6 +217,7 @@ public class CallStats {
         }
 
         /** Sets the database used by the session. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setDatabase(@NonNull String database) {
             mDatabase = Objects.requireNonNull(database);
@@ -196,6 +225,7 @@ public class CallStats {
         }
 
         /** Sets the status code. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setStatusCode(@AppSearchResult.ResultCode int statusCode) {
             mStatusCode = statusCode;
@@ -203,6 +233,7 @@ public class CallStats {
         }
 
         /** Sets total latency in millis. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setTotalLatencyMillis(int totalLatencyMillis) {
             mTotalLatencyMillis = totalLatencyMillis;
@@ -210,6 +241,7 @@ public class CallStats {
         }
 
         /** Sets type of the call. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setCallType(@CallType int callType) {
             mCallType = callType;
@@ -217,6 +249,7 @@ public class CallStats {
         }
 
         /** Sets estimated binder latency, in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setEstimatedBinderLatencyMillis(int estimatedBinderLatencyMillis) {
             mEstimatedBinderLatencyMillis = estimatedBinderLatencyMillis;
@@ -234,6 +267,7 @@ public class CallStats {
          * the sum of {@link CallStats#getNumOperationsSucceeded()} and {@link
          * CallStats#getNumOperationsFailed()} is always 1 since there is only one operation.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNumOperationsSucceeded(int numOperationsSucceeded) {
             mNumOperationsSucceeded = numOperationsSucceeded;
@@ -251,6 +285,7 @@ public class CallStats {
          * the sum of {@link CallStats#getNumOperationsSucceeded()} and {@link
          * CallStats#getNumOperationsFailed()} is always 1 since there is only one operation.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNumOperationsFailed(int numOperationsFailed) {
             mNumOperationsFailed = numOperationsFailed;

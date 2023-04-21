@@ -21,10 +21,12 @@ import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.util.BundleUtil;
 import android.os.Bundle;
 import android.util.ArrayMap;
+import android.util.ArraySet;
 
 import com.android.internal.util.Preconditions;
 
@@ -66,6 +68,7 @@ public final class SearchSpec {
     static final String TYPE_PROPERTY_WEIGHTS_FIELD = "typePropertyWeightsField";
     static final String JOIN_SPEC = "joinSpec";
     static final String ADVANCED_RANKING_EXPRESSION = "advancedRankingExpression";
+    static final String ENABLED_FEATURES_FIELD = "enabledFeatures";
 
     /** @hide */
     public static final int DEFAULT_NUM_PER_PAGE = 10;
@@ -176,20 +179,29 @@ public final class SearchSpec {
      */
     @IntDef(
             flag = true,
-            value = {GROUPING_TYPE_PER_PACKAGE, GROUPING_TYPE_PER_NAMESPACE})
+            value = {
+                GROUPING_TYPE_PER_PACKAGE,
+                GROUPING_TYPE_PER_NAMESPACE,
+                GROUPING_TYPE_PER_SCHEMA
+            })
     @Retention(RetentionPolicy.SOURCE)
     public @interface GroupingType {}
-
     /**
      * Results should be grouped together by package for the purpose of enforcing a limit on the
      * number of results returned per package.
      */
-    public static final int GROUPING_TYPE_PER_PACKAGE = 0b01;
+    public static final int GROUPING_TYPE_PER_PACKAGE = 0b001;
     /**
      * Results should be grouped together by namespace for the purpose of enforcing a limit on the
      * number of results returned per namespace.
      */
-    public static final int GROUPING_TYPE_PER_NAMESPACE = 0b10;
+    public static final int GROUPING_TYPE_PER_NAMESPACE = 0b010;
+    /**
+     * Results should be grouped together by schema type for the purpose of enforcing a limit on the
+     * number of results returned per schema type.
+     * @hide
+     */
+    public static final int GROUPING_TYPE_PER_SCHEMA = 0b100;
 
     private final Bundle mBundle;
 
@@ -210,7 +222,8 @@ public final class SearchSpec {
     }
 
     /** Returns how the query terms should match terms in the index. */
-    public @TermMatch int getTermMatch() {
+    @TermMatch
+    public int getTermMatch() {
         return mBundle.getInt(TERM_MATCH_TYPE_FIELD, -1);
     }
 
@@ -264,12 +277,14 @@ public final class SearchSpec {
     }
 
     /** Returns the ranking strategy. */
-    public @RankingStrategy int getRankingStrategy() {
+    @RankingStrategy
+    public int getRankingStrategy() {
         return mBundle.getInt(RANKING_STRATEGY_FIELD);
     }
 
     /** Returns the order of returned search results (descending or ascending). */
-    public @Order int getOrder() {
+    @Order
+    public int getOrder() {
         return mBundle.getInt(ORDER_FIELD);
     }
 
@@ -399,7 +414,8 @@ public final class SearchSpec {
      * Get the type of grouping limit to apply, or 0 if {@link Builder#setResultGrouping} was not
      * called.
      */
-    public @GroupingType int getResultGroupingTypeFlags() {
+    @GroupingType
+    public int getResultGroupingTypeFlags() {
         return mBundle.getInt(RESULT_GROUPING_TYPE_FLAGS);
     }
 
@@ -432,22 +448,49 @@ public final class SearchSpec {
         return mBundle.getString(ADVANCED_RANKING_EXPRESSION, "");
     }
 
+    /** Returns whether the {@link Features#NUMERIC_SEARCH} feature is enabled. */
+    public boolean isNumericSearchEnabled() {
+        return getEnabledFeatures().contains(FeatureConstants.NUMERIC_SEARCH);
+    }
+
+    /** Returns whether the {@link Features#VERBATIM_SEARCH} feature is enabled. */
+    public boolean isVerbatimSearchEnabled() {
+        return getEnabledFeatures().contains(FeatureConstants.VERBATIM_SEARCH);
+    }
+
+    /** Returns whether the {@link Features#LIST_FILTER_QUERY_LANGUAGE} feature is enabled. */
+    public boolean isListFilterQueryLanguageEnabled() {
+        return getEnabledFeatures().contains(FeatureConstants.LIST_FILTER_QUERY_LANGUAGE);
+    }
+
+    /**
+     * Get the list of enabled features that the caller is intending to use in this search call.
+     *
+     * @return the set of {@link Features} enabled in this {@link SearchSpec} Entry.
+     * @hide
+     */
+    @NonNull
+    public List<String> getEnabledFeatures() {
+        return mBundle.getStringArrayList(ENABLED_FEATURES_FIELD);
+    }
+
     /** Builder for {@link SearchSpec objects}. */
     public static final class Builder {
         private ArrayList<String> mSchemas = new ArrayList<>();
         private ArrayList<String> mNamespaces = new ArrayList<>();
         private ArrayList<String> mPackageNames = new ArrayList<>();
+        private ArraySet<String> mEnabledFeatures = new ArraySet<>();
         private Bundle mProjectionTypePropertyMasks = new Bundle();
         private Bundle mTypePropertyWeights = new Bundle();
 
         private int mResultCountPerPage = DEFAULT_NUM_PER_PAGE;
-        private @TermMatch int mTermMatchType = TERM_MATCH_PREFIX;
+        @TermMatch private int mTermMatchType = TERM_MATCH_PREFIX;
         private int mSnippetCount = 0;
         private int mSnippetCountPerProperty = MAX_SNIPPET_PER_PROPERTY_COUNT;
         private int mMaxSnippetSize = 0;
-        private @RankingStrategy int mRankingStrategy = RANKING_STRATEGY_NONE;
-        private @Order int mOrder = ORDER_DESCENDING;
-        private @GroupingType int mGroupingTypeFlags = 0;
+        @RankingStrategy private int mRankingStrategy = RANKING_STRATEGY_NONE;
+        @Order private int mOrder = ORDER_DESCENDING;
+        @GroupingType private int mGroupingTypeFlags = 0;
         private int mGroupingLimit = 0;
         private JoinSpec mJoinSpec;
         private String mAdvancedRankingExpression = "";
@@ -459,6 +502,7 @@ public final class SearchSpec {
          * <p>If this method is not called, the default term match type is {@link
          * SearchSpec#TERM_MATCH_PREFIX}.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setTermMatch(@TermMatch int termMatchType) {
             Preconditions.checkArgumentInRange(
@@ -474,6 +518,7 @@ public final class SearchSpec {
          *
          * <p>If unset, the query will search over all schema types.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull String... schemas) {
             Objects.requireNonNull(schemas);
@@ -487,6 +532,7 @@ public final class SearchSpec {
          *
          * <p>If unset, the query will search over all schema types.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull Collection<String> schemas) {
             Objects.requireNonNull(schemas);
@@ -501,6 +547,7 @@ public final class SearchSpec {
          *
          * <p>If unset, the query will search over all namespaces.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterNamespaces(@NonNull String... namespaces) {
             Objects.requireNonNull(namespaces);
@@ -514,6 +561,7 @@ public final class SearchSpec {
          *
          * <p>If unset, the query will search over all namespaces.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterNamespaces(@NonNull Collection<String> namespaces) {
             Objects.requireNonNull(namespaces);
@@ -530,6 +578,7 @@ public final class SearchSpec {
          * package names are specified which caller doesn't have access to, then those package names
          * will be ignored.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterPackageNames(@NonNull String... packageNames) {
             Objects.requireNonNull(packageNames);
@@ -545,6 +594,7 @@ public final class SearchSpec {
          * package names are specified which caller doesn't have access to, then those package names
          * will be ignored.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterPackageNames(@NonNull Collection<String> packageNames) {
             Objects.requireNonNull(packageNames);
@@ -558,6 +608,7 @@ public final class SearchSpec {
          *
          * <p>The default number of results per page is 10.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setResultCountPerPage(
                 @IntRange(from = 0, to = MAX_NUM_PER_PAGE) int resultCountPerPage) {
@@ -569,6 +620,7 @@ public final class SearchSpec {
         }
 
         /** Sets ranking strategy for AppSearch results. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setRankingStrategy(@RankingStrategy int rankingStrategy) {
             Preconditions.checkArgumentInRange(
@@ -686,6 +738,7 @@ public final class SearchSpec {
          *
          * @param advancedRankingExpression a non-empty string representing the ranking expression.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setRankingStrategy(@NonNull String advancedRankingExpression) {
             Preconditions.checkStringNotEmpty(advancedRankingExpression);
@@ -701,6 +754,7 @@ public final class SearchSpec {
          *
          * <p>This order field will be ignored if RankingStrategy = {@code RANKING_STRATEGY_NONE}.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setOrder(@Order int order) {
             Preconditions.checkArgumentInRange(
@@ -720,6 +774,7 @@ public final class SearchSpec {
          * <p>If set to 0 (default), snippeting is disabled and the list returned from {@link
          * SearchResult#getMatchInfos} will be empty.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setSnippetCount(
                 @IntRange(from = 0, to = MAX_SNIPPET_COUNT) int snippetCount) {
@@ -740,6 +795,7 @@ public final class SearchSpec {
          * <p>The default behavior is to snippet all matches a property contains, up to the maximum
          * value of 10,000.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setSnippetCountPerProperty(
                 @IntRange(from = 0, to = MAX_SNIPPET_PER_PROPERTY_COUNT)
@@ -766,6 +822,7 @@ public final class SearchSpec {
          * <p>Ex. {@code maxSnippetSize} = 16. "foo bar baz bat rat" with a query of "baz" will
          * return a window of "bar baz bat" which is only 11 bytes long.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setMaxSnippetSize(
                 @IntRange(from = 0, to = MAX_SNIPPET_SIZE_LIMIT) int maxSnippetSize) {
@@ -786,6 +843,7 @@ public final class SearchSpec {
          * @param schema a string corresponding to the schema to add projections to.
          * @param propertyPaths the projections to add.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder addProjection(
                 @NonNull String schema, @NonNull Collection<String> propertyPaths) {
@@ -866,6 +924,7 @@ public final class SearchSpec {
          * @param schema a string corresponding to the schema to add projections to.
          * @param propertyPaths the projections to add.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder addProjectionPaths(
                 @NonNull String schema, @NonNull Collection<PropertyPath> propertyPaths) {
@@ -896,6 +955,7 @@ public final class SearchSpec {
          */
         // Individual parameters available from getResultGroupingTypeFlags and
         // getResultGroupingLimit
+        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setResultGrouping(@GroupingType int groupingTypeFlags, int limit) {
@@ -1014,6 +1074,70 @@ public final class SearchSpec {
         }
 
         /**
+         * Sets the {@link Features#NUMERIC_SEARCH} feature as enabled/disabled according to the
+         * enabled parameter.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it.
+         *     <p>If disabled, disallows use of {@link
+         *     AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE} and all other numeric
+         *     querying features.
+         */
+        @NonNull
+        public Builder setNumericSearchEnabled(boolean enabled) {
+            modifyEnabledFeature(FeatureConstants.NUMERIC_SEARCH, enabled);
+            return this;
+        }
+
+        /**
+         * Sets the {@link Features#VERBATIM_SEARCH} feature as enabled/disabled according to the
+         * enabled parameter.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it
+         *     <p>If disabled, disallows use of {@link
+         *     AppSearchSchema.StringPropertyConfig#TOKENIZER_TYPE_VERBATIM} and all other verbatim
+         *     search features within the query language that allows clients to search using the
+         *     verbatim string operator.
+         *     <p>Ex. The verbatim string operator '"foo/bar" OR baz' will ensure that 'foo/bar' is
+         *     treated as a single 'verbatim' token.
+         */
+        @NonNull
+        public Builder setVerbatimSearchEnabled(boolean enabled) {
+            modifyEnabledFeature(FeatureConstants.VERBATIM_SEARCH, enabled);
+            return this;
+        }
+
+        /**
+         * Sets the {@link Features#LIST_FILTER_QUERY_LANGUAGE} feature as enabled/disabled
+         * according to the enabled parameter.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it.
+         *     <p>This feature covers the expansion of the query language to conform to the
+         *     definition of the list filters language (https://aip.dev/160). This includes:
+         *     <ul>
+         *       <li>addition of explicit 'AND' and 'NOT' operators
+         *       <li>property restricts are allowed with grouping (ex. "prop:(a OR b)")
+         *       <li>addition of custom functions to control matching
+         *     </ul>
+         *     <p>The newly added custom functions covered by this feature are:
+         *     <ul>
+         *       <li>createList(String...)
+         *       <li>termSearch(String, List<String>)
+         *     </ul>
+         *     <p>createList takes a variable number of strings and returns a list of strings. It is
+         *     for use with termSearch.
+         *     <p>termSearch takes a query string that will be parsed according to the supported
+         *     query language and an optional list of strings that specify the properties to be
+         *     restricted to. This exists as a convenience for multiple property restricts. So, for
+         *     example, the query "(subject:foo OR body:foo) (subject:bar OR body:bar)" could be
+         *     rewritten as "termSearch(\"foo bar\", createList(\"subject\", \"bar\"))"
+         */
+        @NonNull
+        public Builder setListFilterQueryLanguageEnabled(boolean enabled) {
+            modifyEnabledFeature(FeatureConstants.LIST_FILTER_QUERY_LANGUAGE, enabled);
+            return this;
+        }
+
+        /**
          * Constructs a new {@link SearchSpec} from the contents of this builder.
          *
          * @throws IllegalArgumentException if property weights are provided with a ranking strategy
@@ -1046,6 +1170,7 @@ public final class SearchSpec {
             bundle.putStringArrayList(SCHEMA_FIELD, mSchemas);
             bundle.putStringArrayList(NAMESPACE_FIELD, mNamespaces);
             bundle.putStringArrayList(PACKAGE_NAME_FIELD, mPackageNames);
+            bundle.putStringArrayList(ENABLED_FEATURES_FIELD, new ArrayList<>(mEnabledFeatures));
             bundle.putBundle(PROJECTION_TYPE_PROPERTY_PATHS_FIELD, mProjectionTypePropertyMasks);
             bundle.putInt(NUM_PER_PAGE_FIELD, mResultCountPerPage);
             bundle.putInt(TERM_MATCH_TYPE_FIELD, mTermMatchType);
@@ -1076,6 +1201,15 @@ public final class SearchSpec {
                 mProjectionTypePropertyMasks = BundleUtil.deepCopy(mProjectionTypePropertyMasks);
                 mTypePropertyWeights = BundleUtil.deepCopy(mTypePropertyWeights);
                 mBuilt = false;
+            }
+        }
+
+        private void modifyEnabledFeature(@NonNull String feature, boolean enabled) {
+            resetIfBuilt();
+            if (enabled) {
+                mEnabledFeatures.add(feature);
+            } else {
+                mEnabledFeatures.remove(feature);
             }
         }
     }

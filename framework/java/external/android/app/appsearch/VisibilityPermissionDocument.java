@@ -18,6 +18,7 @@ package android.app.appsearch;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.util.ArraySet;
 
 import java.util.Set;
@@ -73,6 +74,7 @@ public class VisibilityPermissionDocument extends GenericDocument {
         }
 
         /** Sets whether this schema has opted out of platform surfacing. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setVisibleToAllRequiredPermissions(
                 @NonNull Set<Integer> allRequiredPermissions) {

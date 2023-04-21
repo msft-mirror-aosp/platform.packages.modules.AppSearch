@@ -115,6 +115,7 @@ public class AppSearchMigrationHelper implements Closeable {
                             .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                             .build().getBundle(),
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
