@@ -946,6 +946,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull AttributionSource callerAttributionSource,
                 @Nullable String databaseName,
                 long nextPageToken,
+                @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinType,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
@@ -969,11 +970,13 @@ public class AppSearchManagerService extends SystemService {
                 SearchStats.Builder statsBuilder;
                 if (databaseName == null) {
                     statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_GLOBAL,
-                            callingPackageName);
+                            callingPackageName)
+                            .setJoinType(joinType);
                 } else {
                     statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_LOCAL,
                             callingPackageName)
-                            .setDatabase(databaseName);
+                            .setDatabase(databaseName)
+                            .setJoinType(joinType);
                 }
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);

@@ -270,12 +270,18 @@ public final class AppSearchImpl implements Closeable {
     public static AppSearchImpl create(
             @NonNull File icingDir,
             @NonNull LimitConfig limitConfig,
+            @NonNull IcingOptionsConfig icingOptionsConfig,
             @Nullable InitializeStats.Builder initStatsBuilder,
             @NonNull OptimizeStrategy optimizeStrategy,
             @Nullable VisibilityChecker visibilityChecker)
             throws AppSearchException {
         return new AppSearchImpl(
-                icingDir, limitConfig, initStatsBuilder, optimizeStrategy, visibilityChecker);
+                icingDir,
+                limitConfig,
+                icingOptionsConfig,
+                initStatsBuilder,
+                optimizeStrategy,
+                visibilityChecker);
     }
 
     /**
@@ -284,11 +290,13 @@ public final class AppSearchImpl implements Closeable {
     private AppSearchImpl(
             @NonNull File icingDir,
             @NonNull LimitConfig limitConfig,
+            @NonNull IcingOptionsConfig icingOptionsConfig,
             @Nullable InitializeStats.Builder initStatsBuilder,
             @NonNull OptimizeStrategy optimizeStrategy,
             @Nullable VisibilityChecker visibilityChecker)
             throws AppSearchException {
         Objects.requireNonNull(icingDir);
+        Objects.requireNonNull(icingOptionsConfig);
         mLimitConfig = Objects.requireNonNull(limitConfig);
         mOptimizeStrategy = Objects.requireNonNull(optimizeStrategy);
         mVisibilityCheckerLocked = visibilityChecker;
@@ -300,10 +308,13 @@ public final class AppSearchImpl implements Closeable {
             IcingSearchEngineOptions options =
                     IcingSearchEngineOptions.newBuilder()
                             .setBaseDir(icingDir.getAbsolutePath())
+                            .setMaxTokenLength(icingOptionsConfig.getMaxTokenLength())
+                            .setIndexMergeSize(icingOptionsConfig.getIndexMergeSize())
                             .setDocumentStoreNamespaceIdFingerprint(
-                                    mLimitConfig.getDocumentStoreNamespaceIdFingerprint())
+                                    icingOptionsConfig.getDocumentStoreNamespaceIdFingerprint())
                             .setOptimizeRebuildIndexThreshold(
-                                    mLimitConfig.getOptimizeRebuildIndexThreshold())
+                                    icingOptionsConfig.getOptimizeRebuildIndexThreshold())
+                            .setCompressionLevel(icingOptionsConfig.getCompressionLevel())
                             .build();
             LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
             mIcingSearchEngineLocked = new IcingSearchEngine(options);
@@ -1538,6 +1549,11 @@ public final class AppSearchImpl implements Closeable {
                 TAG, "search, response", searchResultProto.getResultsCount(), searchResultProto);
         if (sStatsBuilder != null) {
             sStatsBuilder.setStatusCode(statusProtoToResultCode(searchResultProto.getStatus()));
+            if (searchSpec.hasJoinSpec()) {
+                // TODO(b/276349029): Log different join types when they get added.
+                sStatsBuilder.setJoinType(
+                        AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID);
+            }
             AppSearchLoggerHelper.copyNativeStats(searchResultProto.getQueryStats(), sStatsBuilder);
         }
         checkSuccess(searchResultProto.getStatus());
@@ -1683,6 +1699,8 @@ public final class AppSearchImpl implements Closeable {
 
             if (sStatsBuilder != null) {
                 sStatsBuilder.setStatusCode(statusProtoToResultCode(searchResultProto.getStatus()));
+                // Join query stats are handled by SearchResultsImpl, which has access to the
+                // original SearchSpec.
                 AppSearchLoggerHelper.copyNativeStats(
                         searchResultProto.getQueryStats(), sStatsBuilder);
             }
