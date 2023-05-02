@@ -223,6 +223,7 @@ public final class AppSearchUserInstanceManager {
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
                 icingDir,
                 new FrameworkLimitConfig(config),
+                new FrameworkIcingOptionsConfig(),
                 initStatsBuilder,
                 new FrameworkOptimizeStrategy(config),
                 visibilityCheckerImpl);
