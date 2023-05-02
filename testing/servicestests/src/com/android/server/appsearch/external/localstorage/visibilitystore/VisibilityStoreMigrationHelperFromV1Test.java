@@ -28,6 +28,7 @@ import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.VisibilityDocument;
 
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
@@ -74,6 +75,7 @@ public class VisibilityStoreMigrationHelperFromV1Test {
                 AppSearchImpl.create(
                         mFile,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -128,6 +130,7 @@ public class VisibilityStoreMigrationHelperFromV1Test {
                 AppSearchImpl.create(
                         mFile,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -154,5 +157,6 @@ public class VisibilityStoreMigrationHelperFromV1Test {
                                         SetSchemaRequest.READ_SMS, SetSchemaRequest.READ_CALENDAR),
                                 ImmutableSet.of(SetSchemaRequest.READ_HOME_APP_SEARCH_DATA),
                                 ImmutableSet.of(SetSchemaRequest.READ_ASSISTANT_APP_SEARCH_DATA)));
+        appSearchImpl.close();
     }
 }
