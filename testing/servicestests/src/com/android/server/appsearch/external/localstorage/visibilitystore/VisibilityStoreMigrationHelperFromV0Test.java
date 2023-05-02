@@ -33,6 +33,7 @@ import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.VisibilityDocument;
 
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
@@ -140,6 +141,7 @@ public class VisibilityStoreMigrationHelperFromV0Test {
                 AppSearchImpl.create(
                         mFile,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -175,6 +177,7 @@ public class VisibilityStoreMigrationHelperFromV0Test {
                         .build();
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
         assertThat(actualDocument2).isEqualTo(expectedDocument2);
+        appSearchImpl.close();
     }
 
     /** Build AppSearchImpl with deprecated visibility schemas version 0. */
@@ -221,6 +224,7 @@ public class VisibilityStoreMigrationHelperFromV0Test {
                 AppSearchImpl.create(
                         mFile,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
