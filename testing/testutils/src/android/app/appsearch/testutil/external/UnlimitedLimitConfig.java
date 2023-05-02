@@ -21,8 +21,6 @@ package com.android.server.appsearch.external.localstorage;
  * In Jetpack, AppSearch doesn't enforce artificial limits on number of documents or size of
  * documents, since the app is the only user of the Icing instance. Icing still enforces a docid
  * limit of 1M docs.
- *
- * @hide
  */
 public class UnlimitedLimitConfig implements LimitConfig {
     @Override
@@ -38,15 +36,5 @@ public class UnlimitedLimitConfig implements LimitConfig {
     @Override
     public int getMaxSuggestionCount() {
         return Integer.MAX_VALUE;
-    }
-
-    @Override
-    public boolean getDocumentStoreNamespaceIdFingerprint() {
-        return true;
-    }
-
-    @Override
-    public float getOptimizeRebuildIndexThreshold() {
-        return (float) 0.9;
     }
 }
