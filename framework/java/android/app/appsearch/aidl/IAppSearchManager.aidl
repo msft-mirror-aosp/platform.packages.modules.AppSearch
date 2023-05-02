@@ -214,6 +214,7 @@ interface IAppSearchManager {
      * @param databaseName The nullable databaseName this query for. The databaseName will be null
                            if the query is a global search.
      * @param nextPageToken The token of pre-loaded results of previously executed query.
+     * @param joinType the type of join performed. 0 if no join is performed
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      * @param callback {@link AppSearchResult}&lt;{@link Bundle}&gt; of performing this
@@ -223,6 +224,7 @@ interface IAppSearchManager {
         in AttributionSource callerAttributionSource,
         in String databaseName,
         in long nextPageToken,
+        in int joinType,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
         in IAppSearchResultCallback callback);
