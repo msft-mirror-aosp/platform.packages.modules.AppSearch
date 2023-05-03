@@ -413,8 +413,6 @@ public class AppSearchManagerService extends SystemService {
                     long checkForOptimizeLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                     setSchemaStatsBuilder
-                            .setStatusCode(statusCode)
-                            .setSchemaMigrationCallType(schemaMigrationCallType)
                             .setVerifyIncomingCallLatencyMillis(
                                     (int) (verifyIncomingCallLatencyEndTimeMillis
                                             - verifyIncomingCallLatencyStartTimeMillis))
@@ -455,6 +453,8 @@ public class AppSearchManagerService extends SystemService {
                                 .setNumOperationsFailed(operationFailureCount)
                                 .build());
                         instance.getLogger().logStats(setSchemaStatsBuilder
+                                .setStatusCode(statusCode)
+                                .setSchemaMigrationCallType(schemaMigrationCallType)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .build());
                     }
@@ -1001,18 +1001,18 @@ public class AppSearchManagerService extends SystemService {
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         CallStats.Builder builder = new CallStats.Builder()
                                 .setPackageName(callingPackageName)
+                                .setDatabase(databaseName)
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
-                                .setCallType(CallStats.CALL_TYPE_GET_NEXT_PAGE)
+                                .setCallType(databaseName == null
+                                        ? CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE
+                                        : CallStats.CALL_TYPE_GET_NEXT_PAGE)
                                 // TODO(b/173532925) check the existing binder call latency chart
                                 // is good enough for us:
                                 // http://dashboards/view/_72c98f9a_91d9_41d4_ab9a_bc14f79742b4
                                 .setEstimatedBinderLatencyMillis(estimatedBinderLatencyMillis)
                                 .setNumOperationsSucceeded(operationSuccessCount)
                                 .setNumOperationsFailed(operationFailureCount);
-                        if (databaseName != null) {
-                            builder.setDatabase(databaseName);
-                        }
                         instance.getLogger().logStats(builder.build());
                         instance.getLogger().logStats(statsBuilder.build());
                     }
@@ -1716,8 +1716,8 @@ public class AppSearchManagerService extends SystemService {
                             int totalLatencyMillis =
                                     (int) (SystemClock.elapsedRealtime()
                                             - totalLatencyStartTimeMillis);
-                            String packageName = callerAttributionSource.getPackageName();
                             CallStats.Builder callStatsBuilder = new CallStats.Builder();
+                            String packageName = callerAttributionSource.getPackageName();
                             if (packageName != null) {
                                 callStatsBuilder.setPackageName(packageName);
                             }
@@ -1926,7 +1926,9 @@ public class AppSearchManagerService extends SystemService {
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
+                        String callingPackageName = callerAttributionSource.getPackageName();
                         instance.getLogger().logStats(new CallStats.Builder()
+                                .setPackageName(callingPackageName)
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_INITIALIZE)
