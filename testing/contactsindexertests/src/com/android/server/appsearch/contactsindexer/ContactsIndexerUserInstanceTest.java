@@ -362,7 +362,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
-                mSingleThreadedExecutor);
+                mSingleThreadedExecutor, mConfigForTest);
         List<String> contactIds = searchHelper.getAllContactIdsAsync().get();
         assertThat(contactIds.size()).isEqualTo(500);
     }
@@ -382,7 +382,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
-                mSingleThreadedExecutor);
+                mSingleThreadedExecutor, mConfigForTest);
         List<String> contactIds = searchHelper.getAllContactIdsAsync().get();
         assertThat(contactIds.size()).isEqualTo(250);
 
@@ -420,7 +420,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
-                mSingleThreadedExecutor);
+                mSingleThreadedExecutor, mConfigForTest);
         List<String> contactIds = searchHelper.getAllContactIdsAsync().get();
         assertThat(contactIds.size()).isEqualTo(100);
     }
@@ -454,7 +454,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
-                mSingleThreadedExecutor);
+                mSingleThreadedExecutor, mConfigForTest);
         List<String> contactIds = searchHelper.getAllContactIdsAsync().get();
         assertThat(contactIds.size()).isEqualTo(6);
         assertThat(contactIds).containsNoneOf("2", "3", "5", "7");
@@ -504,7 +504,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
-                mSingleThreadedExecutor);
+                mSingleThreadedExecutor, mConfigForTest);
         List<String> contactIds = searchHelper.getAllContactIdsAsync().get();
         assertThat(contactIds.size()).isEqualTo(6);
         assertThat(contactIds).containsNoneOf("2", "3", "5", "7");
@@ -565,7 +565,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
-                mSingleThreadedExecutor);
+                mSingleThreadedExecutor, mConfigForTest);
         List<String> contactIds = searchHelper.getAllContactIdsAsync().get();
         assertThat(contactIds.size()).isEqualTo(11);
         assertThat(contactIds).containsNoneOf("2", "3", "5", "7");
@@ -693,7 +693,8 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         AppSearchSessionShim db = AppSearchSessionShimImpl.createSearchSessionAsync(
                 searchContext).get();
         SetSchemaRequest setSchemaRequest = new SetSchemaRequest.Builder()
-                .addSchemas(TestUtils.CONTACT_POINT_SCHEMA_WITH_APP_IDS_OPTIONAL, Person.SCHEMA)
+                .addSchemas(TestUtils.CONTACT_POINT_SCHEMA_WITH_APP_IDS_OPTIONAL,
+                        Person.getSchema(mConfigForTest))
                 .setForceOverride(true).build();
         db.setSchemaAsync(setSchemaRequest).get();
 
@@ -736,7 +737,8 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         AppSearchSessionShim db = AppSearchSessionShimImpl.createSearchSessionAsync(
                 searchContext).get();
         SetSchemaRequest setSchemaRequest = new SetSchemaRequest.Builder()
-                .addSchemas(TestUtils.CONTACT_POINT_SCHEMA_WITH_LABEL_REPEATED, Person.SCHEMA)
+                .addSchemas(TestUtils.CONTACT_POINT_SCHEMA_WITH_LABEL_REPEATED,
+                        Person.getSchema(mConfigForTest))
                 .setForceOverride(true).build();
         db.setSchemaAsync(setSchemaRequest).get();
         // Setup a latch
