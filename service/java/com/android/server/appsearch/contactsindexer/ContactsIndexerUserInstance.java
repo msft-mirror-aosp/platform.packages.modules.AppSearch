@@ -127,7 +127,7 @@ public final class ContactsIndexerUserInstance {
         Objects.requireNonNull(executorService);
 
         AppSearchHelper appSearchHelper = AppSearchHelper.createAppSearchHelper(context,
-                executorService);
+                executorService, contactsIndexerConfig);
         ContactsIndexerUserInstance indexer = new ContactsIndexerUserInstance(context,
                 contactsDir, appSearchHelper, contactsIndexerConfig, executorService);
         indexer.loadSettingsAsync();
