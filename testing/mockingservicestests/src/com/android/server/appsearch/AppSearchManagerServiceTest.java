@@ -403,7 +403,7 @@ public class AppSearchManagerServiceTest {
                 BINDER_CALL_START_TIME, callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
-                CallStats.CALL_TYPE_WRITE_QUERY_RESULTS_TO_FILE);
+                CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE);
     }
 
     @Test
