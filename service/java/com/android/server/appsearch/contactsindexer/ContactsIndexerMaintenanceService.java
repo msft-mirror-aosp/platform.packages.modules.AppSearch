@@ -16,6 +16,7 @@
 
 package com.android.server.appsearch.contactsindexer;
 
+import android.annotation.NonNull;
 import android.annotation.UserIdInt;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.util.LogUtil;
@@ -27,13 +28,17 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.os.CancellationSignal;
 import android.os.PersistableBundle;
+import android.os.UserHandle;
 import android.util.Log;
 import android.util.SparseArray;
+
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.LocalManagerRegistry;
+import com.android.server.SystemService;
 
+import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -76,7 +81,7 @@ public class ContactsIndexerMaintenanceService extends JobService {
      */
     static void scheduleFullUpdateJob(Context context, @UserIdInt int userId,
             boolean periodic, long intervalMillis) {
-        int jobId = MIN_INDEXER_JOB_ID + userId;
+        int jobId = getJobIdForUser(userId);
         JobScheduler jobScheduler = context.getSystemService(JobScheduler.class);
         ComponentName component =
                 new ComponentName(context, ContactsIndexerMaintenanceService.class);
@@ -108,13 +113,54 @@ public class ContactsIndexerMaintenanceService extends JobService {
         }
     }
 
-    static void cancelFullUpdateJob(Context context, @UserIdInt int userId) {
-        int jobId = MIN_INDEXER_JOB_ID + userId;
+    /**
+     * Cancel full update job for the given user.
+     *
+     * @param userId The user id for whom the full update job needs to be cancelled.
+     */
+    private static void cancelFullUpdateJob(@NonNull Context context, @UserIdInt int userId) {
+        Objects.requireNonNull(context);
+        int jobId = getJobIdForUser(userId);
         JobScheduler jobScheduler = context.getSystemService(JobScheduler.class);
         jobScheduler.cancel(jobId);
         if (LogUtil.DEBUG) {
             Log.v(TAG, "Canceled full update job " + jobId + " for user " + userId);
         }
+    }
+
+    /**
+     * Check if a full update job is scheduled for the given user.
+     *
+     * @param userId The user id for whom the check for scheduled job needs to be performed
+     *
+     * @return true if a scheduled job exists
+     */
+    public static boolean isFullUpdateJobScheduled(@NonNull Context context,
+            @UserIdInt int userId) {
+        Objects.requireNonNull(context);
+        int jobId = getJobIdForUser(userId);
+        JobScheduler jobScheduler = context.getSystemService(JobScheduler.class);
+        return jobScheduler.getPendingJob(jobId) != null;
+    }
+
+    /**
+     * Cancel any scheduled full update job for the given user. Checks if a full update job for the
+     * given user exists before trying to cancel it.
+     *
+     * @param user The user for whom the full update job needs to be cancelled.
+     */
+    public static void cancelFullUpdateJobIfScheduled(@NonNull Context context, UserHandle user) {
+        try {
+            if (isFullUpdateJobScheduled(context, user.getIdentifier())) {
+                cancelFullUpdateJob(context, user.getIdentifier());
+            }
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Failed to cancel pending full update job ", e);
+        }
+    }
+
+    private static int getJobIdForUser(int userId) {
+        return MIN_INDEXER_JOB_ID + userId;
     }
 
     @Override
@@ -141,7 +187,7 @@ public class ContactsIndexerMaintenanceService extends JobService {
         synchronized (mSignals) {
             mSignals.put(userId, signal);
         }
-        EXECUTOR.execute(() -> doFullUpdateForUser(params, userId, signal));
+        EXECUTOR.execute(() -> doFullUpdateForUser(this, params, userId, signal));
         return true;
     }
 
@@ -157,7 +203,7 @@ public class ContactsIndexerMaintenanceService extends JobService {
      */
     @VisibleForTesting
     @CanIgnoreReturnValue
-    protected boolean doFullUpdateForUser(JobParameters params, int userId,
+    protected boolean doFullUpdateForUser(Context context, JobParameters params, int userId,
             CancellationSignal signal) {
         try {
             ContactsIndexerManagerService.LocalService service =
@@ -166,6 +212,11 @@ public class ContactsIndexerMaintenanceService extends JobService {
             if (service == null) {
                 Log.e(TAG, "Background job failed to trigger FullUpdate because "
                         + "ContactsIndexerManagerService.LocalService is not available.");
+                // If a background full update job exists while ContactsIndexer is disabled, cancel
+                // the job after its first run. This will prevent any periodic jobs from being
+                // unnecessarily triggered repeatedly. If the service is null, it means the contacts
+                // indexer is disabled. So the local service is not registered during the startup.
+                cancelFullUpdateJob(context, userId);
                 return false;
             }
             service.doFullUpdateForUser(userId, signal);

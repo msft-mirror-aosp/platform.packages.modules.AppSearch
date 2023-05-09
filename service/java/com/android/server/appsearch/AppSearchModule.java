@@ -25,6 +25,7 @@ import android.util.Log;
 
 import com.android.server.SystemService;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerConfig;
+import com.android.server.appsearch.contactsindexer.ContactsIndexerMaintenanceService;
 import com.android.server.appsearch.contactsindexer.FrameworkContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerManagerService;
 
@@ -95,7 +96,10 @@ public class AppSearchModule {
         @Override
         public void onUserUnlocking(@NonNull TargetUser user) {
             mAppSearchManagerService.onUserUnlocking(user);
-            if (mContactsIndexerManagerService != null) {
+            if (mContactsIndexerManagerService == null) {
+                ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(getContext(),
+                        user.getUserHandle());
+            } else {
                 mContactsIndexerManagerService.onUserUnlocking(user);
             }
         }
