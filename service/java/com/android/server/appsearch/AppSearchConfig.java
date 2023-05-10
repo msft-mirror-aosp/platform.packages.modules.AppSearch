@@ -128,7 +128,7 @@ public interface AppSearchConfig extends AutoCloseable {
     int getCachedTimeOptimizeThresholdMs();
 
     /**
-     * Returns the cached optimize document count threshold threshold.
+     * Returns the cached optimize document count threshold.
      *
      * An AppSearch Optimize job will be triggered if the number of document of garbage resource
      * exceeds this threshold.
@@ -147,6 +147,11 @@ public interface AppSearchConfig extends AutoCloseable {
      * Returns the maximum number of last API calls' statistics that can be included in dumpsys.
      */
     int getCachedApiCallStatsLimit();
+
+    /**
+     * Returns the cached denylist.
+     */
+    Denylist getCachedDenylist();
 
     /**
      * Closes this {@link AppSearchConfig}.
