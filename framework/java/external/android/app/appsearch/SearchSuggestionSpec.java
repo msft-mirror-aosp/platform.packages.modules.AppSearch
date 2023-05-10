@@ -16,7 +16,6 @@
 
 package android.app.appsearch;
 
-import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
 
 import android.annotation.IntDef;
 import android.annotation.IntRange;
@@ -47,7 +46,7 @@ import java.util.Set;
  *
  * @see AppSearchSession#searchSuggestion
  */
-public class SearchSuggestionSpec {
+public final class SearchSuggestionSpec {
     static final String NAMESPACE_FIELD = "namespace";
     static final String SCHEMA_FIELD = "schema";
     static final String PROPERTY_FIELD = "property";
@@ -421,14 +420,13 @@ public class SearchSuggestionSpec {
 
         /** Constructs a new {@link SearchSpec} from the contents of this builder. */
         @NonNull
-        public SearchSuggestionSpec build() throws AppSearchException {
+        public SearchSuggestionSpec build() {
             Bundle bundle = new Bundle();
             if (!mSchemas.isEmpty()) {
                 Set<String> schemaFilter = new ArraySet<>(mSchemas);
                 for (String schema : mTypePropertyFilters.keySet()) {
                     if (!schemaFilter.contains(schema)) {
-                        throw new AppSearchException(
-                                RESULT_INVALID_ARGUMENT,
+                        throw new IllegalStateException(
                                 "The schema: "
                                         + schema
                                         + " exists in the property filter but "
@@ -440,8 +438,7 @@ public class SearchSuggestionSpec {
                 Set<String> namespaceFilter = new ArraySet<>(mNamespaces);
                 for (String namespace : mDocumentIds.keySet()) {
                     if (!namespaceFilter.contains(namespace)) {
-                        throw new AppSearchException(
-                                RESULT_INVALID_ARGUMENT,
+                        throw new IllegalStateException(
                                 "The namespace: "
                                         + namespace
                                         + " exists in the document id "

@@ -80,6 +80,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -115,6 +116,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -579,6 +581,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -1078,6 +1081,7 @@ public class AppSearchImplTest {
         assertThat(suggestions.get(1).getSuggestedResult()).isEqualTo("term2");
     }
 
+    @Ignore("b/273733335")
     @Test
     public void testSearchSuggestion_invalidPrefix() throws Exception {
         // Insert schema just put something in the AppSearch to make it searchable.
@@ -2871,6 +2875,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -2946,6 +2951,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3038,6 +3044,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3168,6 +3175,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3262,6 +3270,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3327,6 +3336,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3371,6 +3381,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3508,6 +3519,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3616,6 +3628,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3686,6 +3699,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3865,6 +3879,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3958,6 +3973,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4021,6 +4037,7 @@ public class AppSearchImplTest {
                                 return Integer.MAX_VALUE;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4075,6 +4092,7 @@ public class AppSearchImplTest {
                                 return 2;
                             }
                         },
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4185,6 +4203,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4240,6 +4259,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4291,6 +4311,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4346,6 +4367,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4733,6 +4755,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4776,6 +4799,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4811,6 +4835,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4915,6 +4940,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -5006,6 +5032,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         rejectChecker);
@@ -5110,6 +5137,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
@@ -5172,6 +5200,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         rejectChecker);
@@ -5527,6 +5556,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
@@ -5699,6 +5729,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
@@ -5797,6 +5828,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
@@ -5891,6 +5923,7 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);

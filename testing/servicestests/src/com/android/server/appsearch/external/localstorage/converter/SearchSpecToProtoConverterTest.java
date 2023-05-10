@@ -29,6 +29,7 @@ import android.app.appsearch.SearchSpec;
 import android.app.appsearch.testutil.AppSearchTestUtils;
 
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
@@ -45,6 +46,8 @@ import com.android.server.appsearch.icing.proto.TypePropertyWeights;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -58,6 +61,25 @@ public class SearchSpecToProtoConverterTest {
     public static final OptimizeStrategy ALWAYS_OPTIMIZE = optimizeInfo -> true;
 
     @Rule public final TemporaryFolder mTemporaryFolder = new TemporaryFolder();
+
+    private AppSearchImpl mAppSearchImpl;
+
+    @Before
+    public void setUp() throws Exception {
+        mAppSearchImpl =
+                AppSearchImpl.create(
+                        mTemporaryFolder.newFolder(),
+                        new UnlimitedLimitConfig(),
+                        new DefaultIcingOptionsConfig(),
+                        /*initStatsBuilder=*/ null,
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
+    }
+
+    @After
+    public void tearDown() {
+        mAppSearchImpl.close();
+    }
 
     @Test
     public void testToSearchSpecProto() throws Exception {
@@ -169,7 +191,7 @@ public class SearchSpecToProtoConverterTest {
 
         JoinSpecProto joinSpecProto = searchSpecProto.getJoinSpec();
         assertThat(joinSpecProto.hasNestedSpec()).isTrue();
-        assertThat(joinSpecProto.getParentPropertyExpression()).isEqualTo(JoinSpec.QUALIFIED_ID);
+        assertThat(joinSpecProto.getParentPropertyExpression()).isEqualTo("this.qualifiedId()");
         assertThat(joinSpecProto.getChildPropertyExpression()).isEqualTo("childPropertyExpression");
         assertThat(joinSpecProto.getAggregationScoringStrategy())
                 .isEqualTo(JoinSpecProto.AggregationScoringStrategy.Code.SUM);
@@ -224,14 +246,7 @@ public class SearchSpecToProtoConverterTest {
                                         prefix2 + "typeA", configProto,
                                         prefix2 + "typeB", configProto)));
 
-        AppSearchImpl appSearchImpl =
-                AppSearchImpl.create(
-                        mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
-        VisibilityStore visibilityStore = new VisibilityStore(appSearchImpl);
+        VisibilityStore visibilityStore = new VisibilityStore(mAppSearchImpl);
         converter.removeInaccessibleSchemaFilter(
                 new CallerAccess(/*callingPackageName=*/ "package"),
                 visibilityStore,
@@ -350,7 +365,8 @@ public class SearchSpecToProtoConverterTest {
                         /*namespaceMap=*/ ImmutableMap.of(),
                         /*schemaMap=*/ ImmutableMap.of());
         ResultSpecProto resultSpecProto =
-                convert.toResultSpecProto(/*namespaceMap=*/ ImmutableMap.of());
+                convert.toResultSpecProto(
+                        /*namespaceMap=*/ ImmutableMap.of(), /*schemaMap=*/ ImmutableMap.of());
 
         assertThat(resultSpecProto.getNumPerPage()).isEqualTo(123);
         assertThat(resultSpecProto.getSnippetSpec().getNumToSnippet()).isEqualTo(234);
@@ -381,7 +397,8 @@ public class SearchSpecToProtoConverterTest {
                                                 prefix1 + "namespaceA", prefix1 + "namespaceB"),
                                 prefix2,
                                         ImmutableSet.of(
-                                                prefix2 + "namespaceA", prefix2 + "namespaceB")));
+                                                prefix2 + "namespaceA", prefix2 + "namespaceB")),
+                        /*schemaMap=*/ ImmutableMap.of());
 
         assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(2);
         // First grouping should have same package name.
@@ -422,7 +439,8 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         namespaceMap,
                         /*schemaMap=*/ ImmutableMap.of());
-        ResultSpecProto resultSpecProto = converter.toResultSpecProto(namespaceMap);
+        ResultSpecProto resultSpecProto =
+                converter.toResultSpecProto(namespaceMap, /*schemaMap=*/ ImmutableMap.of());
 
         assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(2);
         // First grouping should have same namespace.
@@ -461,7 +479,8 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         namespaceMap,
                         /*schemaMap=*/ ImmutableMap.of());
-        ResultSpecProto resultSpecProto = converter.toResultSpecProto(namespaceMap);
+        ResultSpecProto resultSpecProto =
+                converter.toResultSpecProto(namespaceMap, /*schemaMap=*/ ImmutableMap.of());
 
         // All namespace should be separated.
         assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(4);
@@ -698,14 +717,7 @@ public class SearchSpecToProtoConverterTest {
 
     @Test
     public void testRemoveInaccessibleSchemaFilter() throws Exception {
-        AppSearchImpl appSearchImpl =
-                AppSearchImpl.create(
-                        mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
-        VisibilityStore visibilityStore = new VisibilityStore(appSearchImpl);
+        VisibilityStore visibilityStore = new VisibilityStore(mAppSearchImpl);
 
         final String prefix = PrefixUtil.createPrefix("package", "database");
         SchemaTypeConfigProto schemaTypeConfigProto =
@@ -808,14 +820,7 @@ public class SearchSpecToProtoConverterTest {
 
     @Test
     public void testRemoveInaccessibleSchemaFilterWithEmptyNestedFilter() throws Exception {
-        AppSearchImpl appSearchImpl =
-                AppSearchImpl.create(
-                        mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
-        VisibilityStore visibilityStore = new VisibilityStore(appSearchImpl);
+        VisibilityStore visibilityStore = new VisibilityStore(mAppSearchImpl);
 
         final String prefix = PrefixUtil.createPrefix("package", "database");
         SchemaTypeConfigProto schemaTypeConfigProto =
