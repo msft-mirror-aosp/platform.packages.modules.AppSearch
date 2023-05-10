@@ -22,7 +22,9 @@ import static android.Manifest.permission.WRITE_DEVICE_CONFIG;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
 
@@ -302,11 +304,16 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
     }
 
     @Test
-    public void testStart_subsequentRun_doesNotScheduleFullUpdateJob() throws Exception {
+    public void testStart_subsequentRunWithNoScheduledJob_schedulesFullUpdateJob()
+            throws Exception {
+        // Trigger an initial full update.
         executeAndWaitForCompletion(
                 mInstance.doFullUpdateInternalAsync(new CancellationSignal(), mUpdateStats),
                 mSingleThreadedExecutor);
 
+        // By default mockJobScheduler.getPendingJob() would return null. This simulates the
+        // scenario where the scheduled full update job after the initial run is cancelled
+        // due to some reason.
         JobScheduler mockJobScheduler = mock(JobScheduler.class);
         mContextWrapper.setJobScheduler(mockJobScheduler);
         ContactsIndexerUserInstance instance = ContactsIndexerUserInstance.createInstance(
@@ -343,10 +350,70 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         instance.startAsync();
 
         // Wait for all async tasks to complete
-        mSingleThreadedExecutor.submit(() -> {
-        }).get();
+        latch.await(30L, TimeUnit.SECONDS);
 
-        verifyZeroInteractions(mockJobScheduler);
+        ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
+        verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
+        JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
+        assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
+        assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
+        assertThat(fullUpdateJob.isPersisted()).isTrue();
+        assertThat(fullUpdateJob.isPeriodic()).isFalse();
+    }
+
+    @Test
+    public void testStart_subsequentRunWithScheduledJob_doesNotScheduleFullUpdateJob()
+            throws Exception {
+        // Trigger an initial full update.
+        executeAndWaitForCompletion(
+                mInstance.doFullUpdateInternalAsync(new CancellationSignal(), mUpdateStats),
+                mSingleThreadedExecutor);
+
+        JobScheduler mockJobScheduler = mock(JobScheduler.class);
+        JobInfo mockJobInfo = mock(JobInfo.class);
+        // getPendingJob() should return a non-null value to simulate the scenario where a
+        // background job is already scheduled.
+        doReturn(mockJobInfo).when(mockJobScheduler).getPendingJob(
+                ContactsIndexerMaintenanceService.MIN_INDEXER_JOB_ID +
+                        mContext.getUser().getIdentifier());
+        mContextWrapper.setJobScheduler(mockJobScheduler);
+        ContactsIndexerUserInstance instance = ContactsIndexerUserInstance.createInstance(
+                mContext, mContactsDir, mConfigForTest, mSingleThreadedExecutor);
+
+        int docCount = 100;
+        CountDownLatch latch = new CountDownLatch(docCount);
+        GlobalSearchSessionShim shim =
+                GlobalSearchSessionShimImpl.createGlobalSearchSessionAsync(mContext).get();
+        ObserverCallback callback = new ObserverCallback() {
+            @Override
+            public void onSchemaChanged(SchemaChangeInfo changeInfo) {
+                // Do nothing
+            }
+
+            @Override
+            public void onDocumentChanged(DocumentChangeInfo changeInfo) {
+                for (int i = 0; i < changeInfo.getChangedDocumentIds().size(); i++) {
+                    latch.countDown();
+                }
+            }
+        };
+        shim.registerObserverCallback(mContext.getPackageName(),
+                new ObserverSpec.Builder().addFilterSchemas("builtin:Person").build(),
+                mSingleThreadedExecutor,
+                callback);
+        // Insert contacts to trigger delta update.
+        ContentResolver resolver = mContext.getContentResolver();
+        ContentValues dummyValues = new ContentValues();
+        for (int i = 0; i < docCount; i++) {
+            resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
+        }
+
+        instance.startAsync();
+
+        // Wait for all async tasks to complete
+        latch.await(30L, TimeUnit.SECONDS);
+
+        verify(mockJobScheduler, never()).schedule(any());
     }
 
     @Test
@@ -614,7 +681,8 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                     FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
                     String.valueOf(maxDocumentCount), false);
             // Cancel any existing jobs.
-            ContactsIndexerMaintenanceService.cancelFullUpdateJob(mContext, mContext.getUserId());
+            ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(mContext,
+                    mContext.getUser());
 
             JobScheduler mockJobScheduler = mock(JobScheduler.class);
             mContextWrapper.setJobScheduler(mockJobScheduler);
