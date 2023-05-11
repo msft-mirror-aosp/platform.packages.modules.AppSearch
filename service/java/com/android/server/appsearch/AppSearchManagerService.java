@@ -15,6 +15,7 @@
  */
 package com.android.server.appsearch;
 
+import static android.app.appsearch.AppSearchResult.RESULT_DENIED;
 import static android.app.appsearch.AppSearchResult.RESULT_OK;
 import static android.app.appsearch.AppSearchResult.throwableToFailedResult;
 import static android.os.Process.INVALID_UID;
@@ -126,6 +127,7 @@ public class AppSearchManagerService extends SystemService {
     private final Context mContext;
     private final ExecutorManager mExecutorManager = new ExecutorManager();
     private final AppSearchEnvironment mAppSearchEnvironment;
+    private final AppSearchConfig mAppSearchConfig;
 
     private PackageManager mPackageManager;
     private ServiceImplHelper mServiceImplHelper;
@@ -138,9 +140,9 @@ public class AppSearchManagerService extends SystemService {
     public AppSearchManagerService(Context context, AppSearchModule.Lifecycle lifecycle) {
         super(context);
         mContext = context;
-        mAppSearchEnvironment = AppSearchEnvironmentFactory
-                .getEnvironmentInstance();
         mLifecycle = lifecycle;
+        mAppSearchEnvironment = AppSearchEnvironmentFactory.getEnvironmentInstance();
+        mAppSearchConfig = AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR);
     }
 
     @Override
@@ -266,7 +268,7 @@ public class AppSearchManagerService extends SystemService {
                             mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                     userContext,
                                     userHandle,
-                                    AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR));
+                                    mAppSearchConfig);
                     instance.getAppSearchImpl().clearPackageData(packageName);
                     dispatchChangeNotifications(instance);
                     instance.getLogger().removeCachedUidForPackage(packageName);
@@ -292,7 +294,7 @@ public class AppSearchManagerService extends SystemService {
                             mAppSearchUserInstanceManager.getOrCreateUserInstance(
                                     userContext,
                                     userHandle,
-                                    AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR));
+                                    mAppSearchConfig);
                     List<PackageInfo> installedPackageInfos = userContext
                             .getPackageManager()
                             .getInstalledPackages(/* flags= */ 0);
@@ -356,6 +358,11 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, databaseName, CallStats.CALL_TYPE_SET_SCHEMA,
+                    callback, targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
             }
             long verifyIncomingCallLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
@@ -484,6 +491,18 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            boolean global = !callingPackageName.equals(targetPackageName);
+            // We deny based on the calling package and calling database names. If the calling
+            // package does not match the target package, then the call is global and the target
+            // database is not a calling database.
+            String callingDatabaseName = global ? null : databaseName;
+            int callType = global ? CallStats.CALL_TYPE_GLOBAL_GET_SCHEMA
+                    : CallStats.CALL_TYPE_GET_SCHEMA;
+            if (checkCallDenied(callingPackageName, callingDatabaseName, callType, callback,
+                    targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
+            }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -515,9 +534,6 @@ public class AppSearchManagerService extends SystemService {
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
-                        int callType = !callingPackageName.equals(targetPackageName) ?
-                                CallStats.CALL_TYPE_GLOBAL_GET_SCHEMA :
-                                CallStats.CALL_TYPE_GET_SCHEMA;
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
                                 .setDatabase(databaseName)
@@ -555,6 +571,12 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, databaseName,
+                    CallStats.CALL_TYPE_GET_NAMESPACES, callback, targetUser,
+                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -619,6 +641,11 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, databaseName, CallStats.CALL_TYPE_PUT_DOCUMENTS,
+                    callback, targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ documentsParcel.getDocuments().size())) {
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
@@ -720,13 +747,23 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            boolean global = !callingPackageName.equals(targetPackageName);
+            // We deny based on the calling package and calling database names. If the calling
+            // package does not match the target package, then the call is global and the target
+            // database is not a calling database.
+            String callingDatabaseName = global ? null : databaseName;
+            int callType = global ? CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID
+                    : CallStats.CALL_TYPE_GET_DOCUMENTS;
+            if (checkCallDenied(callingPackageName, callingDatabaseName, callType, callback,
+                    targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ ids.size())) {
+                return;
+            }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
-                boolean global =
-                        !callingPackageName.equals(targetPackageName);
                 try {
                     AppSearchBatchResult.Builder<String, Bundle> resultBuilder =
                             new AppSearchBatchResult.Builder<>();
@@ -779,9 +816,6 @@ public class AppSearchManagerService extends SystemService {
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
-                        int callType = global ?
-                                CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID :
-                                CallStats.CALL_TYPE_GET_DOCUMENTS;
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
                                 .setDatabase(databaseName)
@@ -823,6 +857,11 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, databaseName, CallStats.CALL_TYPE_SEARCH,
+                    callback, targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
@@ -891,6 +930,12 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
+                    CallStats.CALL_TYPE_GLOBAL_SEARCH, callback, targetUser,
+                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
@@ -962,13 +1007,21 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            boolean global = databaseName == null;
+            int callType = global ? CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE
+                    : CallStats.CALL_TYPE_GET_NEXT_PAGE;
+            if (checkCallDenied(callingPackageName, databaseName, callType, callback, targetUser,
+                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
+            }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 SearchStats.Builder statsBuilder;
-                if (databaseName == null) {
+                if (global) {
                     statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_GLOBAL,
                             callingPackageName)
                             .setJoinType(joinType);
@@ -1004,9 +1057,7 @@ public class AppSearchManagerService extends SystemService {
                                 .setDatabase(databaseName)
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
-                                .setCallType(databaseName == null
-                                        ? CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE
-                                        : CallStats.CALL_TYPE_GET_NEXT_PAGE)
+                                .setCallType(callType)
                                 // TODO(b/173532925) check the existing binder call latency chart
                                 // is good enough for us:
                                 // http://dashboards/view/_72c98f9a_91d9_41d4_ab9a_bc14f79742b4
@@ -1035,6 +1086,12 @@ public class AppSearchManagerService extends SystemService {
                         callerAttributionSource, userHandle);
                 String callingPackageName =
                         Objects.requireNonNull(callerAttributionSource.getPackageName());
+                if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
+                        CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, targetUser,
+                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1)) {
+                    return;
+                }
                 mExecutorManager.getOrCreateUserExecutor(targetUser).execute(() -> {
                     @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                     AppSearchUserInstance instance = null;
@@ -1103,6 +1160,12 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, databaseName,
+                    CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE, callback, targetUser,
+                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -1178,6 +1241,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(fileDescriptor);
             Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(schemaMigrationStatsBundle);
             Objects.requireNonNull(callback);
 
             long callStatsTotalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1187,6 +1251,14 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            // Since we don't read from the given file, we don't know the number of documents so we
+            // just set numOperations to 1 instead
+            if (checkCallDenied(callingPackageName, databaseName,
+                    CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, callback, targetUser,
+                    binderCallStartTimeMillis, callStatsTotalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -1310,6 +1382,12 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            if (checkCallDenied(callingPackageName, databaseName,
+                    CallStats.CALL_TYPE_SEARCH_SUGGESTION, callback, targetUser,
+                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
+            }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -1391,6 +1469,17 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            // We deny based on the calling package and calling database names. If the API call is
+            // intended for system usage, then the call is global, and the target database is not a
+            // calling database.
+            String callingDatabaseName = systemUsage ? null : databaseName;
+            int callType = systemUsage ? CallStats.CALL_TYPE_REPORT_SYSTEM_USAGE
+                    : CallStats.CALL_TYPE_REPORT_USAGE;
+            if (checkCallDenied(callingPackageName, callingDatabaseName, callType, callback,
+                    targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
+            }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -1430,9 +1519,6 @@ public class AppSearchManagerService extends SystemService {
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
-                        int callType = systemUsage ?
-                                CallStats.CALL_TYPE_REPORT_SYSTEM_USAGE :
-                                CallStats.CALL_TYPE_REPORT_USAGE;
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
                                 .setDatabase(databaseName)
@@ -1474,6 +1560,12 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, databaseName,
+                    CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID, callback, targetUser,
+                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ ids.size())) {
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
@@ -1552,7 +1644,6 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
-            // TODO(b/173532925) log CallStats once we have CALL_TYPE_REMOVE_BY_QUERY added
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(queryExpression);
@@ -1567,6 +1658,12 @@ public class AppSearchManagerService extends SystemService {
                     Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, databaseName,
+                    CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH, callback, targetUser,
+                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
@@ -1641,6 +1738,12 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            if (checkCallDenied(callingPackageName, databaseName,
+                    CallStats.CALL_TYPE_GET_STORAGE_INFO, callback, targetUser,
+                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
+            }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -1695,6 +1798,13 @@ public class AppSearchManagerService extends SystemService {
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
                         callerAttributionSource, userHandle);
+                String callingPackageName =
+                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
+                        CallStats.CALL_TYPE_FLUSH, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis, /* numOperations= */ 1)) {
+                    return;
+                }
                 mExecutorManager.getOrCreateUserExecutor(targetUser).execute(() -> {
                     @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                     AppSearchUserInstance instance = null;
@@ -1716,12 +1826,8 @@ public class AppSearchManagerService extends SystemService {
                             int totalLatencyMillis =
                                     (int) (SystemClock.elapsedRealtime()
                                             - totalLatencyStartTimeMillis);
-                            CallStats.Builder callStatsBuilder = new CallStats.Builder();
-                            String packageName = callerAttributionSource.getPackageName();
-                            if (packageName != null) {
-                                callStatsBuilder.setPackageName(packageName);
-                            }
-                            instance.getLogger().logStats(callStatsBuilder
+                            instance.getLogger().logStats(new CallStats.Builder()
+                                    .setPackageName(callingPackageName)
                                     .setStatusCode(statusCode)
                                     .setTotalLatencyMillis(totalLatencyMillis)
                                     .setCallType(CallStats.CALL_TYPE_FLUSH)
@@ -1765,8 +1871,15 @@ public class AppSearchManagerService extends SystemService {
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
                         callerAttributionSource, userHandle);
-                callingPackageName = Objects.requireNonNull(
-                        callerAttributionSource.getPackageName());
+                callingPackageName =
+                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
+                        CallStats.CALL_TYPE_REGISTER_OBSERVER_CALLBACK, targetUser,
+                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1)) {
+                    return new AppSearchResultParcel<>(
+                            AppSearchResult.newFailedResult(RESULT_DENIED, null));
+                }
                 long callingIdentity = Binder.clearCallingIdentity();
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
@@ -1846,6 +1959,15 @@ public class AppSearchManagerService extends SystemService {
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
                         callerAttributionSource, userHandle);
+                String callingPackageName =
+                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
+                        CallStats.CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK, targetUser,
+                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1)) {
+                    return new AppSearchResultParcel<>(
+                            AppSearchResult.newFailedResult(RESULT_DENIED, null));
+                }
                 long callingIdentity = Binder.clearCallingIdentity();
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
@@ -1898,8 +2020,18 @@ public class AppSearchManagerService extends SystemService {
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
                     callerAttributionSource, userHandle, callback);
+            String callingPackageName =
+                    Objects.requireNonNull(callerAttributionSource.getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (mAppSearchConfig.getCachedDenylist().checkDeniedPackage(callingPackageName,
+                    CallStats.CALL_TYPE_INITIALIZE)) {
+                // Note: can't log CallStats here since UserInstance isn't guaranteed to (and most
+                // likely does not) exist
+                invokeCallbackOnResult(callback,
+                        AppSearchResult.newFailedResult(RESULT_DENIED, null));
+                return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
@@ -1912,7 +2044,7 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getOrCreateUserInstance(
                             targetUserContext,
                             targetUser,
-                            AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR));
+                            mAppSearchConfig);
                     ++operationSuccessCount;
                     invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
                 } catch (Throwable t) {
@@ -1926,7 +2058,6 @@ public class AppSearchManagerService extends SystemService {
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
-                        String callingPackageName = callerAttributionSource.getPackageName();
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
                                 .setStatusCode(statusCode)
@@ -2241,5 +2372,84 @@ public class AppSearchManagerService extends SystemService {
                 }
             }
         });
+    }
+
+    /**
+     * Checks if an API call for a given calling package and calling database should be denied
+     * according to the denylist. If the call is denied, also logs the denial through CallStats.
+     *
+     * @return true if the given api call should be denied for the given calling package and calling
+     * database; otherwise false
+     */
+    @WorkerThread
+    private boolean checkCallDenied(@NonNull String callingPackageName,
+            @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
+            @NonNull UserHandle targetUser, long binderCallStartTimeMillis,
+            long totalLatencyStartTimeMillis, int numOperations) {
+        Denylist denylist = mAppSearchConfig.getCachedDenylist();
+        boolean denied = callingDatabaseName == null ? denylist.checkDeniedPackage(
+                callingPackageName, apiType) : denylist.checkDeniedPackageDatabase(
+                callingPackageName, callingDatabaseName, apiType);
+        if (denied) {
+            int estimatedBinderLatencyMillis =
+                    2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+            int totalLatencyMillis =
+                    (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
+            mAppSearchUserInstanceManager.getUserInstance(targetUser).getLogger().logStats(
+                    new CallStats.Builder()
+                            .setPackageName(callingPackageName)
+                            // For a global call, the calling database logged here will be null even
+                            // when there is a non-null target database
+                            .setDatabase(callingDatabaseName)
+                            .setStatusCode(RESULT_DENIED)
+                            .setTotalLatencyMillis(totalLatencyMillis)
+                            .setCallType(apiType)
+                            .setEstimatedBinderLatencyMillis(estimatedBinderLatencyMillis)
+                            .setNumOperationsFailed(numOperations)
+                            .build());
+        }
+        return denied;
+    }
+
+    /**
+     * Checks if an API call for a given calling package and calling database should be denied
+     * according to the denylist. If the call is denied, also logs the denial through CallStats and
+     * invokes the given {@link IAppSearchResultCallback} with a failed result.
+     *
+     * @return true if the given api call should be denied for the given calling package and calling
+     * database; otherwise false
+     */
+    @WorkerThread
+    private boolean checkCallDenied(@NonNull String callingPackageName,
+            @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
+            @NonNull IAppSearchResultCallback callback, @NonNull UserHandle targetUser,
+            long binderCallStartTimeMillis, long totalLatencyStartTimeMillis, int numOperations) {
+        if (checkCallDenied(callingPackageName, callingDatabaseName, apiType, targetUser,
+                binderCallStartTimeMillis, totalLatencyStartTimeMillis, numOperations)) {
+            invokeCallbackOnResult(callback, AppSearchResult.newFailedResult(RESULT_DENIED, null));
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Checks if an API call for a given calling package and calling database should be denied
+     * according to the denylist. If the call is denied, also logs the denial through CallStats and
+     * invokes the given {@link IAppSearchBatchResultCallback} with a failed result.
+     *
+     * @return true if the given api call should be denied for the given calling package and calling
+     * database; otherwise false
+     */
+    @WorkerThread
+    private boolean checkCallDenied(@NonNull String callingPackageName,
+            @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
+            @NonNull IAppSearchBatchResultCallback callback, @NonNull UserHandle targetUser,
+            long binderCallStartTimeMillis, long totalLatencyStartTimeMillis, int numOperations) {
+        if (checkCallDenied(callingPackageName, callingDatabaseName, apiType, targetUser,
+                binderCallStartTimeMillis, totalLatencyStartTimeMillis, numOperations)) {
+            invokeCallbackOnError(callback, AppSearchResult.newFailedResult(RESULT_DENIED, null));
+            return true;
+        }
+        return false;
     }
 }
