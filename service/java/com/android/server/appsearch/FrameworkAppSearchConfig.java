@@ -74,6 +74,7 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
     public static final String KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS =
             "min_time_optimize_threshold";
     public static final String KEY_API_CALL_STATS_LIMIT = "api_call_stats_limit";
+    public static final String KEY_DENYLIST = "denylist";
 
     // Array contains all the corresponding keys for the cached values.
     private static final String[] KEYS_TO_ALL_CACHED_VALUES = {
@@ -92,7 +93,8 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS,
             KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
             KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
-            KEY_API_CALL_STATS_LIMIT
+            KEY_API_CALL_STATS_LIMIT,
+            KEY_DENYLIST,
     };
 
     // Lock needed for all the operations in this class.
@@ -104,6 +106,9 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
      */
     @GuardedBy("mLock")
     private final Bundle mBundleLocked = new Bundle();
+
+    @GuardedBy("mLock")
+    private Denylist mDenylistLocked = Denylist.EMPTY_INSTANCE;
 
     @GuardedBy("mLock")
     private boolean mIsClosedLocked = false;
@@ -332,6 +337,14 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
         }
     }
 
+    @Override
+    public Denylist getCachedDenylist() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mDenylistLocked;
+        }
+    }
+
     @GuardedBy("mLock")
     private void throwIfClosedLocked() {
         if (mIsClosedLocked) {
@@ -427,6 +440,15 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                 synchronized (mLock) {
                     mBundleLocked.putInt(key,
                             properties.getInt(key, DEFAULT_API_CALL_STATS_LIMIT));
+                }
+                break;
+            case KEY_DENYLIST:
+                String denylistString = properties.getString(key, /* defaultValue= */ "");
+                Denylist denylist =
+                        denylistString.isEmpty() ? Denylist.EMPTY_INSTANCE : Denylist.create(
+                                denylistString);
+                synchronized (mLock) {
+                    mDenylistLocked = denylist;
                 }
                 break;
             default:
