@@ -31,11 +31,17 @@ import android.util.Log;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.AppSearchEnvironmentFactory;
+import com.android.server.appsearch.AppSearchUserInstance;
 import com.android.server.appsearch.stats.AppSearchStatsLog;
+import com.android.server.appsearch.util.AdbDumpUtil;
+
+import com.google.android.icing.proto.DebugInfoProto;
+import com.google.android.icing.proto.DebugInfoVerbosity;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -255,6 +261,23 @@ public final class ContactsIndexerUserInstance {
         });
     }
 
+    /** Dumps the internal state of this {@link ContactsIndexerUserInstance}. */
+    public void dump(@NonNull PrintWriter pw, boolean verbose) {
+        // Those timestamps are not protected by any lock since in ContactsIndexerUserInstance
+        // we only have one thread to handle all the updates. It is possible we might run into
+        // race condition if there is an update running while those numbers are being printed.
+        // This is acceptable though for debug purpose, so still no lock here.
+        pw.println(
+                "last_delta_delete_timestamp: " +
+                        mSettings.getLastDeltaDeleteTimestampMillis() + " ms");
+        pw.println(
+                "last_delta_update_timestamp: " +
+                        mSettings.getLastDeltaUpdateTimestampMillis() + " ms");
+        pw.println(
+                "last_full_update_timestamp: " +
+                        mSettings.getLastFullUpdateTimestampMillis() + " ms");
+    }
+
     @VisibleForTesting
     CompletableFuture<Void> doFullUpdateInternalAsync(
             @Nullable CancellationSignal signal, @NonNull ContactsUpdateStats updateStats) {
@@ -276,11 +299,15 @@ public final class ContactsIndexerUserInstance {
                     // all_contacts_from_AppSearch - all_contacts_from_cp2 =
                     // contacts_needs_to_be_removed_from_AppSearch.
                     appsearchContactIds.removeAll(cp2ContactIds);
-                    if (LogUtil.DEBUG) {
-                        Log.d(TAG, "Performing a full sync (updated:" + cp2ContactIds.size()
+                    // Full update doesn't happen very often. In normal cases, it is scheduled to
+                    // be run every 15-30 days.
+                    // One-off full update can be scheduled if
+                    // 1) during startup, full update has never been run.
+                    // 2) or we get OUT_OF_SPACE from AppSearch.
+                    // So print a message once in 15-30 days should be acceptable.
+                    Log.i(TAG, "Performing a full sync (updated:" + cp2ContactIds.size()
                                 + ", deleted:" + appsearchContactIds.size()
                                 + ") of CP2 contacts in AppSearch");
-                    }
                     return mContactsIndexerImpl.updatePersonCorpusAsync(/*wantedContactIds=*/
                             cp2ContactIds, /*unwantedContactIds=*/ appsearchContactIds,
                             updateStats);

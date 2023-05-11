@@ -131,11 +131,16 @@ public class AppSearchManagerService extends SystemService {
     private ServiceImplHelper mServiceImplHelper;
     private AppSearchUserInstanceManager mAppSearchUserInstanceManager;
 
-    public AppSearchManagerService(Context context) {
+    // Keep a reference for the lifecycle instance, so we can access other services like
+    // ContactsIndexer for dumpsys purpose.
+    private final AppSearchModule.Lifecycle mLifecycle;
+
+    public AppSearchManagerService(Context context, AppSearchModule.Lifecycle lifecycle) {
         super(context);
         mContext = context;
         mAppSearchEnvironment = AppSearchEnvironmentFactory
                 .getEnvironmentInstance();
+        mLifecycle = lifecycle;
     }
 
     @Override
@@ -408,8 +413,6 @@ public class AppSearchManagerService extends SystemService {
                     long checkForOptimizeLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                     setSchemaStatsBuilder
-                            .setStatusCode(statusCode)
-                            .setSchemaMigrationCallType(schemaMigrationCallType)
                             .setVerifyIncomingCallLatencyMillis(
                                     (int) (verifyIncomingCallLatencyEndTimeMillis
                                             - verifyIncomingCallLatencyStartTimeMillis))
@@ -450,6 +453,8 @@ public class AppSearchManagerService extends SystemService {
                                 .setNumOperationsFailed(operationFailureCount)
                                 .build());
                         instance.getLogger().logStats(setSchemaStatsBuilder
+                                .setStatusCode(statusCode)
+                                .setSchemaMigrationCallType(schemaMigrationCallType)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .build());
                     }
@@ -941,6 +946,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull AttributionSource callerAttributionSource,
                 @Nullable String databaseName,
                 long nextPageToken,
+                @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinType,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
@@ -964,11 +970,13 @@ public class AppSearchManagerService extends SystemService {
                 SearchStats.Builder statsBuilder;
                 if (databaseName == null) {
                     statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_GLOBAL,
-                            callingPackageName);
+                            callingPackageName)
+                            .setJoinType(joinType);
                 } else {
                     statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_LOCAL,
                             callingPackageName)
-                            .setDatabase(databaseName);
+                            .setDatabase(databaseName)
+                            .setJoinType(joinType);
                 }
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
@@ -993,18 +1001,18 @@ public class AppSearchManagerService extends SystemService {
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         CallStats.Builder builder = new CallStats.Builder()
                                 .setPackageName(callingPackageName)
+                                .setDatabase(databaseName)
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
-                                .setCallType(CallStats.CALL_TYPE_GET_NEXT_PAGE)
+                                .setCallType(databaseName == null
+                                        ? CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE
+                                        : CallStats.CALL_TYPE_GET_NEXT_PAGE)
                                 // TODO(b/173532925) check the existing binder call latency chart
                                 // is good enough for us:
                                 // http://dashboards/view/_72c98f9a_91d9_41d4_ab9a_bc14f79742b4
                                 .setEstimatedBinderLatencyMillis(estimatedBinderLatencyMillis)
                                 .setNumOperationsSucceeded(operationSuccessCount)
                                 .setNumOperationsFailed(operationFailureCount);
-                        if (databaseName != null) {
-                            builder.setDatabase(databaseName);
-                        }
                         instance.getLogger().logStats(builder.build());
                         instance.getLogger().logStats(statsBuilder.build());
                     }
@@ -1708,8 +1716,8 @@ public class AppSearchManagerService extends SystemService {
                             int totalLatencyMillis =
                                     (int) (SystemClock.elapsedRealtime()
                                             - totalLatencyStartTimeMillis);
-                            String packageName = callerAttributionSource.getPackageName();
                             CallStats.Builder callStatsBuilder = new CallStats.Builder();
+                            String packageName = callerAttributionSource.getPackageName();
                             if (packageName != null) {
                                 callStatsBuilder.setPackageName(packageName);
                             }
@@ -1918,7 +1926,9 @@ public class AppSearchManagerService extends SystemService {
                                 2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
+                        String callingPackageName = callerAttributionSource.getPackageName();
                         instance.getLogger().logStats(new CallStats.Builder()
+                                .setPackageName(callingPackageName)
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_INITIALIZE)
@@ -1932,6 +1942,22 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+        }
+
+        @BinderThread
+        private void dumpContactsIndexer(@NonNull PrintWriter pw, boolean verbose) {
+            Objects.requireNonNull(pw);
+            UserHandle currentUser = UserHandle.getUserHandleForUid(Binder.getCallingUid());
+            try {
+                pw.println("ContactsIndexer stats for " + currentUser);
+                mLifecycle.dumpContactsIndexerForUser(currentUser, pw, verbose);
+            } catch (Exception e) {
+                String errorMessage =
+                        "Unable to dump the internal contacts indexer state for the user: "
+                                + currentUser;
+                Log.e(TAG, errorMessage, e);
+                pw.println(errorMessage);
+            }
         }
 
         @BinderThread
@@ -1989,6 +2015,7 @@ public class AppSearchManagerService extends SystemService {
             }
             boolean verbose = false;
             boolean appSearch = false;
+            boolean contactsIndexer = false;
             boolean unknownArg = false;
             if (args != null && args.length > 0) {
                 for (int i = 0; i < args.length; i++) {
@@ -1997,26 +2024,37 @@ public class AppSearchManagerService extends SystemService {
                         verbose = true;
                     } else if ("-a".equalsIgnoreCase(arg)) {
                         appSearch = true;
+                    } else if ("-c".equalsIgnoreCase(arg)) {
+                        contactsIndexer = true;
                     } else {
                         unknownArg = true;
                         break;
                     }
                 }
             } else {
-                // When there is no argument provided, dump appsearch by default.
+                // When there is no argument provided, dump appsearch and ContactsIndexer
+                // by default.
                 appSearch = true;
+                contactsIndexer = true;
             }
             verbose = verbose && AdbDumpUtil.DEBUG;
-            if (appSearch && !unknownArg) {
-                dumpAppSearch(pw, verbose);
-            } else {
+            if (unknownArg) {
                 pw.printf("Invalid args: %s\n", Arrays.toString(args));
                 pw.println(
                         "-a, dump the internal state of AppSearch platform storage for the "
                                 + "current user.");
+                pw.println(
+                        "-c, dump the internal state of AppSearch Contacts Indexer for the "
+                                + "current user.");
                 if (AdbDumpUtil.DEBUG) {
                     pw.println("-v, verbose mode");
                 }
+            }
+            if (appSearch) {
+                dumpAppSearch(pw, verbose);
+            }
+            if (contactsIndexer) {
+                dumpContactsIndexer(pw, verbose);
             }
         }
     }
