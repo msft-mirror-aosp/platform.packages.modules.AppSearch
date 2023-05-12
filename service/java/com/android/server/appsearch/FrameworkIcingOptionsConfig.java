@@ -16,6 +16,7 @@
 
 package com.android.server.appsearch;
 
+import android.os.Build;
 import android.provider.DeviceConfig;
 
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
@@ -64,5 +65,11 @@ class FrameworkIcingOptionsConfig implements IcingOptionsConfig {
     public int getCompressionLevel() {
         return DeviceConfig.getInt(DeviceConfig.NAMESPACE_APPSEARCH, KEY_ICING_COMPRESSION_LEVEL,
                 DEFAULT_COMPRESSION_LEVEL);
+    }
+
+    @Override
+    public boolean getAllowCircularSchemaDefinitions() {
+        // TODO(b/282108040) add flag(default on) to cover this feature in case a bug is discovered.
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE;
     }
 }

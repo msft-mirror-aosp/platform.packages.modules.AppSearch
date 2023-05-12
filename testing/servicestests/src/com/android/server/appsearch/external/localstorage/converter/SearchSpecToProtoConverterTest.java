@@ -141,7 +141,6 @@ public class SearchSpecToProtoConverterTest {
                         .setNestedSearch("nestedQuery", nestedSearchSpec)
                         .setAggregationScoringStrategy(
                                 JoinSpec.AGGREGATION_SCORING_SUM_RANKING_SIGNAL)
-                        .setMaxJoinedResultCount(10)
                         .build();
 
         searchSpec.setJoinSpec(joinSpec);
@@ -195,7 +194,6 @@ public class SearchSpecToProtoConverterTest {
         assertThat(joinSpecProto.getChildPropertyExpression()).isEqualTo("childPropertyExpression");
         assertThat(joinSpecProto.getAggregationScoringStrategy())
                 .isEqualTo(JoinSpecProto.AggregationScoringStrategy.Code.SUM);
-        assertThat(joinSpecProto.getMaxJoinedChildCount()).isEqualTo(10);
 
         JoinSpecProto.NestedSpecProto nestedSpecProto = joinSpecProto.getNestedSpec();
         assertThat(nestedSpecProto.getSearchSpec().getQuery()).isEqualTo("nestedQuery");
@@ -220,7 +218,6 @@ public class SearchSpecToProtoConverterTest {
         JoinSpec joinSpec =
                 new JoinSpec.Builder("childPropertyExpression")
                         .setNestedSearch("nestedQuery", nestedSearchSpec)
-                        .setMaxJoinedResultCount(10)
                         .build();
 
         searchSpec.setJoinSpec(joinSpec);
