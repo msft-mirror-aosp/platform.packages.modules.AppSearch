@@ -46,4 +46,9 @@ public class DefaultIcingOptionsConfig implements IcingOptionsConfig {
     public int getCompressionLevel() {
         return DEFAULT_COMPRESSION_LEVEL;
     }
+
+    @Override
+    public boolean getAllowCircularSchemaDefinitions() {
+        return true;
+    }
 }
