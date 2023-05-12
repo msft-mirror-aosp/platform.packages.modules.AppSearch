@@ -267,8 +267,7 @@ public final class SearchSpecToProtoConverter {
                             .setChildPropertyExpression(joinSpec.getChildPropertyExpression())
                             .setAggregationScoringStrategy(
                                     toAggregationScoringStrategy(
-                                            joinSpec.getAggregationScoringStrategy()))
-                            .setMaxJoinedChildCount(joinSpec.getMaxJoinedResultCount());
+                                            joinSpec.getAggregationScoringStrategy()));
 
             protoBuilder.setJoinSpec(joinSpecProtoBuilder);
         }
@@ -338,6 +337,11 @@ public final class SearchSpecToProtoConverter {
                                         .setNumMatchesPerProperty(
                                                 mSearchSpec.getSnippetCountPerProperty())
                                         .setMaxWindowUtf32Length(mSearchSpec.getMaxSnippetSize()));
+        JoinSpec joinSpec = mSearchSpec.getJoinSpec();
+        if (joinSpec != null) {
+            resultSpecBuilder.setMaxJoinedChildrenPerParentToReturn(
+                    joinSpec.getMaxJoinedResultCount());
+        }
 
         // Rewrites the typePropertyMasks that exist in {@code prefixes}.
         int groupingType = mSearchSpec.getResultGroupingTypeFlags();
