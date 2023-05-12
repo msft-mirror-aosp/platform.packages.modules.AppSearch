@@ -23,6 +23,7 @@ import static com.google.common.truth.Truth.assertThat;
 import android.provider.DeviceConfig;
 
 import com.android.modules.utils.testing.TestableDeviceConfig;
+import com.android.server.appsearch.external.localstorage.stats.CallStats;
 
 import org.junit.Assert;
 import org.junit.Rule;
@@ -492,6 +493,52 @@ public class FrameworkAppSearchConfigTest {
     }
 
     @Test
+    public void testCustomizedValue_denylist() {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST,
+                "pkg=foo&db=bar&apis=localSetSchema,localGetSchema", false);
+
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        assertThat(appSearchConfig.getCachedDenylist().checkDeniedPackageDatabase("foo", "bar",
+                CallStats.CALL_TYPE_SET_SCHEMA)).isTrue();
+        assertThat(appSearchConfig.getCachedDenylist().checkDeniedPackageDatabase("foo", "bar",
+                CallStats.CALL_TYPE_GET_SCHEMA)).isTrue();
+        assertThat(appSearchConfig.getCachedDenylist().checkDeniedPackageDatabase("foo", "bar",
+                CallStats.CALL_TYPE_INITIALIZE)).isFalse();
+    }
+
+    @Test
+    public void testCustomizedValueOverride_denylist() {
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+
+        // By default, denylist should be empty
+        for (Integer apiType : CallStats.getAllApiCallTypes()) {
+            assertThat(appSearchConfig.getCachedDenylist().checkDeniedPackageDatabase("foo", "bar",
+                    apiType)).isFalse();
+            assertThat(appSearchConfig.getCachedDenylist().checkDeniedPackage("foo", apiType))
+                    .isFalse();
+        }
+
+        // Overriding with the flag creates a new denylist
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, "pkg=foo&db=bar&apis=initialize", false);
+
+        assertThat(appSearchConfig.getCachedDenylist().checkDeniedPackageDatabase("foo", "bar",
+                CallStats.CALL_TYPE_INITIALIZE)).isTrue();
+
+        // Overriding with an empty flag sets an empty denylist
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, "", false);
+
+        for (Integer apiType : CallStats.getAllApiCallTypes()) {
+            assertThat(appSearchConfig.getCachedDenylist().checkDeniedPackageDatabase("foo", "bar",
+                    apiType)).isFalse();
+            assertThat(appSearchConfig.getCachedDenylist().checkDeniedPackage("foo", apiType))
+                    .isFalse();
+        }
+    }
+
+    @Test
     public void testNotUsable_afterClose() {
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
@@ -533,5 +580,8 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getCachedApiCallStatsLimit());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getCachedDenylist());
     }
 }

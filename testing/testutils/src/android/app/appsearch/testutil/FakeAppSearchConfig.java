@@ -17,6 +17,7 @@
 package android.app.appsearch.testutil;
 
 import com.android.server.appsearch.AppSearchConfig;
+import com.android.server.appsearch.Denylist;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -130,6 +131,11 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
     public int getCachedApiCallStatsLimit() {
         throwIfClosed();
         return DEFAULT_API_CALL_STATS_LIMIT;
+    }
+
+    @Override
+    public Denylist getCachedDenylist() {
+        return Denylist.EMPTY_INSTANCE;
     }
 
     private void throwIfClosed() {
