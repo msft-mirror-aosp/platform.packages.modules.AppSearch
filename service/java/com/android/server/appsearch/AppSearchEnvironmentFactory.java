@@ -45,6 +45,14 @@ public final class AppSearchEnvironmentFactory {
         }
     }
 
+    @VisibleForTesting
+    static void setConfigInstanceForTest(
+            AppSearchConfig appSearchConfig) {
+        synchronized (AppSearchEnvironmentFactory.class) {
+            mConfigInstance = appSearchConfig;
+        }
+    }
+
     private AppSearchEnvironmentFactory() {
     }
 }
