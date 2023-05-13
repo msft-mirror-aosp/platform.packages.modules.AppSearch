@@ -34,6 +34,7 @@ import android.os.PatternMatcher;
 import android.os.UserHandle;
 import android.provider.ContactsContract;
 import android.util.Log;
+import android.util.Slog;
 import android.util.SparseArray;
 
 import com.android.server.LocalManagerRegistry;
@@ -92,51 +93,53 @@ public final class ContactsIndexerManagerService extends SystemService {
 
     @Override
     public void onUserUnlocking(@NonNull TargetUser user) {
-        Objects.requireNonNull(user);
-        UserHandle userHandle = user.getUserHandle();
-        synchronized (mContactsIndexersLocked) {
-            int userId = userHandle.getIdentifier();
-            ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
-            if (instance == null) {
-                AppSearchEnvironment appSearchEnvironment = AppSearchEnvironmentFactory
-                    .getEnvironmentInstance();
-                Context userContext = appSearchEnvironment
-                    .createContextAsUser(mContext, userHandle);
-                File appSearchDir = appSearchEnvironment
-                    .getAppSearchDir(userContext, userHandle);
-                File contactsDir = new File(appSearchDir, "contacts");
-                try {
-                    instance = ContactsIndexerUserInstance.createInstance(userContext, contactsDir,
-                            mContactsIndexerConfig);
+        try {
+            Objects.requireNonNull(user);
+            UserHandle userHandle = user.getUserHandle();
+            synchronized (mContactsIndexersLocked) {
+                int userId = userHandle.getIdentifier();
+                ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
+                if (instance == null) {
+                    AppSearchEnvironment appSearchEnvironment = AppSearchEnvironmentFactory
+                            .getEnvironmentInstance();
+                    Context userContext = appSearchEnvironment
+                            .createContextAsUser(mContext, userHandle);
+                    File appSearchDir = appSearchEnvironment
+                            .getAppSearchDir(userContext, userHandle);
+                    File contactsDir = new File(appSearchDir, "contacts");
+                    instance = ContactsIndexerUserInstance.createInstance(userContext,
+                            contactsDir, mContactsIndexerConfig);
                     if (LogUtil.DEBUG) {
                         Log.d(TAG, "Created Contacts Indexer instance for user " + userHandle);
                     }
-                } catch (Throwable t) {
-                    Log.e(TAG, "Failed to create Contacts Indexer instance for user "
-                            + userHandle, t);
-                    return;
+                    mContactsIndexersLocked.put(userId, instance);
                 }
-                mContactsIndexersLocked.put(userId, instance);
+                instance.startAsync();
             }
-            instance.startAsync();
+        } catch (RuntimeException e) {
+            Slog.wtf(TAG, "ContactsIndexerManagerService.onUserUnlocking() failed ", e);
         }
     }
 
     @Override
     public void onUserStopping(@NonNull TargetUser user) {
-        Objects.requireNonNull(user);
-        UserHandle userHandle = user.getUserHandle();
-        synchronized (mContactsIndexersLocked) {
-            int userId = userHandle.getIdentifier();
-            ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
-            if (instance != null) {
-                mContactsIndexersLocked.delete(userId);
-                try {
-                    instance.shutdown();
-                } catch (InterruptedException e) {
-                    Log.w(TAG, "Failed to shutdown contacts indexer for " + userHandle, e);
+        try {
+            Objects.requireNonNull(user);
+            UserHandle userHandle = user.getUserHandle();
+            synchronized (mContactsIndexersLocked) {
+                int userId = userHandle.getIdentifier();
+                ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
+                if (instance != null) {
+                    mContactsIndexersLocked.delete(userId);
+                    try {
+                        instance.shutdown();
+                    } catch (InterruptedException e) {
+                        Log.w(TAG, "Failed to shutdown contacts indexer for " + userHandle, e);
+                    }
                 }
             }
+        } catch (RuntimeException e) {
+            Slog.wtf(TAG, "ContactsIndexerManagerService.onUserStopping() failed ", e);
         }
     }
 
@@ -144,16 +147,20 @@ public final class ContactsIndexerManagerService extends SystemService {
     @BinderThread
     public void dumpContactsIndexerForUser(
             @NonNull UserHandle userHandle, @NonNull PrintWriter pw, boolean verbose) {
-        Objects.requireNonNull(userHandle);
-        Objects.requireNonNull(pw);
-        int userId = userHandle.getIdentifier();
-        synchronized (mContactsIndexersLocked) {
-            ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
-            if (instance != null) {
-                instance.dump(pw, verbose);
-            } else {
-                pw.println("ContactsIndexerUserInstance is not created for " + userHandle);
+        try{
+            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(pw);
+            int userId = userHandle.getIdentifier();
+            synchronized (mContactsIndexersLocked) {
+                ContactsIndexerUserInstance instance = mContactsIndexersLocked.get(userId);
+                if (instance != null) {
+                    instance.dump(pw, verbose);
+                } else {
+                    pw.println("ContactsIndexerUserInstance is not created for " + userHandle);
+                }
             }
+        } catch (RuntimeException e) {
+            Slog.wtf(TAG, "ContactsIndexerManagerService.dumpContactsIndexerForUser() failed ", e);
         }
     }
 
@@ -213,29 +220,33 @@ public final class ContactsIndexerManagerService extends SystemService {
 
         @Override
         public void onReceive(@NonNull Context context, @NonNull Intent intent) {
-            Objects.requireNonNull(context);
-            Objects.requireNonNull(intent);
+            try {
+                Objects.requireNonNull(context);
+                Objects.requireNonNull(intent);
 
-            switch (intent.getAction()) {
-                case Intent.ACTION_PACKAGE_CHANGED:
-                case Intent.ACTION_PACKAGE_DATA_CLEARED:
-                    String packageName = intent.getData().getSchemeSpecificPart();
-                    if (LogUtil.DEBUG) {
-                        Log.v(TAG, "Received package data cleared event for " + packageName);
-                    }
-                    if (!mContactsProviderPackageName.equals(packageName)) {
-                        return;
-                    }
-                    int uid = intent.getIntExtra(Intent.EXTRA_UID, INVALID_UID);
-                    if (uid == INVALID_UID) {
-                        Log.w(TAG, "uid is missing in the intent: " + intent);
-                        return;
-                    }
-                    int userId = UserHandle.getUserHandleForUid(uid).getIdentifier();
-                    mLocalService.doFullUpdateForUser(userId,  new CancellationSignal());
-                    break;
-                default:
-                    Log.w(TAG, "Received unknown intent: " + intent);
+                switch (intent.getAction()) {
+                    case Intent.ACTION_PACKAGE_CHANGED:
+                    case Intent.ACTION_PACKAGE_DATA_CLEARED:
+                        String packageName = intent.getData().getSchemeSpecificPart();
+                        if (LogUtil.DEBUG) {
+                            Log.v(TAG, "Received package data cleared event for " + packageName);
+                        }
+                        if (!mContactsProviderPackageName.equals(packageName)) {
+                            return;
+                        }
+                        int uid = intent.getIntExtra(Intent.EXTRA_UID, INVALID_UID);
+                        if (uid == INVALID_UID) {
+                            Log.w(TAG, "uid is missing in the intent: " + intent);
+                            return;
+                        }
+                        int userId = UserHandle.getUserHandleForUid(uid).getIdentifier();
+                        mLocalService.doFullUpdateForUser(userId,  new CancellationSignal());
+                        break;
+                    default:
+                        Log.w(TAG, "Received unknown intent: " + intent);
+                }
+            } catch (RuntimeException e) {
+                Slog.wtf(TAG, "ContactsProviderChangedReceiver.onReceive() failed ", e);
             }
         }
     }
