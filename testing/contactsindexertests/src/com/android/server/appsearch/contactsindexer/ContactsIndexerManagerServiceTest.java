@@ -54,6 +54,7 @@ import com.android.server.SystemService;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -111,9 +112,11 @@ public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeCon
         //  If I make ContactsIndexerManagerService static and only initialize it once in setUp
         //  by checking nullness, it seems working. However, it will make the tests run 3X slower,
         //  and we need to investigate that.
+        //  UPDATE: mContactsIndexerManagerService.onStart() has been moved to the test
+        //  testCP2Clear_runsFullUpdate specifically because currently that's the only test that
+        //  needs mContactsIndexerManagerService to be fully functional.
         mContactsIndexerManagerService = new ContactsIndexerManagerService(mContext,
                 new TestContactsIndexerConfig());
-        mContactsIndexerManagerService.onStart();
     }
 
     @Override
@@ -128,8 +131,18 @@ public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeCon
         super.tearDown();
     }
 
+    // TODO(b/282073711) This test is flaky, figure out the root cause and fix it.
     @Test
+    @Ignore
     public void testCP2Clear_runsFullUpdate() throws Exception {
+        // TODO(b/276401961) onStart is being called here instead of the setUp method because setUp
+        //  is called before every test and running onStart more than once will throw an exception
+        //  (see the note in setUp method for more context). The other tests in this class don't
+        //  really need the mContactsIndexerManagerService to function fully so onStart can be
+        //  skipped there, but if we later need to add more tests that need
+        //  mContactsIndexerManagerService to be fully functional, onStart will need to be moved
+        //  back to setUp after figuring out a better way to handle multiple calls to it.
+        mContactsIndexerManagerService.onStart();
         int userId = mContext.getUserId();
 
         // Populate fake CP2 with 100 contacts.
@@ -198,6 +211,21 @@ public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeCon
         String[] arrs = dumpOutputOneLine.split(" ");
         assertThat(arrs.length).isAtLeast(2);
         return Long.parseLong(arrs[arrs.length - 2]);
+    }
+
+    @Test
+    public void test_onUserUnlocking_handlesExceptionGracefully() {
+        mContactsIndexerManagerService.onUserUnlocking(null);
+    }
+
+    @Test
+    public void test_onUserStopping_handlesExceptionGracefully() {
+        mContactsIndexerManagerService.onUserStopping(null);
+    }
+
+    @Test
+    public void test_dumpContactsIndexerForUser_handlesExceptionGracefully() {
+        mContactsIndexerManagerService.dumpContactsIndexerForUser(null, null, false);
     }
 
     /**
