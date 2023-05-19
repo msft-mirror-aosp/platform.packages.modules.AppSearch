@@ -34,6 +34,7 @@ class FrameworkIcingOptionsConfig implements IcingOptionsConfig {
     static final String KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD =
             "icing_optimize_rebuild_index_threshold";
     static final String KEY_ICING_COMPRESSION_LEVEL = "icing_compression_level";
+    static final String KEY_ICING_USE_READ_ONLY_SEARCH = "icing_use_read_only_search";
 
     @Override
     public int getMaxTokenLength() {
@@ -71,5 +72,11 @@ class FrameworkIcingOptionsConfig implements IcingOptionsConfig {
     public boolean getAllowCircularSchemaDefinitions() {
         // TODO(b/282108040) add flag(default on) to cover this feature in case a bug is discovered.
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE;
+    }
+
+    @Override
+    public boolean getUseReadOnlySearch() {
+        return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_ICING_USE_READ_ONLY_SEARCH, true);
     }
 }
