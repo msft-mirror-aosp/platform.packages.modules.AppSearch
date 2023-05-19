@@ -45,6 +45,7 @@ public class FrameworkIcingOptionsConfigTest {
                 IcingOptionsConfig.DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD);
         assertThat(icingOptionsConfig.getCompressionLevel()).isEqualTo(
                 IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL);
+        assertThat(icingOptionsConfig.getUseReadOnlySearch()).isEqualTo(true);
     }
 
     @Test
@@ -70,6 +71,9 @@ public class FrameworkIcingOptionsConfigTest {
                 FrameworkIcingOptionsConfig.KEY_ICING_COMPRESSION_LEVEL,
                 Integer.toString(IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL + 1),
                 false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkIcingOptionsConfig.KEY_ICING_USE_READ_ONLY_SEARCH,
+                Boolean.toString(false), false);
 
 
         FrameworkIcingOptionsConfig icingOptionsConfig = new FrameworkIcingOptionsConfig();
@@ -84,5 +88,6 @@ public class FrameworkIcingOptionsConfigTest {
                 IcingOptionsConfig.DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD + 1.0f);
         assertThat(icingOptionsConfig.getCompressionLevel()).isEqualTo(
                 IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL + 1);
+        assertThat(icingOptionsConfig.getUseReadOnlySearch()).isEqualTo(false);
     }
 }
