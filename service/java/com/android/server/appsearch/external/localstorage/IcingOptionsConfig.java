@@ -21,7 +21,8 @@ import com.google.android.icing.proto.IcingSearchEngineOptions;
 
 /**
  * An interface exposing the optional config flags in {@link IcingSearchEngineOptions} used to
- * instantiate {@link com.google.android.icing.IcingSearchEngine}.
+ * instantiate {@link com.google.android.icing.IcingSearchEngine}, as well as other additional
+ * config flags for IcingSearchEngine.
  */
 public interface IcingOptionsConfig {
     // Defaults from IcingSearchEngineOptions proto
@@ -97,4 +98,15 @@ public interface IcingOptionsConfig {
      * has a joinable property, or depends on a type with a joinable property.
      */
     boolean getAllowCircularSchemaDefinitions();
+
+    /**
+     * Flag for {@link com.google.android.icing.proto.SearchSpecProto}.
+     *
+     * <p>Whether to use the read-only implementation of IcingSearchEngine::Search.
+     *
+     * <p>The read-only version enables multiple queries to be performed concurrently as it only
+     * acquires the read lock at IcingSearchEngine's level. Finer-grained locks are implemented
+     * around code paths that write changes to Icing during Search.
+     */
+    boolean getUseReadOnlySearch();
 }
