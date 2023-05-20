@@ -46,6 +46,10 @@ public class FrameworkIcingOptionsConfigTest {
         assertThat(icingOptionsConfig.getCompressionLevel()).isEqualTo(
                 IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL);
         assertThat(icingOptionsConfig.getUseReadOnlySearch()).isEqualTo(true);
+        assertThat(icingOptionsConfig.getUsePreMappingWithFileBackedVector())
+                .isEqualTo(IcingOptionsConfig.DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR);
+        assertThat(icingOptionsConfig.getUsePersistentHashMap())
+                .isEqualTo(IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP);
     }
 
     @Test
@@ -74,6 +78,12 @@ public class FrameworkIcingOptionsConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkIcingOptionsConfig.KEY_ICING_USE_READ_ONLY_SEARCH,
                 Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                    FrameworkIcingOptionsConfig.KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
+                Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkIcingOptionsConfig.KEY_ICING_USE_PERSISTENT_HASHMAP,
+                Boolean.toString(false), false);
 
 
         FrameworkIcingOptionsConfig icingOptionsConfig = new FrameworkIcingOptionsConfig();
@@ -89,5 +99,7 @@ public class FrameworkIcingOptionsConfigTest {
         assertThat(icingOptionsConfig.getCompressionLevel()).isEqualTo(
                 IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL + 1);
         assertThat(icingOptionsConfig.getUseReadOnlySearch()).isEqualTo(false);
+        assertThat(icingOptionsConfig.getUsePreMappingWithFileBackedVector()).isEqualTo(false);
+        assertThat(icingOptionsConfig.getUsePersistentHashMap()).isEqualTo(false);
     }
 }
