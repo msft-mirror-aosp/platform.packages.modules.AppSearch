@@ -35,6 +35,9 @@ class FrameworkIcingOptionsConfig implements IcingOptionsConfig {
             "icing_optimize_rebuild_index_threshold";
     static final String KEY_ICING_COMPRESSION_LEVEL = "icing_compression_level";
     static final String KEY_ICING_USE_READ_ONLY_SEARCH = "icing_use_read_only_search";
+    static final String KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR =
+            "icing_use_pre_mapping_with_file_backed_vector";
+    static final String KEY_ICING_USE_PERSISTENT_HASHMAP = "icing_use_persistent_hashmap";
 
     @Override
     public int getMaxTokenLength() {
@@ -78,5 +81,18 @@ class FrameworkIcingOptionsConfig implements IcingOptionsConfig {
     public boolean getUseReadOnlySearch() {
         return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_APPSEARCH,
                 KEY_ICING_USE_READ_ONLY_SEARCH, true);
+    }
+
+    @Override
+    public boolean getUsePreMappingWithFileBackedVector() {
+        return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
+                DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR);
+    }
+
+    @Override
+    public boolean getUsePersistentHashMap() {
+        return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_ICING_USE_PERSISTENT_HASHMAP, DEFAULT_USE_PERSISTENT_HASH_MAP);
     }
 }
