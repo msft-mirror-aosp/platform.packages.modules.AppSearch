@@ -31,6 +31,7 @@ import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
 
+import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
@@ -87,6 +88,9 @@ public final class SearchSpecToProtoConverter {
      */
     private final Map<String, Map<String, SchemaTypeConfigProto>> mSchemaMap;
 
+    /** Optional config flags in {@link SearchSpecProto}. */
+    private final IcingOptionsConfig mIcingOptionsConfig;
+
     /**
      * The nested converter, which contains SearchSpec, ResultSpec, and ScoringSpec information
      * about the nested query. This will remain null if there is no nested {@link JoinSpec}.
@@ -109,12 +113,14 @@ public final class SearchSpecToProtoConverter {
             @NonNull SearchSpec searchSpec,
             @NonNull Set<String> prefixes,
             @NonNull Map<String, Set<String>> namespaceMap,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap) {
+            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
+            @NonNull IcingOptionsConfig icingOptionsConfig) {
         mQueryExpression = Objects.requireNonNull(queryExpression);
         mSearchSpec = Objects.requireNonNull(searchSpec);
         mPrefixes = Objects.requireNonNull(prefixes);
         mNamespaceMap = Objects.requireNonNull(namespaceMap);
         mSchemaMap = Objects.requireNonNull(schemaMap);
+        mIcingOptionsConfig = Objects.requireNonNull(icingOptionsConfig);
         mTargetPrefixedNamespaceFilters =
                 SearchSpecToProtoConverterUtil.generateTargetNamespaceFilters(
                         prefixes, namespaceMap, searchSpec.getFilterNamespaces());
@@ -139,7 +145,8 @@ public final class SearchSpecToProtoConverter {
                         joinSpec.getNestedSearchSpec(),
                         mPrefixes,
                         namespaceMap,
-                        schemaMap);
+                        schemaMap,
+                        mIcingOptionsConfig);
     }
 
     /**
@@ -240,7 +247,8 @@ public final class SearchSpecToProtoConverter {
                 SearchSpecProto.newBuilder()
                         .setQuery(mQueryExpression)
                         .addAllNamespaceFilters(mTargetPrefixedNamespaceFilters)
-                        .addAllSchemaTypeFilters(mTargetPrefixedSchemaFilters);
+                        .addAllSchemaTypeFilters(mTargetPrefixedSchemaFilters)
+                        .setUseReadOnlySearch(mIcingOptionsConfig.getUseReadOnlySearch());
 
         @SearchSpec.TermMatch int termMatchCode = mSearchSpec.getTermMatch();
         TermMatchType.Code termMatchCodeProto = TermMatchType.Code.forNumber(termMatchCode);
