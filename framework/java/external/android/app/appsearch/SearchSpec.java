@@ -703,7 +703,7 @@ public final class SearchSpec {
          *       document, where type must be evaluated to an integer from 1 to 2. Type 1 refers to
          *       usages reported by {@link AppSearchSession#reportUsage}, and type 2 refers to
          *       usages reported by {@link GlobalSearchSession#reportSystemUsage}.
-         *   <li>this.childrenScores()
+         *   <li>this.childrenRankingSignals()
          *       <p>Returns a list of children document scores. Currently, a document can only be a
          *       child of another document in the context of joins. If this function is called
          *       without the Join API enabled, a type error will be raised.
@@ -729,7 +729,7 @@ public final class SearchSpec {
          *
          * <ul>
          *   <li>"sin(2, 3)" - wrong number of arguments for the sin function
-         *   <li>"this.childrenScores() + 1" - cannot add a list with a number
+         *   <li>"this.childrenRankingSignals() + 1" - cannot add a list with a number
          *   <li>"this.propertyWeights()" - the final type of the overall expression cannot be a
          *       list, which can be fixed by "max(this.propertyWeights())"
          *   <li>"abs(this.propertyWeights())" - the abs function does not support list type
