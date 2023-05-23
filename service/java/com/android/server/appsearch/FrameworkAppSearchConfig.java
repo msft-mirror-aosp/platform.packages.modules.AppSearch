@@ -77,12 +77,19 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             "min_time_optimize_threshold";
     public static final String KEY_API_CALL_STATS_LIMIT = "api_call_stats_limit";
     public static final String KEY_DENYLIST = "denylist";
+    public static final String KEY_RATE_LIMIT_ENABLED = "rate_limit_enabled";
+    public static final String KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY =
+            "rate_limit_task_queue_total_capacity";
+    public static final String KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE =
+            "rate_limit_task_queue_per_package_capacity_percentage";
+    public static final String KEY_RATE_LIMIT_API_COSTS = "rate_limit_api_costs";
+
     public static final String KEY_ICING_MAX_TOKEN_LENGTH = "icing_max_token_length";
     public static final String KEY_ICING_INDEX_MERGE_SIZE = "icing_index_merge_size";
     public static final String KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT =
-                   "icing_document_store_namespace_id_fingerprint";
+            "icing_document_store_namespace_id_fingerprint";
     public static final String KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD =
-                   "icing_optimize_rebuild_index_threshold";
+            "icing_optimize_rebuild_index_threshold";
     public static final String KEY_ICING_COMPRESSION_LEVEL = "icing_compression_level";
     public static final String KEY_ICING_USE_READ_ONLY_SEARCH = "icing_use_read_only_search";
     public static final String KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR =
@@ -115,6 +122,10 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
             KEY_API_CALL_STATS_LIMIT,
             KEY_DENYLIST,
+            KEY_RATE_LIMIT_ENABLED,
+            KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+            KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+            KEY_RATE_LIMIT_API_COSTS,
             KEY_ICING_MAX_TOKEN_LENGTH,
             KEY_ICING_INDEX_MERGE_SIZE,
             KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT,
@@ -138,6 +149,12 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
 
     @GuardedBy("mLock")
     private Denylist mDenylistLocked = Denylist.EMPTY_INSTANCE;
+
+    @GuardedBy("mLock")
+    private AppSearchRateLimitConfig mRateLimitConfigLocked = AppSearchRateLimitConfig.create(
+            DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+            DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+            DEFAULT_RATE_LIMIT_API_COSTS_STRING);
 
     @GuardedBy("mLock")
     private boolean mIsClosedLocked = false;
@@ -473,6 +490,22 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
         }
     }
 
+    @Override
+    public boolean getCachedRateLimitEnabled() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getBoolean(KEY_RATE_LIMIT_ENABLED, DEFAULT_RATE_LIMIT_ENABLED);
+        }
+    }
+
+    @Override
+    public AppSearchRateLimitConfig getCachedRateLimitConfig() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mRateLimitConfigLocked;
+        }
+    }
+
     @GuardedBy("mLock")
     private void throwIfClosedLocked() {
         if (mIsClosedLocked) {
@@ -484,6 +517,7 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
         for (String key : properties.getKeyset()) {
             updateCachedValue(key, properties);
         }
+        updateDerivedClasses();
     }
 
     private void updateCachedValue(@NonNull String key,
@@ -578,6 +612,29 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                 synchronized (mLock) {
                     mDenylistLocked = denylist;
                 }
+            case KEY_RATE_LIMIT_ENABLED:
+                synchronized (mLock) {
+                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
+                            DEFAULT_RATE_LIMIT_ENABLED));
+                }
+                break;
+            case KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY:
+                synchronized (mLock) {
+                    mBundleLocked.putInt(key, properties.getInt(key,
+                            DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+                }
+                break;
+            case KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE:
+                synchronized (mLock) {
+                    mBundleLocked.putFloat(key, properties.getFloat(key,
+                            DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE));
+                }
+                break;
+            case KEY_RATE_LIMIT_API_COSTS:
+                synchronized (mLock) {
+                    mBundleLocked.putString(key, properties.getString(key,
+                            DEFAULT_RATE_LIMIT_API_COSTS_STRING));
+                }
                 break;
             case KEY_ICING_MAX_TOKEN_LENGTH:
                 synchronized (mLock) {
@@ -635,6 +692,23 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                 break;
             default:
                 break;
+        }
+    }
+
+    private void updateDerivedClasses() {
+        if (getCachedRateLimitEnabled()) {
+            synchronized (mLock) {
+                int taskQueueTotalCapacity = mBundleLocked.getInt(
+                        KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                        DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+                float taskQueuePerPackagePercentage = mBundleLocked.getFloat(
+                        KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                        DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE);
+                String apiCostsString = mBundleLocked.getString(KEY_RATE_LIMIT_API_COSTS,
+                        DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                mRateLimitConfigLocked = mRateLimitConfigLocked.rebuildIfNecessary(
+                        taskQueueTotalCapacity, taskQueuePerPackagePercentage, apiCostsString);
+            }
         }
     }
 }
