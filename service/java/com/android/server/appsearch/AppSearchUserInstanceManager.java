@@ -222,8 +222,8 @@ public final class AppSearchUserInstanceManager {
         VisibilityCheckerImpl visibilityCheckerImpl = new VisibilityCheckerImpl(userContext);
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
                 icingDir,
-                new FrameworkLimitConfig(config),
-                new FrameworkIcingOptionsConfig(),
+                /* limitConfig= */ config,
+                /* icingOptionsConfig= */ config,
                 initStatsBuilder,
                 new FrameworkOptimizeStrategy(config),
                 visibilityCheckerImpl);
