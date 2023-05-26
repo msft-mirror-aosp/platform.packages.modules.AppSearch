@@ -16,12 +16,10 @@
 
 package android.app.appsearch;
 
-import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
-
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
-import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.util.BundleUtil;
 import android.os.Bundle;
 import android.util.ArrayMap;
@@ -46,7 +44,7 @@ import java.util.Set;
  *
  * @see AppSearchSession#searchSuggestion
  */
-public class SearchSuggestionSpec {
+public final class SearchSuggestionSpec {
     static final String NAMESPACE_FIELD = "namespace";
     static final String SCHEMA_FIELD = "schema";
     static final String PROPERTY_FIELD = "property";
@@ -143,7 +141,8 @@ public class SearchSuggestionSpec {
     }
 
     /** Returns the ranking strategy. */
-    public @SuggestionRankingStrategy int getRankingStrategy() {
+    @SuggestionRankingStrategy
+    public int getRankingStrategy() {
         return mBundle.getInt(RANKING_STRATEGY_FIELD);
     }
 
@@ -221,8 +220,10 @@ public class SearchSuggestionSpec {
         private Bundle mTypePropertyFilters = new Bundle();
         private Bundle mDocumentIds = new Bundle();
         private final int mTotalResultCount;
-        private @SuggestionRankingStrategy int mRankingStrategy =
-                SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT;
+
+        @SuggestionRankingStrategy
+        private int mRankingStrategy = SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT;
+
         private boolean mBuilt = false;
 
         /**
@@ -242,6 +243,7 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all namespaces.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterNamespaces(@NonNull String... namespaces) {
             Objects.requireNonNull(namespaces);
@@ -255,6 +257,7 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all namespaces.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterNamespaces(@NonNull Collection<String> namespaces) {
             Objects.requireNonNull(namespaces);
@@ -269,6 +272,7 @@ public class SearchSuggestionSpec {
          * <p>The default value {@link #SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT} will be used if
          * this method is never called.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setRankingStrategy(@SuggestionRankingStrategy int rankingStrategy) {
             Preconditions.checkArgumentInRange(
@@ -287,6 +291,7 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all schema.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull String... schemaTypes) {
             Objects.requireNonNull(schemaTypes);
@@ -300,6 +305,7 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all schema.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull Collection<String> schemaTypes) {
             Objects.requireNonNull(schemaTypes);
@@ -379,6 +385,7 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all documents.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterDocumentIds(
                 @NonNull String namespace, @NonNull String... documentIds) {
@@ -394,6 +401,7 @@ public class SearchSuggestionSpec {
          *
          * <p>If unset, the query will search over all documents.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterDocumentIds(
                 @NonNull String namespace, @NonNull Collection<String> documentIds) {
@@ -410,14 +418,13 @@ public class SearchSuggestionSpec {
 
         /** Constructs a new {@link SearchSpec} from the contents of this builder. */
         @NonNull
-        public SearchSuggestionSpec build() throws AppSearchException {
+        public SearchSuggestionSpec build() {
             Bundle bundle = new Bundle();
             if (!mSchemas.isEmpty()) {
                 Set<String> schemaFilter = new ArraySet<>(mSchemas);
                 for (String schema : mTypePropertyFilters.keySet()) {
                     if (!schemaFilter.contains(schema)) {
-                        throw new AppSearchException(
-                                RESULT_INVALID_ARGUMENT,
+                        throw new IllegalStateException(
                                 "The schema: "
                                         + schema
                                         + " exists in the property filter but "
@@ -429,8 +436,7 @@ public class SearchSuggestionSpec {
                 Set<String> namespaceFilter = new ArraySet<>(mNamespaces);
                 for (String namespace : mDocumentIds.keySet()) {
                     if (!namespaceFilter.contains(namespace)) {
-                        throw new AppSearchException(
-                                RESULT_INVALID_ARGUMENT,
+                        throw new IllegalStateException(
                                 "The namespace: "
                                         + namespace
                                         + " exists in the document id "

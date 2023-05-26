@@ -14,13 +14,27 @@
  * limitations under the License.
  */
 
-package android.app.appsearch.observer;
+package com.android.server.appsearch.external.localstorage;
 
 
 /**
- * @deprecated use {@link ObserverCallback} instead.
- * @hide
+ * In Jetpack, AppSearch doesn't enforce artificial limits on number of documents or size of
+ * documents, since the app is the only user of the Icing instance. Icing still enforces a docid
+ * limit of 1M docs.
  */
-// TODO(b/209734214): Remove this after dogfooders and devices have migrated away from this class.
-@Deprecated
-public interface AppSearchObserverCallback extends ObserverCallback {}
+public class UnlimitedLimitConfig implements LimitConfig {
+    @Override
+    public int getMaxDocumentSizeBytes() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
+    public int getMaxDocumentCount() {
+        return Integer.MAX_VALUE;
+    }
+
+    @Override
+    public int getMaxSuggestionCount() {
+        return Integer.MAX_VALUE;
+    }
+}

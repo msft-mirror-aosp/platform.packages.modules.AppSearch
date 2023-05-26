@@ -18,6 +18,7 @@ package android.app.appsearch;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Bundle;
 
 import com.android.internal.util.Preconditions;
@@ -212,6 +213,7 @@ public final class SearchResult {
         }
 
         /** Sets the document which matched. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setGenericDocument(@NonNull GenericDocument document) {
             Objects.requireNonNull(document);
@@ -221,6 +223,7 @@ public final class SearchResult {
         }
 
         /** Adds another match to this SearchResult. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addMatchInfo(@NonNull MatchInfo matchInfo) {
             Preconditions.checkState(
@@ -233,6 +236,7 @@ public final class SearchResult {
         }
 
         /** Sets the ranking signal of the matched document in this SearchResult. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setRankingSignal(double rankingSignal) {
             resetIfBuilt();
@@ -245,6 +249,7 @@ public final class SearchResult {
          *
          * @param joinedResult The joined SearchResult to add.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addJoinedResult(@NonNull SearchResult joinedResult) {
             resetIfBuilt();
@@ -276,8 +281,8 @@ public final class SearchResult {
     }
 
     /**
-     * This class represents match objects for any Snippets that might be present in {@link
-     * SearchResults} from a query. Using this class, the user can get:
+     * This class represents match objects for any snippets that might be present in {@link
+     * SearchResults} from a query. Using this class, you can get:
      *
      * <ul>
      *   <li>the full text - all of the text in that String property
@@ -593,7 +598,7 @@ public final class SearchResult {
              * property in the document these snippets correspond to.
              *
              * <p>Example properties: 'body', 'sender.name', 'sender.emailaddress', etc. For class
-             * example 1 this returns "subject".
+             * example 1, this returns "subject".
              *
              * @param propertyPath A dot-delimited sequence of property names indicating which
              *     property in the document these snippets correspond to.
@@ -603,6 +608,7 @@ public final class SearchResult {
             }
 
             /** Sets the exact {@link MatchRange} corresponding to the given entry. */
+            @CanIgnoreReturnValue
             @NonNull
             public Builder setExactMatchRange(@NonNull MatchRange matchRange) {
                 mExactMatchRange = Objects.requireNonNull(matchRange);
@@ -610,6 +616,7 @@ public final class SearchResult {
             }
 
             /** Sets the submatch {@link MatchRange} corresponding to the given entry. */
+            @CanIgnoreReturnValue
             @NonNull
             public Builder setSubmatchRange(@NonNull MatchRange matchRange) {
                 mSubmatchRange = Objects.requireNonNull(matchRange);
@@ -617,6 +624,7 @@ public final class SearchResult {
             }
 
             /** Sets the snippet {@link MatchRange} corresponding to the given entry. */
+            @CanIgnoreReturnValue
             @NonNull
             public Builder setSnippetRange(@NonNull MatchRange matchRange) {
                 mSnippetRange = Objects.requireNonNull(matchRange);
@@ -654,7 +662,7 @@ public final class SearchResult {
      * <p>All ranges are finite, and the left side of the range is always {@code <=} the right side
      * of the range.
      *
-     * <p>Example: MatchRange(0, 100) represent a hundred ints from 0 to 99."
+     * <p>Example: MatchRange(0, 100) represents hundred ints from 0 to 99."
      */
     public static final class MatchRange {
         private final int mEnd;

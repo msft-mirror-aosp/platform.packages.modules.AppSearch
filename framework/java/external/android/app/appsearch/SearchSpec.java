@@ -21,10 +21,12 @@ import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.util.BundleUtil;
 import android.os.Bundle;
 import android.util.ArrayMap;
+import android.util.ArraySet;
 
 import com.android.internal.util.Preconditions;
 
@@ -66,6 +68,7 @@ public final class SearchSpec {
     static final String TYPE_PROPERTY_WEIGHTS_FIELD = "typePropertyWeightsField";
     static final String JOIN_SPEC = "joinSpec";
     static final String ADVANCED_RANKING_EXPRESSION = "advancedRankingExpression";
+    static final String ENABLED_FEATURES_FIELD = "enabledFeatures";
 
     /** @hide */
     public static final int DEFAULT_NUM_PER_PAGE = 10;
@@ -91,13 +94,15 @@ public final class SearchSpec {
     /**
      * Query terms will only match exact tokens in the index.
      *
-     * <p>Ex. A query term "foo" will only match indexed token "foo", and not "foot" or "football".
+     * <p>For example, a query term "foo" will only match indexed token "foo", and not "foot" or
+     * "football".
      */
     public static final int TERM_MATCH_EXACT_ONLY = 1;
     /**
      * Query terms will match indexed tokens when the query term is a prefix of the token.
      *
-     * <p>Ex. A query term "foo" will match indexed tokens like "foo", "foot", and "football".
+     * <p>For example, a query term "foo" will match indexed tokens like "foo", "foot", and
+     * "football".
      */
     public static final int TERM_MATCH_PREFIX = 2;
 
@@ -176,20 +181,30 @@ public final class SearchSpec {
      */
     @IntDef(
             flag = true,
-            value = {GROUPING_TYPE_PER_PACKAGE, GROUPING_TYPE_PER_NAMESPACE})
+            value = {
+                GROUPING_TYPE_PER_PACKAGE,
+                GROUPING_TYPE_PER_NAMESPACE,
+                GROUPING_TYPE_PER_SCHEMA
+            })
     @Retention(RetentionPolicy.SOURCE)
     public @interface GroupingType {}
-
     /**
      * Results should be grouped together by package for the purpose of enforcing a limit on the
      * number of results returned per package.
      */
-    public static final int GROUPING_TYPE_PER_PACKAGE = 0b01;
+    public static final int GROUPING_TYPE_PER_PACKAGE = 1 << 0;
     /**
      * Results should be grouped together by namespace for the purpose of enforcing a limit on the
      * number of results returned per namespace.
      */
-    public static final int GROUPING_TYPE_PER_NAMESPACE = 0b10;
+    public static final int GROUPING_TYPE_PER_NAMESPACE = 1 << 1;
+    /**
+     * Results should be grouped together by schema type for the purpose of enforcing a limit on the
+     * number of results returned per schema type.
+     *
+     * @hide
+     */
+    public static final int GROUPING_TYPE_PER_SCHEMA = 1 << 2;
 
     private final Bundle mBundle;
 
@@ -210,7 +225,8 @@ public final class SearchSpec {
     }
 
     /** Returns how the query terms should match terms in the index. */
-    public @TermMatch int getTermMatch() {
+    @TermMatch
+    public int getTermMatch() {
         return mBundle.getInt(TERM_MATCH_TYPE_FIELD, -1);
     }
 
@@ -264,12 +280,14 @@ public final class SearchSpec {
     }
 
     /** Returns the ranking strategy. */
-    public @RankingStrategy int getRankingStrategy() {
+    @RankingStrategy
+    public int getRankingStrategy() {
         return mBundle.getInt(RANKING_STRATEGY_FIELD);
     }
 
     /** Returns the order of returned search results (descending or ascending). */
-    public @Order int getOrder() {
+    @Order
+    public int getOrder() {
         return mBundle.getInt(ORDER_FIELD);
     }
 
@@ -399,7 +417,8 @@ public final class SearchSpec {
      * Get the type of grouping limit to apply, or 0 if {@link Builder#setResultGrouping} was not
      * called.
      */
-    public @GroupingType int getResultGroupingTypeFlags() {
+    @GroupingType
+    public int getResultGroupingTypeFlags() {
         return mBundle.getInt(RESULT_GROUPING_TYPE_FLAGS);
     }
 
@@ -432,33 +451,61 @@ public final class SearchSpec {
         return mBundle.getString(ADVANCED_RANKING_EXPRESSION, "");
     }
 
+    /** Returns whether the {@link Features#NUMERIC_SEARCH} feature is enabled. */
+    public boolean isNumericSearchEnabled() {
+        return getEnabledFeatures().contains(FeatureConstants.NUMERIC_SEARCH);
+    }
+
+    /** Returns whether the {@link Features#VERBATIM_SEARCH} feature is enabled. */
+    public boolean isVerbatimSearchEnabled() {
+        return getEnabledFeatures().contains(FeatureConstants.VERBATIM_SEARCH);
+    }
+
+    /** Returns whether the {@link Features#LIST_FILTER_QUERY_LANGUAGE} feature is enabled. */
+    public boolean isListFilterQueryLanguageEnabled() {
+        return getEnabledFeatures().contains(FeatureConstants.LIST_FILTER_QUERY_LANGUAGE);
+    }
+
+    /**
+     * Get the list of enabled features that the caller is intending to use in this search call.
+     *
+     * @return the set of {@link Features} enabled in this {@link SearchSpec} Entry.
+     * @hide
+     */
+    @NonNull
+    public List<String> getEnabledFeatures() {
+        return mBundle.getStringArrayList(ENABLED_FEATURES_FIELD);
+    }
+
     /** Builder for {@link SearchSpec objects}. */
     public static final class Builder {
         private ArrayList<String> mSchemas = new ArrayList<>();
         private ArrayList<String> mNamespaces = new ArrayList<>();
         private ArrayList<String> mPackageNames = new ArrayList<>();
+        private ArraySet<String> mEnabledFeatures = new ArraySet<>();
         private Bundle mProjectionTypePropertyMasks = new Bundle();
         private Bundle mTypePropertyWeights = new Bundle();
 
         private int mResultCountPerPage = DEFAULT_NUM_PER_PAGE;
-        private @TermMatch int mTermMatchType = TERM_MATCH_PREFIX;
+        @TermMatch private int mTermMatchType = TERM_MATCH_PREFIX;
         private int mSnippetCount = 0;
         private int mSnippetCountPerProperty = MAX_SNIPPET_PER_PROPERTY_COUNT;
         private int mMaxSnippetSize = 0;
-        private @RankingStrategy int mRankingStrategy = RANKING_STRATEGY_NONE;
-        private @Order int mOrder = ORDER_DESCENDING;
-        private @GroupingType int mGroupingTypeFlags = 0;
+        @RankingStrategy private int mRankingStrategy = RANKING_STRATEGY_NONE;
+        @Order private int mOrder = ORDER_DESCENDING;
+        @GroupingType private int mGroupingTypeFlags = 0;
         private int mGroupingLimit = 0;
         private JoinSpec mJoinSpec;
         private String mAdvancedRankingExpression = "";
         private boolean mBuilt = false;
 
         /**
-         * Indicates how the query terms should match {@code TermMatchCode} in the index.
+         * Sets how the query terms should match {@code TermMatchCode} in the index.
          *
          * <p>If this method is not called, the default term match type is {@link
          * SearchSpec#TERM_MATCH_PREFIX}.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setTermMatch(@TermMatch int termMatchType) {
             Preconditions.checkArgumentInRange(
@@ -474,6 +521,7 @@ public final class SearchSpec {
          *
          * <p>If unset, the query will search over all schema types.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull String... schemas) {
             Objects.requireNonNull(schemas);
@@ -487,6 +535,7 @@ public final class SearchSpec {
          *
          * <p>If unset, the query will search over all schema types.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterSchemas(@NonNull Collection<String> schemas) {
             Objects.requireNonNull(schemas);
@@ -501,6 +550,7 @@ public final class SearchSpec {
          *
          * <p>If unset, the query will search over all namespaces.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterNamespaces(@NonNull String... namespaces) {
             Objects.requireNonNull(namespaces);
@@ -514,6 +564,7 @@ public final class SearchSpec {
          *
          * <p>If unset, the query will search over all namespaces.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterNamespaces(@NonNull Collection<String> namespaces) {
             Objects.requireNonNull(namespaces);
@@ -530,6 +581,7 @@ public final class SearchSpec {
          * package names are specified which caller doesn't have access to, then those package names
          * will be ignored.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterPackageNames(@NonNull String... packageNames) {
             Objects.requireNonNull(packageNames);
@@ -545,6 +597,7 @@ public final class SearchSpec {
          * package names are specified which caller doesn't have access to, then those package names
          * will be ignored.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder addFilterPackageNames(@NonNull Collection<String> packageNames) {
             Objects.requireNonNull(packageNames);
@@ -558,6 +611,7 @@ public final class SearchSpec {
          *
          * <p>The default number of results per page is 10.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setResultCountPerPage(
                 @IntRange(from = 0, to = MAX_NUM_PER_PAGE) int resultCountPerPage) {
@@ -569,6 +623,7 @@ public final class SearchSpec {
         }
 
         /** Sets ranking strategy for AppSearch results. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setRankingStrategy(@RankingStrategy int rankingStrategy) {
             Preconditions.checkArgumentInRange(
@@ -594,54 +649,42 @@ public final class SearchSpec {
          * <p>Numeric literals, arithmetic operators, mathematical functions, and document-based
          * functions are supported to build expressions.
          *
-         * <p>The following are examples of numeric literals:
-         *
-         * <ul>
-         *   <li>Integer
-         *       <p>Example: 0, 1, 2, 13
-         *   <li>Floating-point number
-         *       <p>Example: 0.333, 0.5, 123.456
-         *   <li>Negative number
-         *       <p>Example: -5, -10.5, -100.123
-         * </ul>
-         *
          * <p>The following are supported arithmetic operators:
          *
          * <ul>
          *   <li>Addition(+)
-         *       <p>Example: "1 + 1" will be evaluated to 2.
          *   <li>Subtraction(-)
-         *       <p>Example: "2 - 1.5" will be evaluated to 0.5.
          *   <li>Multiplication(*)
-         *       <p>Example: "2 * -2" will be evaluated to -4.
-         *   <li>Division(/)
-         *       <p>Example: "5 / 2" will be evaluated to 2.5.
+         *   <li>Floating Point Division(/)
          * </ul>
          *
-         * <p>Multiplication and division have higher precedences than addition and subtraction, but
-         * multiplication has the same precedence as division, and addition has the same precedence
-         * as subtraction. Parentheses are supported to change precedences.
+         * <p>Operator precedences are compliant with the Java Language, and parentheses are
+         * supported. For example, "2.2 + (3 - 4) / 2" evaluates to 1.7.
          *
-         * <p>For example:
-         *
-         * <ul>
-         *   <li>"2 + 3 - 4 * 5" will be evaluated to -15
-         *   <li>"(2 + 3) - (4 * 5)" will be evaluated to -15
-         *   <li>"2 + (3 - 4) * 5" will be evaluated to -3
-         * </ul>
-         *
-         * <p>The following are supported mathematical functions:
+         * <p>The following are supported basic mathematical functions:
          *
          * <ul>
          *   <li>log(x) - the natural log of x
          *   <li>log(x, y) - the log of y with base x
          *   <li>pow(x, y) - x to the power of y
-         *   <li>max(v1, v2, ..., vn) with n > 0 - the maximum value among v1, ..., vn
-         *   <li>min(v1, v2, ..., vn) with n > 0 - the minimum value among v1, ..., vn
-         *   <li>sqrt(x) - the square root of x
-         *   <li>abs(x) - the absolute value of x
-         *   <li>sin(x), cos(x), tan(x) - trigonometric functions of x
+         *   <li>sqrt(x)
+         *   <li>abs(x)
+         *   <li>sin(x), cos(x), tan(x)
          *   <li>Example: "max(abs(-100), 10) + pow(2, 10)" will be evaluated to 1124
+         * </ul>
+         *
+         * <p>The following variadic mathematical functions are supported, with n > 0. They also
+         * accept list value parameters. For example, if V is a value of list type, we can call
+         * sum(V) to get the sum of all the values in V. List literals are not supported, so a value
+         * of list type can only be constructed as a return value of some particular document-based
+         * functions.
+         *
+         * <ul>
+         *   <li>max(v1, v2, ..., vn) or max(V)
+         *   <li>min(v1, v2, ..., vn) or min(V)
+         *   <li>len(v1, v2, ..., vn) or len(V)
+         *   <li>sum(v1, v2, ..., vn) or sum(V)
+         *   <li>avg(v1, v2, ..., vn) or avg(V)
          * </ul>
          *
          * <p>Document-based functions must be called via "this", which represents the current
@@ -663,22 +706,56 @@ public final class SearchSpec {
          *       document, where type must be evaluated to an integer from 1 to 2. Type 1 refers to
          *       usages reported by {@link AppSearchSession#reportUsage}, and type 2 refers to
          *       usages reported by {@link GlobalSearchSession#reportSystemUsage}.
+         *   <li>this.childrenRankingSignals()
+         *       <p>Returns a list of children ranking signals calculated by scoring the joined
+         *       documents using the ranking strategy specified in the nested {@link SearchSpec}.
+         *       Currently, a document can only be a child of another document in the context of
+         *       joins. If this function is called without the Join API enabled, a type error will
+         *       be raised.
+         *   <li>this.propertyWeights()
+         *       <p>Returns a list of the normalized weights of the matched properties for the
+         *       current document being scored. Property weights come from what's specified in
+         *       {@link SearchSpec}. After normalizing, each provided weight will be divided by the
+         *       maximum weight, so that each of them will be <= 1.
          * </ul>
          *
          * <p>Some errors may occur when using advanced ranking.
          *
+         * <p>Syntax Error: the expression violates the syntax of the advanced ranking language.
+         * Below are some examples.
+         *
          * <ul>
-         *   <li>Syntax Error: the expression violates the syntax of the advanced ranking language,
-         *       such as unbalanced parenthesis.
-         *   <li>Type Error: the expression fails a static type check, such as getting the wrong
-         *       number of arguments for a function.
-         *   <li>Evaluation Error: an error occurred while evaluating the value of the expression,
-         *       such as getting a non-finite value in the middle of evaluation. Expressions like "1
-         *       / 0" and "log(0) fall into this category.
+         *   <li>"1 + " - missing operand
+         *   <li>"2 * (1 + 2))" - unbalanced parenthesis
+         *   <li>"2 ^ 3" - unknown operator
+         * </ul>
+         *
+         * <p>Type Error: the expression fails a static type check. Below are some examples.
+         *
+         * <ul>
+         *   <li>"sin(2, 3)" - wrong number of arguments for the sin function
+         *   <li>"this.childrenRankingSignals() + 1" - cannot add a list with a number
+         *   <li>"this.propertyWeights()" - the final type of the overall expression cannot be a
+         *       list, which can be fixed by "max(this.propertyWeights())"
+         *   <li>"abs(this.propertyWeights())" - the abs function does not support list type
+         *       arguments
+         *   <li>"print(2)" - unknown function
+         * </ul>
+         *
+         * <p>Evaluation Error: an error occurred while evaluating the value of the expression.
+         * Below are some examples.
+         *
+         * <ul>
+         *   <li>"1 / 0", "log(0)", "1 + sqrt(-1)" - getting a non-finite value in the middle of
+         *       evaluation
+         *   <li>"this.usageCount(1 + 0.5)" - expect the argument to be an integer. Note that this
+         *       is not a type error and "this.usageCount(1.5 + 1/2)" can succeed without any issues
+         *   <li>"this.documentScore()" - in case of an IO error, this will be an evaluation error
          * </ul>
          *
          * <p>Syntax errors and type errors will fail the entire search and will cause {@link
-         * SearchResults#getNextPage} to throw an {@link AppSearchException}.
+         * SearchResults#getNextPage} to throw an {@link AppSearchException} with the result code of
+         * {@link AppSearchResult#RESULT_INVALID_ARGUMENT}.
          *
          * <p>Evaluation errors will result in the offending documents receiving the default score.
          * For {@link #ORDER_DESCENDING}, the default score will be 0, for {@link #ORDER_ASCENDING}
@@ -686,6 +763,7 @@ public final class SearchSpec {
          *
          * @param advancedRankingExpression a non-empty string representing the ranking expression.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setRankingStrategy(@NonNull String advancedRankingExpression) {
             Preconditions.checkStringNotEmpty(advancedRankingExpression);
@@ -696,11 +774,12 @@ public final class SearchSpec {
         }
 
         /**
-         * Indicates the order of returned search results, the default is {@link #ORDER_DESCENDING},
+         * Sets the order of returned search results, the default is {@link #ORDER_DESCENDING},
          * meaning that results with higher scores come first.
          *
          * <p>This order field will be ignored if RankingStrategy = {@code RANKING_STRATEGY_NONE}.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setOrder(@Order int order) {
             Preconditions.checkArgumentInRange(
@@ -711,8 +790,8 @@ public final class SearchSpec {
         }
 
         /**
-         * Only the first {@code snippetCount} documents based on the ranking strategy will have
-         * snippet information provided.
+         * Sets the {@code snippetCount} such that the first {@code snippetCount} documents based on
+         * the ranking strategy will have snippet information provided.
          *
          * <p>The list returned from {@link SearchResult#getMatchInfos} will contain at most this
          * many entries.
@@ -720,6 +799,7 @@ public final class SearchSpec {
          * <p>If set to 0 (default), snippeting is disabled and the list returned from {@link
          * SearchResult#getMatchInfos} will be empty.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setSnippetCount(
                 @IntRange(from = 0, to = MAX_SNIPPET_COUNT) int snippetCount) {
@@ -740,6 +820,7 @@ public final class SearchSpec {
          * <p>The default behavior is to snippet all matches a property contains, up to the maximum
          * value of 10,000.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setSnippetCountPerProperty(
                 @IntRange(from = 0, to = MAX_SNIPPET_PER_PROPERTY_COUNT)
@@ -760,12 +841,13 @@ public final class SearchSpec {
          * maxSnippetSize/2} bytes after the middle of the matching token. It respects token
          * boundaries, therefore the returned window may be smaller than requested.
          *
-         * <p>Setting {@code maxSnippetSize} to 0 will disable windowing and an empty string will be
+         * <p>Setting {@code maxSnippetSize} to 0 will disable windowing and an empty String will be
          * returned. If matches enabled is also set to false, then snippeting is disabled.
          *
-         * <p>Ex. {@code maxSnippetSize} = 16. "foo bar baz bat rat" with a query of "baz" will
-         * return a window of "bar baz bat" which is only 11 bytes long.
+         * <p>For example, {@code maxSnippetSize} = 16. "foo bar baz bat rat" with a query of "baz"
+         * will return a window of "bar baz bat" which is only 11 bytes long.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setMaxSnippetSize(
                 @IntRange(from = 0, to = MAX_SNIPPET_SIZE_LIMIT) int maxSnippetSize) {
@@ -786,6 +868,7 @@ public final class SearchSpec {
          * @param schema a string corresponding to the schema to add projections to.
          * @param propertyPaths the projections to add.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder addProjection(
                 @NonNull String schema, @NonNull Collection<String> propertyPaths) {
@@ -866,6 +949,7 @@ public final class SearchSpec {
          * @param schema a string corresponding to the schema to add projections to.
          * @param propertyPaths the projections to add.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder addProjectionPaths(
                 @NonNull String schema, @NonNull Collection<PropertyPath> propertyPaths) {
@@ -882,12 +966,12 @@ public final class SearchSpec {
          * Sets the maximum number of results to return for each group, where groups are defined by
          * grouping type.
          *
-         * <p>Calling this method will override any previous calls. So calling
-         * setResultGrouping(GROUPING_TYPE_PER_PACKAGE, 7) and then calling
-         * setResultGrouping(GROUPING_TYPE_PER_PACKAGE, 2) will result in only the latter, a limit
-         * of two results per package, being applied. Or calling setResultGrouping
-         * (GROUPING_TYPE_PER_PACKAGE, 1) and then calling setResultGrouping
-         * (GROUPING_TYPE_PER_PACKAGE | GROUPING_PER_NAMESPACE, 5) will result in five results per
+         * <p>Calling this method will override any previous calls. So calling {@code
+         * setResultGrouping(GROUPING_TYPE_PER_PACKAGE, 7)} and then calling {@code
+         * setResultGrouping(GROUPING_TYPE_PER_PACKAGE, 2)} will result in only the latter, a limit
+         * of two results per package, being applied. Or calling {@code setResultGrouping
+         * (GROUPING_TYPE_PER_PACKAGE, 1)} and then calling {@code setResultGrouping
+         * (GROUPING_TYPE_PER_PACKAGE | GROUPING_PER_NAMESPACE, 5)} will result in five results per
          * package per namespace.
          *
          * @param groupingTypeFlags One or more combination of grouping types.
@@ -896,6 +980,7 @@ public final class SearchSpec {
          */
         // Individual parameters available from getResultGroupingTypeFlags and
         // getResultGroupingLimit
+        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setResultGrouping(@GroupingType int groupingTypeFlags, int limit) {
@@ -1014,6 +1099,70 @@ public final class SearchSpec {
         }
 
         /**
+         * Sets the {@link Features#NUMERIC_SEARCH} feature as enabled/disabled according to the
+         * enabled parameter.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it.
+         *     <p>If disabled, disallows use of {@link
+         *     AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE} and all other numeric
+         *     querying features.
+         */
+        @NonNull
+        public Builder setNumericSearchEnabled(boolean enabled) {
+            modifyEnabledFeature(FeatureConstants.NUMERIC_SEARCH, enabled);
+            return this;
+        }
+
+        /**
+         * Sets the {@link Features#VERBATIM_SEARCH} feature as enabled/disabled according to the
+         * enabled parameter.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it
+         *     <p>If disabled, disallows use of {@link
+         *     AppSearchSchema.StringPropertyConfig#TOKENIZER_TYPE_VERBATIM} and all other verbatim
+         *     search features within the query language that allows clients to search using the
+         *     verbatim string operator.
+         *     <p>For example, The verbatim string operator '"foo/bar" OR baz' will ensure that
+         *     'foo/bar' is treated as a single 'verbatim' token.
+         */
+        @NonNull
+        public Builder setVerbatimSearchEnabled(boolean enabled) {
+            modifyEnabledFeature(FeatureConstants.VERBATIM_SEARCH, enabled);
+            return this;
+        }
+
+        /**
+         * Sets the {@link Features#LIST_FILTER_QUERY_LANGUAGE} feature as enabled/disabled
+         * according to the enabled parameter.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it.
+         *     <p>This feature covers the expansion of the query language to conform to the
+         *     definition of the list filters language (https://aip.dev/160). This includes:
+         *     <ul>
+         *       <li>addition of explicit 'AND' and 'NOT' operators
+         *       <li>property restricts are allowed with grouping (ex. "prop:(a OR b)")
+         *       <li>addition of custom functions to control matching
+         *     </ul>
+         *     <p>The newly added custom functions covered by this feature are:
+         *     <ul>
+         *       <li>createList(String...)
+         *       <li>termSearch(String, List<String>)
+         *     </ul>
+         *     <p>createList takes a variable number of strings and returns a list of strings. It is
+         *     for use with termSearch.
+         *     <p>termSearch takes a query string that will be parsed according to the supported
+         *     query language and an optional list of strings that specify the properties to be
+         *     restricted to. This exists as a convenience for multiple property restricts. So, for
+         *     example, the query "(subject:foo OR body:foo) (subject:bar OR body:bar)" could be
+         *     rewritten as "termSearch(\"foo bar\", createList(\"subject\", \"bar\"))"
+         */
+        @NonNull
+        public Builder setListFilterQueryLanguageEnabled(boolean enabled) {
+            modifyEnabledFeature(FeatureConstants.LIST_FILTER_QUERY_LANGUAGE, enabled);
+            return this;
+        }
+
+        /**
          * Constructs a new {@link SearchSpec} from the contents of this builder.
          *
          * @throws IllegalArgumentException if property weights are provided with a ranking strategy
@@ -1046,6 +1195,7 @@ public final class SearchSpec {
             bundle.putStringArrayList(SCHEMA_FIELD, mSchemas);
             bundle.putStringArrayList(NAMESPACE_FIELD, mNamespaces);
             bundle.putStringArrayList(PACKAGE_NAME_FIELD, mPackageNames);
+            bundle.putStringArrayList(ENABLED_FEATURES_FIELD, new ArrayList<>(mEnabledFeatures));
             bundle.putBundle(PROJECTION_TYPE_PROPERTY_PATHS_FIELD, mProjectionTypePropertyMasks);
             bundle.putInt(NUM_PER_PAGE_FIELD, mResultCountPerPage);
             bundle.putInt(TERM_MATCH_TYPE_FIELD, mTermMatchType);
@@ -1057,10 +1207,12 @@ public final class SearchSpec {
             bundle.putInt(RESULT_GROUPING_TYPE_FLAGS, mGroupingTypeFlags);
             bundle.putInt(RESULT_GROUPING_LIMIT, mGroupingLimit);
             if (!mTypePropertyWeights.isEmpty()
-                    && RANKING_STRATEGY_RELEVANCE_SCORE != mRankingStrategy) {
+                    && RANKING_STRATEGY_RELEVANCE_SCORE != mRankingStrategy
+                    && RANKING_STRATEGY_ADVANCED_RANKING_EXPRESSION != mRankingStrategy) {
                 throw new IllegalArgumentException(
-                        "Property weights are only compatible with the "
-                                + "RANKING_STRATEGY_RELEVANCE_SCORE ranking strategy.");
+                        "Property weights are only compatible with the"
+                            + " RANKING_STRATEGY_RELEVANCE_SCORE and"
+                            + " RANKING_STRATEGY_ADVANCED_RANKING_EXPRESSION ranking strategies.");
             }
             bundle.putBundle(TYPE_PROPERTY_WEIGHTS_FIELD, mTypePropertyWeights);
             bundle.putString(ADVANCED_RANKING_EXPRESSION, mAdvancedRankingExpression);
@@ -1076,6 +1228,15 @@ public final class SearchSpec {
                 mProjectionTypePropertyMasks = BundleUtil.deepCopy(mProjectionTypePropertyMasks);
                 mTypePropertyWeights = BundleUtil.deepCopy(mTypePropertyWeights);
                 mBuilt = false;
+            }
+        }
+
+        private void modifyEnabledFeature(@NonNull String feature, boolean enabled) {
+            resetIfBuilt();
+            if (enabled) {
+                mEnabledFeatures.add(feature);
+            } else {
+                mEnabledFeatures.remove(feature);
             }
         }
     }
