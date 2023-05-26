@@ -382,6 +382,52 @@ public class SearchSpecToProtoConverterTest {
     }
 
     @Test
+    public void testToResultSpecProtoWithJoinSpec() throws Exception {
+        SearchSpec nestedSearchSpec =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .build();
+
+        // Create a JoinSpec object and set it in the converter
+        JoinSpec joinSpec =
+                new JoinSpec.Builder("childPropertyExpression")
+                        .setNestedSearch("nestedQuery", nestedSearchSpec)
+                        .setAggregationScoringStrategy(
+                                JoinSpec.AGGREGATION_SCORING_SUM_RANKING_SIGNAL)
+                        .setMaxJoinedResultCount(10)
+                        .build();
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_JOIN_AGGREGATE_SCORE)
+                        .setJoinSpec(joinSpec)
+                        .setResultCountPerPage(123)
+                        .setSnippetCount(234)
+                        .setSnippetCountPerProperty(345)
+                        .setMaxSnippetSize(456)
+                        .build();
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(),
+                        /*namespaceMap=*/ ImmutableMap.of(),
+                        /*schemaMap=*/ ImmutableMap.of(),
+                        mDefaultIcingOptionsConfig);
+
+        ResultSpecProto resultSpecProto =
+                converter.toResultSpecProto(
+                        /*namespaceMap=*/ ImmutableMap.of(), /*schemaMap=*/ ImmutableMap.of());
+
+        assertThat(resultSpecProto.getNumPerPage()).isEqualTo(123);
+        assertThat(resultSpecProto.getSnippetSpec().getNumToSnippet()).isEqualTo(234);
+        assertThat(resultSpecProto.getSnippetSpec().getNumMatchesPerProperty()).isEqualTo(345);
+        assertThat(resultSpecProto.getSnippetSpec().getMaxWindowUtf32Length()).isEqualTo(456);
+        assertThat(resultSpecProto.getMaxJoinedChildrenPerParentToReturn()).isEqualTo(10);
+    }
+
+    @Test
     public void testToResultSpecProto_groupByPackage() {
         SearchSpec searchSpec =
                 new SearchSpec.Builder().setResultGrouping(GROUPING_TYPE_PER_PACKAGE, 5).build();
