@@ -17,6 +17,7 @@ package com.android.server.appsearch;
 
 import static android.app.appsearch.AppSearchResult.RESULT_DENIED;
 import static android.app.appsearch.AppSearchResult.RESULT_OK;
+import static android.app.appsearch.AppSearchResult.RESULT_RATE_LIMITED;
 import static android.app.appsearch.AppSearchResult.throwableToFailedResult;
 import static android.os.Process.INVALID_UID;
 
@@ -83,6 +84,7 @@ import com.android.server.appsearch.stats.StatsCollector;
 import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.AdbDumpUtil;
 import com.android.server.appsearch.util.ExecutorManager;
+import com.android.server.appsearch.util.RateLimitedExecutor;
 import com.android.server.appsearch.util.ServiceImplHelper;
 import com.android.server.appsearch.visibilitystore.FrameworkCallerAccess;
 import com.android.server.usage.StorageStatsManagerLocal;
@@ -125,7 +127,7 @@ public class AppSearchManagerService extends SystemService {
     private static final Executor SHARED_EXECUTOR = ExecutorManager.createDefaultExecutorService();
 
     private final Context mContext;
-    private final ExecutorManager mExecutorManager = new ExecutorManager();
+    private final ExecutorManager mExecutorManager;
     private final AppSearchEnvironment mAppSearchEnvironment;
     private final AppSearchConfig mAppSearchConfig;
 
@@ -143,6 +145,7 @@ public class AppSearchManagerService extends SystemService {
         mLifecycle = lifecycle;
         mAppSearchEnvironment = AppSearchEnvironmentFactory.getEnvironmentInstance();
         mAppSearchConfig = AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR);
+        mExecutorManager = new ExecutorManager(mAppSearchConfig);
     }
 
     @Override
@@ -367,7 +370,9 @@ public class AppSearchManagerService extends SystemService {
             long verifyIncomingCallLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
             long waitExecutorStartTimeMillis = SystemClock.elapsedRealtime();
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(
+                    targetUser, callback, callingPackageName, CallStats.CALL_TYPE_SET_SCHEMA,
+                    () -> {
                 long waitExecutorEndTimeMillis = SystemClock.elapsedRealtime();
 
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -467,6 +472,11 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_SET_SCHEMA, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -503,7 +513,8 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, callType, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -550,6 +561,11 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, callingDatabaseName,
+                        callType, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -578,7 +594,8 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_GET_NAMESPACES, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -618,6 +635,11 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_GET_NAMESPACES, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -647,7 +669,8 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ documentsParcel.getDocuments().size())) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_PUT_DOCUMENTS, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -717,6 +740,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_PUT_DOCUMENTS, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis, /* numOperations= */
+                        documentsParcel.getDocuments().size(), RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -759,7 +788,8 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ ids.size())) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, callType, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -832,6 +862,13 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, callingDatabaseName,
+                        callType, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis, /* numOperations= */ ids.size(),
+                        RESULT_RATE_LIMITED);
+
+            }
         }
 
         @Override
@@ -863,7 +900,8 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_SEARCH, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -907,6 +945,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_SEARCH, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -937,7 +981,8 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_GLOBAL_SEARCH, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -984,6 +1029,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName,
+                        /* callingDatabaseName= */ null, CallStats.CALL_TYPE_GLOBAL_SEARCH,
+                        targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1015,7 +1066,8 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, callType, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1069,6 +1121,11 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName, callType,
+                        targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1092,7 +1149,9 @@ public class AppSearchManagerService extends SystemService {
                         /* numOperations= */ 1)) {
                     return;
                 }
-                mExecutorManager.getOrCreateUserExecutor(targetUser).execute(() -> {
+                boolean callAccepted = mServiceImplHelper.executeLambdaForUserNoCallbackAsync(
+                        targetUser, callingPackageName,
+                        CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, () -> {
                     @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                     AppSearchUserInstance instance = null;
                     int operationSuccessCount = 0;
@@ -1130,6 +1189,13 @@ public class AppSearchManagerService extends SystemService {
                         }
                     }
                 });
+                if (!callAccepted) {
+                    logRateLimitedOrCallDeniedCallStats(
+                            callingPackageName, /* callingDatabaseName= */ null,
+                            CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, targetUser,
+                            binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                            /* numOperations= */ 1, RESULT_RATE_LIMITED);
+                }
             } catch (Throwable t) {
                 Log.e(TAG, "Unable to invalidate the query page token", t);
             }
@@ -1167,7 +1233,9 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE,
+                    () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1225,6 +1293,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE, targetUser,
+                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1260,7 +1334,9 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE,
+                    () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1356,6 +1432,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, targetUser,
+                        binderCallStartTimeMillis, callStatsTotalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1388,7 +1470,9 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_SEARCH_SUGGESTION,
+                    () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1439,6 +1523,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_SEARCH_SUGGESTION, targetUser,
+                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1480,7 +1570,9 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_REPORT_USAGE,
+                    () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1535,6 +1627,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, callingDatabaseName,
+                        callType, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1567,7 +1665,9 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ ids.size())) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID,
+                    () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1633,6 +1733,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID, targetUser,
+                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ ids.size(), RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1665,7 +1771,9 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH,
+                    () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1716,6 +1824,12 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH, targetUser,
+                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1744,7 +1858,8 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+                    callback, callingPackageName, CallStats.CALL_TYPE_GET_STORAGE_INFO, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1784,6 +1899,11 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                        CallStats.CALL_TYPE_GET_STORAGE_INFO, targetUser, binderCallStartTimeMillis,
+                        totalLatencyStartTimeMillis, /* numOperations= */ 1, RESULT_RATE_LIMITED);
+            }
         }
 
         @Override
@@ -1805,7 +1925,8 @@ public class AppSearchManagerService extends SystemService {
                         totalLatencyStartTimeMillis, /* numOperations= */ 1)) {
                     return;
                 }
-                mExecutorManager.getOrCreateUserExecutor(targetUser).execute(() -> {
+                boolean callAccepted = mServiceImplHelper.executeLambdaForUserNoCallbackAsync(
+                        targetUser, callingPackageName, CallStats.CALL_TYPE_FLUSH, () -> {
                     @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                     AppSearchUserInstance instance = null;
                     int operationSuccessCount = 0;
@@ -1841,6 +1962,13 @@ public class AppSearchManagerService extends SystemService {
                         }
                     }
                 });
+                if (!callAccepted) {
+                    logRateLimitedOrCallDeniedCallStats(
+                            callingPackageName, /* callingDatabaseName= */ null,
+                            CallStats.CALL_TYPE_FLUSH, targetUser, binderCallStartTimeMillis,
+                            totalLatencyStartTimeMillis, /* numOperations= */ 1,
+                            RESULT_RATE_LIMITED);
+                }
             } catch (Throwable t) {
                 Log.e(TAG, "Unable to persist the data to disk", t);
             }
@@ -2033,7 +2161,8 @@ public class AppSearchManagerService extends SystemService {
                         AppSearchResult.newFailedResult(RESULT_DENIED, null));
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, () -> {
+            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, callingPackageName,
+                    CallStats.CALL_TYPE_INITIALIZE, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -2375,6 +2504,33 @@ public class AppSearchManagerService extends SystemService {
     }
 
     /**
+     * Logs rate-limited or denied calls to CallStats.
+     */
+    @WorkerThread
+    private void logRateLimitedOrCallDeniedCallStats(@NonNull String callingPackageName,
+            @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
+            @NonNull UserHandle targetUser, long binderCallStartTimeMillis,
+            long totalLatencyStartTimeMillis, int numOperations,
+            @AppSearchResult.ResultCode int statusCode) {
+        Objects.requireNonNull(callingPackageName);
+        Objects.requireNonNull(targetUser);
+        int estimatedBinderLatencyMillis =
+                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+        int totalLatencyMillis =
+                (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
+        mAppSearchUserInstanceManager.getUserInstance(targetUser).getLogger().logStats(
+                new CallStats.Builder()
+                        .setPackageName(callingPackageName)
+                        .setDatabase(callingDatabaseName)
+                        .setStatusCode(statusCode)
+                        .setTotalLatencyMillis(totalLatencyMillis)
+                        .setCallType(apiType)
+                        .setEstimatedBinderLatencyMillis(estimatedBinderLatencyMillis)
+                        .setNumOperationsFailed(numOperations)
+                        .build());
+    }
+
+    /**
      * Checks if an API call for a given calling package and calling database should be denied
      * according to the denylist. If the call is denied, also logs the denial through CallStats.
      *
@@ -2391,22 +2547,9 @@ public class AppSearchManagerService extends SystemService {
                 callingPackageName, apiType) : denylist.checkDeniedPackageDatabase(
                 callingPackageName, callingDatabaseName, apiType);
         if (denied) {
-            int estimatedBinderLatencyMillis =
-                    2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
-            int totalLatencyMillis =
-                    (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
-            mAppSearchUserInstanceManager.getUserInstance(targetUser).getLogger().logStats(
-                    new CallStats.Builder()
-                            .setPackageName(callingPackageName)
-                            // For a global call, the calling database logged here will be null even
-                            // when there is a non-null target database
-                            .setDatabase(callingDatabaseName)
-                            .setStatusCode(RESULT_DENIED)
-                            .setTotalLatencyMillis(totalLatencyMillis)
-                            .setCallType(apiType)
-                            .setEstimatedBinderLatencyMillis(estimatedBinderLatencyMillis)
-                            .setNumOperationsFailed(numOperations)
-                            .build());
+            logRateLimitedOrCallDeniedCallStats(callingPackageName, callingDatabaseName, apiType,
+                    targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    numOperations, RESULT_DENIED);
         }
         return denied;
     }
