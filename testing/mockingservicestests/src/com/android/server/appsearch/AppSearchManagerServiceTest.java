@@ -47,8 +47,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
+import com.android.modules.utils.testing.ExtendedMockitoRule;
 import com.android.modules.utils.testing.StaticMockFixture;
-import com.android.modules.utils.testing.StaticMockFixtureRule;
 import com.android.server.LocalManagerRegistry;
 import com.android.server.usage.StorageStatsManagerLocal;
 
@@ -66,8 +66,9 @@ public class AppSearchManagerServiceTest {
     private final Map<UserHandle, PackageManager> mMockPackageManagers = new ArrayMap<>();
 
     @Rule
-    public StaticMockFixtureRule mStaticMockFixtureRule =
-            new StaticMockFixtureRule(mMockServiceManager);
+    public ExtendedMockitoRule mExtendedMockitoRule =
+            new ExtendedMockitoRule.Builder().addStaticMockFixtures(()-> mMockServiceManager)
+                .build();
 
     private Context mContext;
     private AppSearchManagerService mAppSearchManagerService;
