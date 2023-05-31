@@ -72,8 +72,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
+import com.android.modules.utils.testing.ExtendedMockitoRule;
 import com.android.modules.utils.testing.StaticMockFixture;
-import com.android.modules.utils.testing.StaticMockFixtureRule;
 import com.android.modules.utils.testing.TestableDeviceConfig;
 import com.android.server.LocalManagerRegistry;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
@@ -113,8 +113,9 @@ public class AppSearchManagerServiceTest {
     private final MockServiceManager mMockServiceManager = new MockServiceManager();
 
     @Rule
-    public StaticMockFixtureRule mStaticMockFixtureRule = new StaticMockFixtureRule(
-            mMockServiceManager, new TestableDeviceConfig());
+    public ExtendedMockitoRule mExtendedMockitoRule = new ExtendedMockitoRule.Builder()
+            .addStaticMockFixtures(()-> mMockServiceManager, TestableDeviceConfig::new)
+            .build();
 
     @Rule
     public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
