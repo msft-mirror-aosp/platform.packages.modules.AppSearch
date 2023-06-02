@@ -53,6 +53,7 @@ public interface AppSearchConfig extends AutoCloseable, IcingOptionsConfig, Limi
     int DEFAULT_API_CALL_STATS_LIMIT = 0;
 
     boolean DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH = true;
+    boolean DEFAULT_USE_FIXED_EXECUTOR_SERVICE = true;
 
     /** Returns cached value for minTimeIntervalBetweenSamplesMillis. */
     long getCachedMinTimeIntervalBetweenSamplesMillis();
