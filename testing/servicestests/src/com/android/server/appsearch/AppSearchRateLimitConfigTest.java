@@ -24,10 +24,139 @@ import org.junit.Test;
 
 public class AppSearchRateLimitConfigTest {
     @Test
+    public void testDefaultRateLimitConfig() {
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+        // Verify that API costs are set to default of 1
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NAMESPACES)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_STORAGE_INFO)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(
+                CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH)).isEqualTo(1);
+    }
+
+    @Test
     public void testCustomRateLimitConfig() {
         AppSearchRateLimitConfig rateLimitConfig =
                 AppSearchRateLimitConfig.create(1000, 0.8f,
                         "localPutDocuments:5;localGetDocuments:11;localSetSchema:99");
+
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(1000);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(800);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(5);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(11);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(99);
+        // Unset API costs = 1 by default
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NAMESPACES)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_STORAGE_INFO)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(
+                CallStats.CALL_TYPE_REMOVE_DOCUMENT_BY_SEARCH)).isEqualTo(1);
+    }
+
+    @Test
+    public void testRateLimitConfigRebuild_noChanges() {
+        AppSearchRateLimitConfig rateLimitConfig1 = AppSearchRateLimitConfig.create(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+        AppSearchRateLimitConfig rateLimitConfig2 = rateLimitConfig1.rebuildIfNecessary(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+        assertThat(rateLimitConfig2).isEqualTo(rateLimitConfig1);
+    }
+
+    @Test
+    public void testRateLimitConfigRebuild_changeTotalCapacity() {
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+        rateLimitConfig = rateLimitConfig.rebuildIfNecessary(1000,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(1000);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * 1000));
+        // API costs = 1 by default
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NAMESPACES)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_STORAGE_INFO)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(
+                CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH)).isEqualTo(1);
+    }
+
+    @Test
+    public void testRateLimitConfigRebuild_changePerPackagePercentage() {
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(10000,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+        rateLimitConfig = rateLimitConfig.rebuildIfNecessary(10000, 0.5f,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(10000);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (0.5 * 10000));
+        // API costs = 1 by default
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NAMESPACES)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_STORAGE_INFO)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(
+                CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH)).isEqualTo(1);
+    }
+
+    @Test
+    public void testRateLimitConfigRebuild_changeApiCosts() {
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+        rateLimitConfig = rateLimitConfig.rebuildIfNecessary(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                "localPutDocuments:5;localGetDocuments:11;localSetSchema:99");
+
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(5);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(11);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(99);
+        // Unset API costs = 1 by default
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NAMESPACES)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_STORAGE_INFO)).isEqualTo(1);
+        assertThat(rateLimitConfig.getApiCost(
+                CallStats.CALL_TYPE_REMOVE_DOCUMENT_BY_SEARCH)).isEqualTo(1);
+    }
+
+    @Test
+    public void testRateLimitConfigRebuild_allConfigsChanged() {
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+        rateLimitConfig = rateLimitConfig.rebuildIfNecessary(1000, 0.8f,
+                "localPutDocuments:5;localGetDocuments:11;localSetSchema:99");
 
         assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(1000);
         assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(800);
