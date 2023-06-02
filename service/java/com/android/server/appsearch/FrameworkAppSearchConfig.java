@@ -88,6 +88,7 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
     public static final String KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR =
             "icing_use_pre_mapping_with_file_backed_vector";
     public static final String KEY_ICING_USE_PERSISTENT_HASHMAP = "icing_use_persistent_hashmap";
+    public static final String KEY_ICING_MAX_PAGE_BYTES_LIMIT = "icing_max_page_bytes_limit";
 
     // Array contains all the corresponding keys for the cached values.
     private static final String[] KEYS_TO_ALL_CACHED_VALUES = {
@@ -115,7 +116,8 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             KEY_ICING_COMPRESSION_LEVEL,
             KEY_ICING_USE_READ_ONLY_SEARCH,
             KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
-            KEY_ICING_USE_PERSISTENT_HASHMAP
+            KEY_ICING_USE_PERSISTENT_HASHMAP,
+            KEY_ICING_MAX_PAGE_BYTES_LIMIT
     };
 
     // Lock needed for all the operations in this class.
@@ -447,6 +449,15 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
         }
     }
 
+    @Override
+    public int getMaxPageBytesLimit() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getInt(KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+                    IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT);
+        }
+    }
+
     @GuardedBy("mLock")
     private void throwIfClosedLocked() {
         if (mIsClosedLocked) {
@@ -599,6 +610,12 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                 synchronized (mLock) {
                     mBundleLocked.putBoolean(key, properties.getBoolean(key,
                             IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP));
+                }
+                break;
+            case KEY_ICING_MAX_PAGE_BYTES_LIMIT:
+                synchronized (mLock) {
+                    mBundleLocked.putInt(key, properties.getInt(key,
+                            IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT));
                 }
                 break;
             default:
