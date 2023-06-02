@@ -20,8 +20,9 @@ import android.annotation.NonNull;
 import android.os.UserHandle;
 import android.util.ArrayMap;
 
-import com.android.server.appsearch.AppSearchEnvironmentFactory;
 import com.android.internal.annotations.GuardedBy;
+import com.android.server.appsearch.AppSearchEnvironmentFactory;
+import com.android.server.appsearch.FrameworkAppSearchConfig;
 
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -48,15 +49,20 @@ public class ExecutorManager {
     /**
      * Creates a new {@link ExecutorService} with default settings for use in AppSearch.
      *
-     * <p>The default settings are to use as many threads as there are CPUs and to allow the pool
-     * to shrink to 1.
+     * <p>The default settings are to use as many threads as there are CPUs. The core pool size is
+     * 1 if cached executors should be used, or also the CPU number if fixed executors should be
+     * used.
      */
     @NonNull
     public static ExecutorService createDefaultExecutorService() {
+        boolean useFixedExecutorService = FrameworkAppSearchConfig.getUseFixedExecutorService();
+        int corePoolSize = useFixedExecutorService ? Runtime.getRuntime().availableProcessors() : 1;
+        long keepAliveTime = useFixedExecutorService ? 0L : 60L;
+
         return AppSearchEnvironmentFactory.getEnvironmentInstance().createExecutorService(
-                /*corePoolSize=*/ 1,
+                /*corePoolSize=*/ corePoolSize,
                 /*maxConcurrency=*/ Runtime.getRuntime().availableProcessors(),
-                /*keepAliveTime=*/ 60L,
+                /*keepAliveTime=*/ keepAliveTime,
                 /*unit=*/ TimeUnit.SECONDS,
                 /*workQueue=*/ new LinkedBlockingQueue<>(),
                 /*priority=*/ 0); // priority is unused.
