@@ -19,16 +19,28 @@ package com.android.server.appsearch;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
-import com.android.server.appsearch.util.ExecutorManager;
 import com.android.server.appsearch.util.ExecutorServiceTaskCounter;
 
 import org.junit.Test;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+
 public class ExecutorServiceTaskCounterTest {
+    private final ExecutorService mExecutorService =
+            AppSearchEnvironmentFactory.getEnvironmentInstance().createExecutorService(
+                    /*corePoolSize=*/ Runtime.getRuntime().availableProcessors(),
+                    /*maxConcurrency=*/ Runtime.getRuntime().availableProcessors(),
+                    /*keepAliveTime=*/ 0L,
+                    /*unit=*/ TimeUnit.SECONDS,
+                    /*workQueue=*/ new LinkedBlockingQueue<>(),
+                    /*priority=*/ 0);
+
     @Test
     public void testAddTaskToQueue_addOk() {
         ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
-                ExecutorManager.createDefaultExecutorService());
+                mExecutorService);
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
                 100, 0.9f,
                 "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
@@ -60,7 +72,7 @@ public class ExecutorServiceTaskCounterTest {
     @Test
     public void testAddTaskToQueue_exceedsPerPackageCapacity_cannotAddTask() {
         ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
-                ExecutorManager.createDefaultExecutorService());
+                mExecutorService);
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
                 100, 0.9f,
                 "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
@@ -105,7 +117,7 @@ public class ExecutorServiceTaskCounterTest {
     @Test
     public void testAddTaskToQueue_otherPackageExceedsPerPackageCapacity_canAddTask() {
         ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
-                ExecutorManager.createDefaultExecutorService());
+                mExecutorService);
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
                 100, 0.9f,
                 "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
@@ -153,7 +165,7 @@ public class ExecutorServiceTaskCounterTest {
     @Test
     public void testAddTaskToQueue_exceedsTotalCapacity_cannotAddTask() {
         ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
-                ExecutorManager.createDefaultExecutorService());
+                mExecutorService);
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
                 100, 0.9f,
                 "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
@@ -207,7 +219,7 @@ public class ExecutorServiceTaskCounterTest {
     @Test
     public void testRemoveTaskFromQueue_removeOk() {
         ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
-                ExecutorManager.createDefaultExecutorService());
+                mExecutorService);
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
                 100, 0.9f,
                 "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
@@ -261,7 +273,7 @@ public class ExecutorServiceTaskCounterTest {
     @Test
     public void testCanAddMoreTasksAfterQueueClearsUp() {
         ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
-                ExecutorManager.createDefaultExecutorService());
+                mExecutorService);
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
                 100, 0.9f,
                 "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
