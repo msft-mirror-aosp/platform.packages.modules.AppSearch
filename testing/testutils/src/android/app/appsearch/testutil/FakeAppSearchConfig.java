@@ -21,6 +21,7 @@ import android.os.Build;
 import com.android.server.appsearch.AppSearchConfig;
 import com.android.server.appsearch.Denylist;
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
+import com.android.server.appsearch.AppSearchRateLimitConfig;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -34,6 +35,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class FakeAppSearchConfig implements AppSearchConfig {
     private final AtomicBoolean mIsClosed = new AtomicBoolean();
+    private static final AppSearchRateLimitConfig DEFAULT_APPSEARCH_RATE_LIMIT_CONFIG =
+            AppSearchRateLimitConfig.create(
+                    DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                    DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                    DEFAULT_RATE_LIMIT_API_COSTS_STRING);
 
     @Override
     public void close() {
@@ -199,6 +205,18 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
     public int getMaxPageBytesLimit() {
         throwIfClosed();
         return IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT;
+    }
+
+    @Override
+    public boolean getCachedRateLimitEnabled() {
+        throwIfClosed();
+        return DEFAULT_RATE_LIMIT_ENABLED;
+    }
+
+    @Override
+    public AppSearchRateLimitConfig getCachedRateLimitConfig() {
+        throwIfClosed();
+        return DEFAULT_APPSEARCH_RATE_LIMIT_CONFIG;
     }
 
     private void throwIfClosed() {
