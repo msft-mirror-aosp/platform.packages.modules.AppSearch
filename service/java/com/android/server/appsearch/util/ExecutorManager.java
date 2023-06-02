@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit;
  * Manages executors within AppSearch.
  *
  * <p>This class is thread-safe.
+ *
  * @hide
  */
 public class ExecutorManager {
@@ -41,7 +42,8 @@ public class ExecutorManager {
      * class's public API.
      */
     @GuardedBy("mPerUserExecutorsLocked")
-    private final Map<UserHandle, ExecutorService> mPerUserExecutorsLocked = new ArrayMap<>();
+    private final Map<UserHandle, ExecutorServiceTaskCounter> mPerUserExecutorsLocked =
+            new ArrayMap<>();
 
     /**
      * Creates a new {@link ExecutorService} with default settings for use in AppSearch.
@@ -51,14 +53,22 @@ public class ExecutorManager {
      */
     @NonNull
     public static ExecutorService createDefaultExecutorService() {
-        return AppSearchEnvironmentFactory.getEnvironmentInstance()
-          .createExecutorService(
-              /*corePoolSize=*/ 1,
-              /*maxConcurrency=*/ Runtime.getRuntime().availableProcessors(),
-              /*keepAliveTime=*/ 60L,
-              /*unit=*/ TimeUnit.SECONDS,
-              /*workQueue=*/ new LinkedBlockingQueue<>(),
-              /*priority=*/ 0); // priority is unused.
+        return AppSearchEnvironmentFactory.getEnvironmentInstance().createExecutorService(
+                /*corePoolSize=*/ 1,
+                /*maxConcurrency=*/ Runtime.getRuntime().availableProcessors(),
+                /*keepAliveTime=*/ 60L,
+                /*unit=*/ TimeUnit.SECONDS,
+                /*workQueue=*/ new LinkedBlockingQueue<>(),
+                /*priority=*/ 0); // priority is unused.
+    }
+
+    /**
+     * Creates a new {@link ExecutorServiceTaskCounter} with default settings.
+     */
+    @NonNull
+    private static ExecutorServiceTaskCounter createDefaultExecutorServiceTaskCounter() {
+        ExecutorService executorService = createDefaultExecutorService();
+        return new ExecutorServiceTaskCounter(executorService);
     }
 
     /**
@@ -70,13 +80,28 @@ public class ExecutorManager {
     @NonNull
     public Executor getOrCreateUserExecutor(@NonNull UserHandle userHandle) {
         synchronized (mPerUserExecutorsLocked) {
-            ExecutorService executor = mPerUserExecutorsLocked.get(userHandle);
-            if (executor == null) {
-                executor = ExecutorManager.createDefaultExecutorService();
-                mPerUserExecutorsLocked.put(userHandle, executor);
-            }
-            return executor;
+            ExecutorServiceTaskCounter executorHelper = getOrCreateUserExecutorTaskCounterLocked(
+                    userHandle);
+            return executorHelper.getExecutorService();
         }
+    }
+
+    /**
+     * Gets the executor service task counter for the given user, creating it if it does not exist.
+     *
+     * <p>You are responsible for making sure not to call this for locked users. The executor will
+     * be created without problems but most operations on locked users will fail.
+     */
+    @NonNull
+    @GuardedBy("mPerUserExecutorsLocked")
+    private ExecutorServiceTaskCounter getOrCreateUserExecutorTaskCounterLocked(
+            @NonNull UserHandle userHandle) {
+        ExecutorServiceTaskCounter executorTaskCounter = mPerUserExecutorsLocked.get(userHandle);
+        if (executorTaskCounter == null) {
+            executorTaskCounter = ExecutorManager.createDefaultExecutorServiceTaskCounter();
+            mPerUserExecutorsLocked.put(userHandle, executorTaskCounter);
+        }
+        return executorTaskCounter;
     }
 
     /**
@@ -85,9 +110,13 @@ public class ExecutorManager {
      */
     public void shutDownAndRemoveUserExecutor(@NonNull UserHandle userHandle)
             throws InterruptedException {
-        ExecutorService executor;
+        ExecutorServiceTaskCounter executorTaskCounter;
+        ExecutorService executor = null;
         synchronized (mPerUserExecutorsLocked) {
-            executor = mPerUserExecutorsLocked.remove(userHandle);
+            executorTaskCounter = mPerUserExecutorsLocked.remove(userHandle);
+            if (executorTaskCounter != null) {
+                executor = executorTaskCounter.getExecutorService();
+            }
         }
         if (executor != null) {
             executor.shutdown();
