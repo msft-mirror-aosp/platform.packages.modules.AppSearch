@@ -108,6 +108,10 @@ public class AppSearchManagerServiceTest {
     private static final long BINDER_CALL_START_TIME = SystemClock.elapsedRealtime() - 1;
     // TODO(b/279047435): use actual AppSearchResult.RESULT_DENIED constant after it's unhidden
     private static final int RESULT_DENIED = 9;
+
+    // TODO(b/279047435): use actual AppSearchResult.RESULT_RATE_LIMITED constant after it's
+    //  unhidden
+    private static final int RESULT_RATE_LIMITED = 10;
     private static final String FOO_PACKAGE_NAME = "foo";
 
     private final MockServiceManager mMockServiceManager = new MockServiceManager();
@@ -759,6 +763,300 @@ public class AppSearchManagerServiceTest {
         verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
         verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
         verifyInitializeResult(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOff_acceptTasksAndIgnoreCapacities()
+            throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(false),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+
+        // All rate limits should be ignored when rate limit is off
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOn_dropTaskDueToCapacitiesExceeded()
+            throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+
+        // Set Schema call is rejected because of per-package capacity exceeded
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        // Set Schema call is rejected because of total capacity exceeded
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+        // Other calls should be fine
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOn_noTasksDropped() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(1000),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOnToOff() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+
+        // All calls should be fine after switching rate limiting to off
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(false),
+                false);
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOffToOn() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(false),
+                false);
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(5),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+        // Some calls are rejected once rate limiting gets enabled
+        verifyQueryResult(RESULT_RATE_LIMITED);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitChangeToHigherLimit() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+
+        // Only getSchema call should be rejected after setting to higher limit
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(15),
+                false);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+
+        verifySetSchemaResult(AppSearchResult.RESULT_OK);
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitChangeToLowerLimit() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+
+        // Query call should also get rejected after setting a lower limit
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.5f),
+                false);
+        verifyQueryResult(RESULT_RATE_LIMITED);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
     }
 
     private void verifyLocalCallsResults(int resultCode) throws Exception {
