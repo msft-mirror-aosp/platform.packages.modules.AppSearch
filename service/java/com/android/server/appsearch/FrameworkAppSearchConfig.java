@@ -90,6 +90,12 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
     public static final String KEY_ICING_USE_PERSISTENT_HASHMAP = "icing_use_persistent_hashmap";
     public static final String KEY_ICING_MAX_PAGE_BYTES_LIMIT = "icing_max_page_bytes_limit";
 
+    /**
+     * This config does not need to be cached in FrameworkAppSearchConfig as it is only accessed
+     * statically. AppSearch retrieves this directly from DeviceConfig when needed.
+     */
+    public static final String KEY_USE_FIXED_EXECUTOR_SERVICE = "use_fixed_executor_service";
+
     // Array contains all the corresponding keys for the cached values.
     private static final String[] KEYS_TO_ALL_CACHED_VALUES = {
             KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS,
@@ -181,6 +187,15 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             }
         }
         return sConfig;
+    }
+
+    /**
+     * Returns whether or not to use a fixed executor service for AppSearch. This config is only
+     * queried statically and is therefore retrieved directly from DeviceConfig.
+     */
+    public static boolean getUseFixedExecutorService() {
+        return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_USE_FIXED_EXECUTOR_SERVICE, DEFAULT_USE_FIXED_EXECUTOR_SERVICE);
     }
 
     /**
