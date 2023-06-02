@@ -36,7 +36,7 @@ import java.util.concurrent.ExecutorService;
  * ExecutorServiceTaskCounter's state are protected with a lock.
  */
 public class ExecutorServiceTaskCounter {
-    private static final String TAG = "AppSearchExecutorTaskCo";
+    private static final String TAG = "AppSearchTaskCounter";
 
     private final ExecutorService mExecutorService;
 
@@ -83,7 +83,7 @@ public class ExecutorServiceTaskCounter {
         } else {
             ++mTaskQueueSize;
             mTaskQueueTotalCost += apiCost;
-            addPackageTaskInfo(packageName, apiCost);
+            addPackageTaskInfo(packageName, apiType, apiCost);
             return true;
         }
     }
@@ -107,7 +107,7 @@ public class ExecutorServiceTaskCounter {
         int apiCost = rateLimitConfig.getApiCost(apiType);
         --mTaskQueueSize;
         mTaskQueueTotalCost -= apiCost;
-        removePackageTaskInfo(packageName, apiCost);
+        removePackageTaskInfo(packageName, apiType, apiCost);
     }
 
     @NonNull
@@ -125,7 +125,8 @@ public class ExecutorServiceTaskCounter {
         return new ArrayMap<>(mPerPackageTaskCosts);
     }
 
-    private void addPackageTaskInfo(@NonNull String packageName, int apiCost) {
+    private void addPackageTaskInfo(@NonNull String packageName, @CallStats.CallType int apiType,
+            int apiCost) {
         TaskCostInfo packageTaskCostInfo = mPerPackageTaskCosts.get(packageName);
         if (packageTaskCostInfo == null) {
             packageTaskCostInfo = new TaskCostInfo(0, 0);
@@ -133,9 +134,11 @@ public class ExecutorServiceTaskCounter {
         }
         ++packageTaskCostInfo.mTaskCount;
         packageTaskCostInfo.mTotalTaskCost += apiCost;
+        packageTaskCostInfo.incrementApiTaskCount(apiType);
     }
 
-    private void removePackageTaskInfo(@NonNull String packageName, int apiCost) {
+    private void removePackageTaskInfo(@NonNull String packageName, @CallStats.CallType int apiType,
+            int apiCost) {
         TaskCostInfo packageTaskCostInfo = mPerPackageTaskCosts.get(packageName);
         if (packageTaskCostInfo == null) {
             Log.e(TAG, "There are no tasks to remove from the queue for package: " + packageName);
@@ -143,6 +146,7 @@ public class ExecutorServiceTaskCounter {
         }
         --packageTaskCostInfo.mTaskCount;
         packageTaskCostInfo.mTotalTaskCost -= apiCost;
+        packageTaskCostInfo.decrementApiTaskCount(apiType);
         if (packageTaskCostInfo.mTaskCount <= 0 || packageTaskCostInfo.mTotalTaskCost <= 0) {
             mPerPackageTaskCosts.remove(packageName);
         }
@@ -154,10 +158,32 @@ public class ExecutorServiceTaskCounter {
     public static final class TaskCostInfo {
         public int mTaskCount;
         public int mTotalTaskCost;
+        /**
+         * A map of {@link CallStats.CallType} -> api task count currently on task queue.
+         */
+        private final ArrayMap<Integer, Integer> mPerApiTaskCounts = new ArrayMap<>();
 
         TaskCostInfo(int taskCount, int totalTaskCost) {
             mTaskCount = taskCount;
             mTotalTaskCost = totalTaskCost;
+        }
+
+        public int getApiTaskCount(@CallStats.CallType int apiType) {
+            return mPerApiTaskCounts.getOrDefault(apiType, 0);
+        }
+
+        private void incrementApiTaskCount(@CallStats.CallType int apiType) {
+            mPerApiTaskCounts.put(apiType, mPerApiTaskCounts.getOrDefault(apiType, 0) + 1);
+        }
+
+        private void decrementApiTaskCount(@CallStats.CallType int apiType) {
+            int taskCount = mPerApiTaskCounts.getOrDefault(apiType, 0);
+            --taskCount;
+            if (taskCount <= 0) {
+                mPerApiTaskCounts.remove(apiType);
+            } else {
+                mPerApiTaskCounts.put(apiType, taskCount);
+            }
         }
     }
 }
