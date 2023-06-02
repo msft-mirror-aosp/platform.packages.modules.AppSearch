@@ -86,6 +86,8 @@ public class FrameworkAppSearchConfigTest {
                 IcingOptionsConfig.DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR);
         assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(
                 IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP);
+        assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT);
     }
 
     @Test
@@ -592,6 +594,9 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_USE_PERSISTENT_HASHMAP,
                 Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+                Integer.toString(1001), false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
         assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(15);
@@ -602,6 +607,7 @@ public class FrameworkAppSearchConfigTest {
         assertThat(appSearchConfig.getUseReadOnlySearch()).isEqualTo(false);
         assertThat(appSearchConfig.getUsePreMappingWithFileBackedVector()).isEqualTo(true);
         assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(true);
+        assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(1001);
     }
 
     @Test
@@ -627,6 +633,9 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_USE_PERSISTENT_HASHMAP,
                 Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+                Integer.toString(1001), false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
@@ -652,6 +661,9 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_USE_PERSISTENT_HASHMAP,
                 Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+                Integer.toString(1002), false);
 
         assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(25);
         assertThat(appSearchConfig.getIndexMergeSize()).isEqualTo(2000);
@@ -661,6 +673,7 @@ public class FrameworkAppSearchConfigTest {
         assertThat(appSearchConfig.getUseReadOnlySearch()).isEqualTo(true);
         assertThat(appSearchConfig.getUsePreMappingWithFileBackedVector()).isEqualTo(false);
         assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(false);
+        assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(1002);
     }
 
     @Test
@@ -741,5 +754,8 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getUsePersistentHashMap());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getMaxPageBytesLimit());
     }
 }

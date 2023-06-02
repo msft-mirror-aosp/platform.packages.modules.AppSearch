@@ -59,11 +59,16 @@ public class DefaultIcingOptionsConfig implements IcingOptionsConfig {
 
     @Override
     public boolean getUsePreMappingWithFileBackedVector() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean getUsePersistentHashMap() {
         return true;
+    }
+
+    @Override
+    public int getMaxPageBytesLimit() {
+        return DEFAULT_MAX_PAGE_BYTES_LIMIT;
     }
 }
