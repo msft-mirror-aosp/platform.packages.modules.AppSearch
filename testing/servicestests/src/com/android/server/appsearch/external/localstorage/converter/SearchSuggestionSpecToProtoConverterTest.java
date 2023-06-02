@@ -68,7 +68,6 @@ public class SearchSuggestionSpecToProtoConverterTest {
                 .containsExactly("package$database/typeA", "package$database/typeB");
         assertThat(proto.getNamespaceFiltersList())
                 .containsExactly("package$database/namespace1", "package$database/namespace2");
-
         assertThat(proto.getDocumentUriFiltersList())
                 .containsExactly(
                         NamespaceDocumentUriGroup.newBuilder()
