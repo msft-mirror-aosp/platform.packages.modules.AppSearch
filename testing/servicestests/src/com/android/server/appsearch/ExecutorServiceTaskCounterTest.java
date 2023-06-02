@@ -26,7 +26,84 @@ import org.junit.Test;
 
 public class ExecutorServiceTaskCounterTest {
     @Test
-    public void testAddTaskToQueue() {
+    public void testAddTaskToQueue_addOk() {
+        ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
+                ExecutorManager.createDefaultExecutorService());
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
+                100, 0.9f,
+                "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
+        String pkgName = "pkgName";
+
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(5);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(40);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(99);
+
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(4);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).mTaskCount)
+                .isEqualTo(4);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).mTotalTaskCost)
+                .isEqualTo(90);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).getApiTaskCount(
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(2);
+    }
+
+    @Test
+    public void testAddTaskToQueue_exceedsPerPackageCapacity_cannotAddTask() {
+        ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
+                ExecutorManager.createDefaultExecutorService());
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
+                100, 0.9f,
+                "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
+        String pkgName = "pkgName";
+
+        // Cannot add task with cost that exceeds the per-package capacity.
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_SET_SCHEMA)).isFalse();
+        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(0);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName))
+                .isNull();
+
+        // Add some tasks to fill up the task queue
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(4);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).mTotalTaskCost)
+                .isEqualTo(90);
+
+        // Can no longer add tasks once per-package capacity is full.
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName,
+                CallStats.CALL_TYPE_SEARCH)).isFalse();
+        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(4);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).mTaskCount)
+                .isEqualTo(4);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).mTotalTaskCost)
+                .isEqualTo(90);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).getApiTaskCount(
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName).getApiTaskCount(
+                CallStats.CALL_TYPE_SEARCH)).isEqualTo(0);
+    }
+
+    @Test
+    public void testAddTaskToQueue_otherPackageExceedsPerPackageCapacity_canAddTask() {
         ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
                 ExecutorManager.createDefaultExecutorService());
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
@@ -35,13 +112,7 @@ public class ExecutorServiceTaskCounterTest {
         String pkgName1 = "pkgName1";
         String pkgName2 = "pkgName2";
 
-        // Cannot add task with cost that exceeds the per-package capacity.
-        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
-                CallStats.CALL_TYPE_SET_SCHEMA)).isFalse();
-        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(0);
-        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1))
-                .isNull();
-
+        // Add some tasks to fill up pkgName1 capacity
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
@@ -50,22 +121,10 @@ public class ExecutorServiceTaskCounterTest {
                 CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
-        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(4);
-        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTaskCount)
-                .isEqualTo(4);
         assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTotalTaskCost)
                 .isEqualTo(90);
 
-        // Can no longer add tasks once per-package capacity is full.
-        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
-                CallStats.CALL_TYPE_SEARCH)).isFalse();
-        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(4);
-        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTaskCount)
-                .isEqualTo(4);
-        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTotalTaskCost)
-                .isEqualTo(90);
-
-        // Adding task to different package is ok
+        // Adding task to pkgName2 is ok
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
                 CallStats.CALL_TYPE_SEARCH)).isTrue();
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
@@ -79,8 +138,49 @@ public class ExecutorServiceTaskCounterTest {
                 .isEqualTo(2);
         assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTotalTaskCost)
                 .isEqualTo(6);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_SEARCH)).isEqualTo(0);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(1);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).getApiTaskCount(
+                CallStats.CALL_TYPE_SEARCH)).isEqualTo(1);
+    }
 
-        // Can no longer add task once API costs exceeds total capacity
+    @Test
+    public void testAddTaskToQueue_exceedsTotalCapacity_cannotAddTask() {
+        ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
+                ExecutorManager.createDefaultExecutorService());
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
+                100, 0.9f,
+                "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
+        String pkgName1 = "pkgName1";
+        String pkgName2 = "pkgName2";
+
+        // Add some tasks to fill up task queue capacity
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
+                CallStats.CALL_TYPE_SEARCH)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTotalTaskCost)
+                .isEqualTo(90);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTotalTaskCost)
+                .isEqualTo(6);
+
+        // Can no longer add to either package once API costs exceeds total capacity
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isFalse();
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS)).isFalse();
         assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(6);
@@ -92,10 +192,20 @@ public class ExecutorServiceTaskCounterTest {
                 .isEqualTo(2);
         assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTotalTaskCost)
                 .isEqualTo(6);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_SEARCH)).isEqualTo(0);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(1);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).getApiTaskCount(
+                CallStats.CALL_TYPE_SEARCH)).isEqualTo(1);
     }
 
     @Test
-    public void testRemoveTaskFromQueue() {
+    public void testRemoveTaskFromQueue_removeOk() {
         ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
                 ExecutorManager.createDefaultExecutorService());
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
@@ -104,6 +214,7 @@ public class ExecutorServiceTaskCounterTest {
         String pkgName1 = "pkgName1";
         String pkgName2 = "pkgName2";
 
+        // Add some tasks to fill up the task queue
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
@@ -117,12 +228,8 @@ public class ExecutorServiceTaskCounterTest {
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
                 CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
         assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(6);
-        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTaskCount)
-                .isEqualTo(3);
         assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTotalTaskCost)
                 .isEqualTo(50);
-        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTaskCount)
-                .isEqualTo(3);
         assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTotalTaskCost)
                 .isEqualTo(50);
 
@@ -141,6 +248,57 @@ public class ExecutorServiceTaskCounterTest {
                 .isEqualTo(2);
         assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTotalTaskCost)
                 .isEqualTo(10);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(1);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(0);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).getApiTaskCount(
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(0);
+    }
+
+    @Test
+    public void testCanAddMoreTasksAfterQueueClearsUp() {
+        ExecutorServiceTaskCounter executorTaskCounter = new ExecutorServiceTaskCounter(
+                ExecutorManager.createDefaultExecutorService());
+        AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
+                100, 0.9f,
+                "localPutDocuments:5;localGetDocuments:40;localSetSchema:99");
+        String pkgName1 = "pkgName1";
+        String pkgName2 = "pkgName2";
+
+        // Add some tasks to fill up the task queue
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isTrue();
+        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(6);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTotalTaskCost)
+                .isEqualTo(50);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTotalTaskCost)
+                .isEqualTo(50);
+
+        // Remove some tasks to clear up the queue
+        executorTaskCounter.removeTaskFromQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_PUT_DOCUMENTS);
+        executorTaskCounter.removeTaskFromQueue(rateLimitConfig, pkgName1,
+                CallStats.CALL_TYPE_GET_DOCUMENTS);
+        executorTaskCounter.removeTaskFromQueue(rateLimitConfig, pkgName2,
+                CallStats.CALL_TYPE_GET_DOCUMENTS);
+        assertThat(executorTaskCounter.getTaskQueueSize()).isEqualTo(3);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).mTotalTaskCost)
+                .isEqualTo(5);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTotalTaskCost)
+                .isEqualTo(10);
 
         // Can add more tasks now that queue has cleared up a little
         assertThat(executorTaskCounter.addTaskToQueue(rateLimitConfig, pkgName2,
@@ -154,5 +312,13 @@ public class ExecutorServiceTaskCounterTest {
                 .isEqualTo(3);
         assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).mTotalTaskCost)
                 .isEqualTo(50);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(1);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName1).getApiTaskCount(
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(0);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).getApiTaskCount(
+                CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(2);
+        assertThat(executorTaskCounter.getPerPackageTaskCosts().get(pkgName2).getApiTaskCount(
+                CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(1);
     }
 }
