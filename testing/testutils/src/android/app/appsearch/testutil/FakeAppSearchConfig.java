@@ -195,6 +195,12 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
         return IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP;
     }
 
+    @Override
+    public int getMaxPageBytesLimit() {
+        throwIfClosed();
+        return IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT;
+    }
+
     private void throwIfClosed() {
         if (mIsClosed.get()) {
             throw new IllegalStateException("Trying to use a closed AppSearchConfig instance.");
