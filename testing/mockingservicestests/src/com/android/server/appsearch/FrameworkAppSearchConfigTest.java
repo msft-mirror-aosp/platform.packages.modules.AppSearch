@@ -88,6 +88,23 @@ public class FrameworkAppSearchConfigTest {
                 IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP);
         assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(
                 IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT);
+        assertThat(appSearchConfig.getCachedRateLimitEnabled()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_ENABLED);
+        AppSearchRateLimitConfig rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+        // Check that rate limit api costs are set to default
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENT)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NEXT_PAGE)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
     }
 
     @Test
@@ -677,6 +694,66 @@ public class FrameworkAppSearchConfigTest {
     }
 
     @Test
+    public void testCustomizedValueOverride_rateLimitConfig() {
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        assertThat(appSearchConfig.getCachedRateLimitEnabled()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_ENABLED);
+        AppSearchRateLimitConfig rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+
+        // Don't update rateLimitConfig when rateLimitEnabled=false.
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(false),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(12345),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.78f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localPutDocuments:5;localGetDocuments:11;localSetSchema:99",
+                false);
+
+        assertThat(appSearchConfig.getCachedRateLimitEnabled()).isFalse();
+        // RateLimitConfig still retains original value
+        rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+
+        // RateLimitConfig should update once rate limiting is enabled
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+
+        assertThat(appSearchConfig.getCachedRateLimitEnabled()).isTrue();
+        rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(12345);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (12345 * 0.78));
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(5);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(11);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(99);
+        // Unset API costs still equal the default
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NAMESPACES)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+    }
+
+    @Test
     public void testNotUsable_afterClose() {
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
@@ -757,5 +834,11 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getMaxPageBytesLimit());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getCachedRateLimitEnabled());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getCachedRateLimitConfig());
     }
 }
