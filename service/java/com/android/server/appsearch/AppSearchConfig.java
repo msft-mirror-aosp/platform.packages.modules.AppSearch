@@ -51,8 +51,29 @@ public interface AppSearchConfig extends AutoCloseable, IcingOptionsConfig, Limi
     int DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS = 0;
     // Cached API Call Stats is disabled by default
     int DEFAULT_API_CALL_STATS_LIMIT = 0;
+    boolean DEFAULT_RATE_LIMIT_ENABLED = false;
+    /**
+     * This defines the task queue's total capacity for rate limiting.
+     */
+    int DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY = Integer.MAX_VALUE;
+    /**
+     * This defines the per-package capacity for rate limiting as a percentage of the total
+     * capacity.
+     */
+    float DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE = 1;
+    /**
+     * This defines API costs used for AppSearch's task queue rate limit.
+     *
+     * <p>Each entry in the string should follow the format 'api_name:integer_cost', and each entry
+     * should be separated by a semi-colon. API names should follow the string definitions in
+     * {@link com.android.server.appsearch.external.localstorage.stats.CallStats}.
+     *
+     * <p>e.g. A valid string: "localPutDocuments:5;localSearch:1;localSetSchema:10"
+     */
+    String DEFAULT_RATE_LIMIT_API_COSTS_STRING = "";
 
     boolean DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH = true;
+    boolean DEFAULT_USE_FIXED_EXECUTOR_SERVICE = true;
 
     /** Returns cached value for minTimeIntervalBetweenSamplesMillis. */
     long getCachedMinTimeIntervalBetweenSamplesMillis();
@@ -148,6 +169,16 @@ public interface AppSearchConfig extends AutoCloseable, IcingOptionsConfig, Limi
      * Returns the cached denylist.
      */
     Denylist getCachedDenylist();
+
+    /**
+     * Returns whether to enable AppSearch rate limiting.
+     */
+    boolean getCachedRateLimitEnabled();
+
+    /**
+     * Returns the cached {@link AppSearchRateLimitConfig}.
+     */
+    AppSearchRateLimitConfig getCachedRateLimitConfig();
 
     /**
      * Closes this {@link AppSearchConfig}.
