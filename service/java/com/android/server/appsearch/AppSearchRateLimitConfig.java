@@ -21,6 +21,7 @@ import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Log;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 
 import java.util.Map;
@@ -53,6 +54,9 @@ import java.util.Objects;
  * cost of incoming API call > task queue per-package capacity.
  */
 public final class AppSearchRateLimitConfig {
+    @VisibleForTesting
+    public static final int DEFAULT_API_COST = 1;
+
     /**
      * Creates an instance of {@link AppSearchRateLimitConfig}.
      *
@@ -72,7 +76,7 @@ public final class AppSearchRateLimitConfig {
         Objects.requireNonNull(apiCostsString);
         Map<Integer, Integer> apiCostsMap = createApiCostsMap(apiCostsString);
         return new AppSearchRateLimitConfig(totalCapacity, perPackageCapacityPercentage,
-                apiCostsMap);
+                apiCostsString, apiCostsMap);
     }
 
     // Truncated as logging tag is allowed to be at most 23 characters.
@@ -81,18 +85,45 @@ public final class AppSearchRateLimitConfig {
     private static final String API_ENTRY_DELIMITER = ";";
     private static final String API_COST_DELIMITER = ":";
 
-    private static final int DEFAULT_API_COST = 1;
-
     private final int mTaskQueueTotalCapacity;
     private final int mTaskQueuePerPackageCapacity;
+    private final String mApiCostsString;
     // Mapping of @CallStats.CallType -> cost
     private final Map<Integer, Integer> mTaskQueueApiCosts;
 
     private AppSearchRateLimitConfig(int totalCapacity, float perPackageCapacityPercentage,
-            @NonNull Map<Integer, Integer> apiCostsMap) {
+            @NonNull String apiCostsString, @NonNull Map<Integer, Integer> apiCostsMap) {
         mTaskQueueTotalCapacity = totalCapacity;
         mTaskQueuePerPackageCapacity = (int) (totalCapacity * perPackageCapacityPercentage);
+        mApiCostsString = Objects.requireNonNull(apiCostsString);
         mTaskQueueApiCosts = Objects.requireNonNull(apiCostsMap);
+    }
+
+    /**
+     * Returns an AppSearchRateLimitConfig instance given the input capacities and ApiCosts.
+     * This may be the same instance if there are no changes in these configs.
+     *
+     * @param totalCapacity                configures total cost of tasks that AppSearch can accept
+     *                                     onto its task queue from all packages.
+     * @param perPackageCapacityPercentage configures total cost of tasks that AppSearch can accept
+     *                                     onto its task queue from a single calling package, as a
+     *                                     percentage of totalCapacity.
+     * @param apiCostsString               configures costs for each {@link CallStats.CallType}. The
+     *                                     string should use API_ENTRY_DELIMITER (';') to separate
+     *                                     entries, with each entry defined by the string API name
+     *                                     followed by API_COST_DELIMITER (':').
+     *                                     e.g. "putDocument:5;query:1;setSchema:10"
+     */
+    public AppSearchRateLimitConfig rebuildIfNecessary(int totalCapacity,
+            float perPackageCapacityPercentage, @NonNull String apiCostsString) {
+        int perPackageCapacity = (int) (totalCapacity * perPackageCapacityPercentage);
+        if (totalCapacity != mTaskQueueTotalCapacity
+                || perPackageCapacity != mTaskQueuePerPackageCapacity
+                || !Objects.equals(apiCostsString, mApiCostsString)) {
+            return AppSearchRateLimitConfig.create(totalCapacity, perPackageCapacityPercentage,
+                    apiCostsString);
+        }
+        return this;
     }
 
     /**

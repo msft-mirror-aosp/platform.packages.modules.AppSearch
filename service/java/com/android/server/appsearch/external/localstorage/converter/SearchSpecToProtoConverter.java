@@ -344,7 +344,9 @@ public final class SearchSpecToProtoConverter {
                                         .setNumToSnippet(mSearchSpec.getSnippetCount())
                                         .setNumMatchesPerProperty(
                                                 mSearchSpec.getSnippetCountPerProperty())
-                                        .setMaxWindowUtf32Length(mSearchSpec.getMaxSnippetSize()));
+                                        .setMaxWindowUtf32Length(mSearchSpec.getMaxSnippetSize()))
+                        .setNumTotalBytesPerPageThreshold(
+                                mIcingOptionsConfig.getMaxPageBytesLimit());
         JoinSpec joinSpec = mSearchSpec.getJoinSpec();
         if (joinSpec != null) {
             resultSpecBuilder.setMaxJoinedChildrenPerParentToReturn(

@@ -20,8 +20,9 @@ import android.annotation.NonNull;
 import android.os.UserHandle;
 import android.util.ArrayMap;
 
-import com.android.server.appsearch.AppSearchEnvironmentFactory;
 import com.android.internal.annotations.GuardedBy;
+import com.android.server.appsearch.AppSearchEnvironmentFactory;
+import com.android.server.appsearch.FrameworkAppSearchConfig;
 
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -33,6 +34,7 @@ import java.util.concurrent.TimeUnit;
  * Manages executors within AppSearch.
  *
  * <p>This class is thread-safe.
+ *
  * @hide
  */
 public class ExecutorManager {
@@ -41,24 +43,38 @@ public class ExecutorManager {
      * class's public API.
      */
     @GuardedBy("mPerUserExecutorsLocked")
-    private final Map<UserHandle, ExecutorService> mPerUserExecutorsLocked = new ArrayMap<>();
+    private final Map<UserHandle, ExecutorServiceTaskCounter> mPerUserExecutorsLocked =
+            new ArrayMap<>();
 
     /**
      * Creates a new {@link ExecutorService} with default settings for use in AppSearch.
      *
-     * <p>The default settings are to use as many threads as there are CPUs and to allow the pool
-     * to shrink to 1.
+     * <p>The default settings are to use as many threads as there are CPUs. The core pool size is
+     * 1 if cached executors should be used, or also the CPU number if fixed executors should be
+     * used.
      */
     @NonNull
     public static ExecutorService createDefaultExecutorService() {
-        return AppSearchEnvironmentFactory.getEnvironmentInstance()
-          .createExecutorService(
-              /*corePoolSize=*/ 1,
-              /*maxConcurrency=*/ Runtime.getRuntime().availableProcessors(),
-              /*keepAliveTime=*/ 60L,
-              /*unit=*/ TimeUnit.SECONDS,
-              /*workQueue=*/ new LinkedBlockingQueue<>(),
-              /*priority=*/ 0); // priority is unused.
+        boolean useFixedExecutorService = FrameworkAppSearchConfig.getUseFixedExecutorService();
+        int corePoolSize = useFixedExecutorService ? Runtime.getRuntime().availableProcessors() : 1;
+        long keepAliveTime = useFixedExecutorService ? 0L : 60L;
+
+        return AppSearchEnvironmentFactory.getEnvironmentInstance().createExecutorService(
+                /*corePoolSize=*/ corePoolSize,
+                /*maxConcurrency=*/ Runtime.getRuntime().availableProcessors(),
+                /*keepAliveTime=*/ keepAliveTime,
+                /*unit=*/ TimeUnit.SECONDS,
+                /*workQueue=*/ new LinkedBlockingQueue<>(),
+                /*priority=*/ 0); // priority is unused.
+    }
+
+    /**
+     * Creates a new {@link ExecutorServiceTaskCounter} with default settings.
+     */
+    @NonNull
+    private static ExecutorServiceTaskCounter createDefaultExecutorServiceTaskCounter() {
+        ExecutorService executorService = createDefaultExecutorService();
+        return new ExecutorServiceTaskCounter(executorService);
     }
 
     /**
@@ -70,13 +86,28 @@ public class ExecutorManager {
     @NonNull
     public Executor getOrCreateUserExecutor(@NonNull UserHandle userHandle) {
         synchronized (mPerUserExecutorsLocked) {
-            ExecutorService executor = mPerUserExecutorsLocked.get(userHandle);
-            if (executor == null) {
-                executor = ExecutorManager.createDefaultExecutorService();
-                mPerUserExecutorsLocked.put(userHandle, executor);
-            }
-            return executor;
+            ExecutorServiceTaskCounter executorHelper = getOrCreateUserExecutorTaskCounterLocked(
+                    userHandle);
+            return executorHelper.getExecutorService();
         }
+    }
+
+    /**
+     * Gets the executor service task counter for the given user, creating it if it does not exist.
+     *
+     * <p>You are responsible for making sure not to call this for locked users. The executor will
+     * be created without problems but most operations on locked users will fail.
+     */
+    @NonNull
+    @GuardedBy("mPerUserExecutorsLocked")
+    private ExecutorServiceTaskCounter getOrCreateUserExecutorTaskCounterLocked(
+            @NonNull UserHandle userHandle) {
+        ExecutorServiceTaskCounter executorTaskCounter = mPerUserExecutorsLocked.get(userHandle);
+        if (executorTaskCounter == null) {
+            executorTaskCounter = ExecutorManager.createDefaultExecutorServiceTaskCounter();
+            mPerUserExecutorsLocked.put(userHandle, executorTaskCounter);
+        }
+        return executorTaskCounter;
     }
 
     /**
@@ -85,9 +116,13 @@ public class ExecutorManager {
      */
     public void shutDownAndRemoveUserExecutor(@NonNull UserHandle userHandle)
             throws InterruptedException {
-        ExecutorService executor;
+        ExecutorServiceTaskCounter executorTaskCounter;
+        ExecutorService executor = null;
         synchronized (mPerUserExecutorsLocked) {
-            executor = mPerUserExecutorsLocked.remove(userHandle);
+            executorTaskCounter = mPerUserExecutorsLocked.remove(userHandle);
+            if (executorTaskCounter != null) {
+                executor = executorTaskCounter.getExecutorService();
+            }
         }
         if (executor != null) {
             executor.shutdown();
