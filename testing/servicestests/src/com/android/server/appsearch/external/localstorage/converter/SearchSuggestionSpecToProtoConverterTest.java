@@ -24,7 +24,6 @@ import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.icing.proto.NamespaceDocumentUriGroup;
 import com.android.server.appsearch.icing.proto.SchemaTypeConfigProto;
 import com.android.server.appsearch.icing.proto.SuggestionSpecProto;
-import com.android.server.appsearch.icing.proto.TypePropertyMask;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -69,6 +68,7 @@ public class SearchSuggestionSpecToProtoConverterTest {
                 .containsExactly("package$database/typeA", "package$database/typeB");
         assertThat(proto.getNamespaceFiltersList())
                 .containsExactly("package$database/namespace1", "package$database/namespace2");
+
         assertThat(proto.getDocumentUriFiltersList())
                 .containsExactly(
                         NamespaceDocumentUriGroup.newBuilder()

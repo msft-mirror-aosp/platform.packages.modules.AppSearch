@@ -21,7 +21,8 @@ import com.google.android.icing.proto.IcingSearchEngineOptions;
 
 /**
  * An interface exposing the optional config flags in {@link IcingSearchEngineOptions} used to
- * instantiate {@link com.google.android.icing.IcingSearchEngine}.
+ * instantiate {@link com.google.android.icing.IcingSearchEngine}, as well as other additional
+ * config flags for IcingSearchEngine.
  */
 public interface IcingOptionsConfig {
     // Defaults from IcingSearchEngineOptions proto
@@ -38,6 +39,10 @@ public interface IcingOptionsConfig {
      * previously-hardcoded document compression level in Icing (which is 3).
      */
     int DEFAULT_COMPRESSION_LEVEL = 3;
+
+    boolean DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR = false;
+
+    boolean DEFAULT_USE_PERSISTENT_HASH_MAP = false;
 
     /**
      * The maximum allowable token length. All tokens in excess of this size will be truncated to
@@ -97,4 +102,32 @@ public interface IcingOptionsConfig {
      * has a joinable property, or depends on a type with a joinable property.
      */
     boolean getAllowCircularSchemaDefinitions();
+
+    /**
+     * Flag for {@link com.google.android.icing.proto.SearchSpecProto}.
+     *
+     * <p>Whether to use the read-only implementation of IcingSearchEngine::Search.
+     *
+     * <p>The read-only version enables multiple queries to be performed concurrently as it only
+     * acquires the read lock at IcingSearchEngine's level. Finer-grained locks are implemented
+     * around code paths that write changes to Icing during Search.
+     */
+    boolean getUseReadOnlySearch();
+
+    /**
+     * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
+     *
+     * <p>Whether or not to pre-map the potential memory region used by the PersistentHashMap. This
+     * will avoid the need to re-map the mmapping used by PersistentHashMap whenever the underlying
+     * storage grows.
+     */
+    boolean getUsePreMappingWithFileBackedVector();
+
+    /**
+     * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
+     *
+     * <p>Whether or not to use the PersistentHashMap in the QualifiedIdTypeJoinableIndex. If false,
+     * we will use the old IcingDynamicTrie to store key value pairs.
+     */
+    boolean getUsePersistentHashMap();
 }
