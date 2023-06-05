@@ -57,6 +57,9 @@ java_defaults {
         "framework-configinfrastructure",
         "framework-statsd.stubs.module_lib",
     ],
+    optimize: {
+      proguard_flags_files: ["proguard.flags"],
+    },
     defaults: [
         "framework-system-server-module-defaults",
         "framework-system-server-module-optimize-defaults",
