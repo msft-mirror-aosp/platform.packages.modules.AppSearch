@@ -73,7 +73,7 @@ public interface AppSearchConfig extends AutoCloseable, IcingOptionsConfig, Limi
     String DEFAULT_RATE_LIMIT_API_COSTS_STRING = "";
 
     boolean DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH = true;
-    boolean DEFAULT_USE_FIXED_EXECUTOR_SERVICE = true;
+    boolean DEFAULT_USE_FIXED_EXECUTOR_SERVICE = false;
 
     /** Returns cached value for minTimeIntervalBetweenSamplesMillis. */
     long getCachedMinTimeIntervalBetweenSamplesMillis();
