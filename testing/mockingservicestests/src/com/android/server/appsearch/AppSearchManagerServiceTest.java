@@ -79,7 +79,6 @@ import com.android.server.LocalManagerRegistry;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
-import com.android.server.appsearch.stats.PlatformLogger;
 import com.android.server.usage.StorageStatsManagerLocal;
 
 import libcore.io.IoBridge;
@@ -130,7 +129,7 @@ public class AppSearchManagerServiceTest {
     private UiAutomation mUiAutomation;
     private IAppSearchManager.Stub mAppSearchManagerServiceStub;
     private AppSearchUserInstance mUserInstance;
-    private PlatformLogger mPlatformLogger;
+    private AppSearchInternalLogger mPlatformLogger;
 
     @Before
     public void setUp() throws Exception {
