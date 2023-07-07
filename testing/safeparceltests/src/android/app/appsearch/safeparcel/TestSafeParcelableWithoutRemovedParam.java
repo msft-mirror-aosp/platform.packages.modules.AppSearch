@@ -13,20 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package android.app.appsearch.safeparcel;
 
-/**
- * Implements {@link SafeParcelable} and implements some default methods defined by {@link
- * android.os.Parcelable}.
- *
- * @hide
- */
-// Include the SafeParcel source code directly in AppSearch until it gets officially open-sourced.
-public abstract class AbstractSafeParcelable implements SafeParcelable {
-    /** @hide */
-    @Override
-    public final int describeContents() {
-        return 0;
+import android.os.Parcel;
+
+@SafeParcelable.Class(creator = "TestSafeParcelableWithoutRemovedParamCreator")
+public class TestSafeParcelableWithoutRemovedParam extends AbstractSafeParcelable {
+
+    public static final Creator<TestSafeParcelableWithoutRemovedParam> CREATOR =
+            new TestSafeParcelableWithoutRemovedParamCreator();
+
+    @Constructor
+    public TestSafeParcelableWithoutRemovedParam(@Param(id = 1) String oldVal) {
+        oldField = oldVal;
     }
+
+    @Override
+    public void writeToParcel(Parcel out, int flags) {
+        TestSafeParcelableWithoutRemovedParamCreator.writeToParcel(this, out, flags);
+    }
+
+    @Field(id = 1, defaultValue = "1")
+    public final String oldField;
 }
