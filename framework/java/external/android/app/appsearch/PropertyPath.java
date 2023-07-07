@@ -40,7 +40,6 @@ import java.util.Objects;
  * not necessarily refer to a valid path in the database.
  *
  * @see SearchResult.MatchInfo
- * @hide
  */
 public class PropertyPath implements Iterable<PropertyPath.PathSegment> {
     private final List<PathSegment> mPathList;
@@ -253,7 +252,7 @@ public class PropertyPath implements Iterable<PropertyPath.PathSegment> {
          * @param propertyName the name of the property
          * @param propertyIndex the index into the property
          * @return A new PathSegment
-         * @throws an {@link IllegalArgumentException} if the property name or index is invalid.
+         * @throws IllegalArgumentException if the property name or index is invalid.
          */
         @NonNull
         public static PathSegment create(@NonNull String propertyName, int propertyIndex) {
@@ -297,7 +296,9 @@ public class PropertyPath implements Iterable<PropertyPath.PathSegment> {
             mPropertyIndex = propertyIndex;
         }
 
-        /** @return the property name */
+        /**
+         * @return the property name
+         */
         @NonNull
         public String getPropertyName() {
             return mPropertyName;
