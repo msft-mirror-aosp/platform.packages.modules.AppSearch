@@ -27,6 +27,7 @@ import android.net.Uri;
 import android.os.CancellationSignal;
 import android.provider.ContactsContract;
 import android.util.Log;
+import android.util.Slog;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
@@ -127,7 +128,7 @@ public final class ContactsIndexerUserInstance {
         Objects.requireNonNull(executorService);
 
         AppSearchHelper appSearchHelper = AppSearchHelper.createAppSearchHelper(context,
-                executorService);
+                executorService, contactsIndexerConfig);
         ContactsIndexerUserInstance indexer = new ContactsIndexerUserInstance(context,
                 contactsDir, appSearchHelper, contactsIndexerConfig, executorService);
         indexer.loadSettingsAsync();
@@ -192,8 +193,8 @@ public final class ContactsIndexerUserInstance {
         }
         mContext.getContentResolver().unregisterContentObserver(mContactsObserver);
 
-        ContactsIndexerMaintenanceService.cancelFullUpdateJob(mContext,
-                mContext.getUser().getIdentifier());
+        ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(mContext,
+                mContext.getUser());
         synchronized (mSingleThreadedExecutor) {
             mSingleThreadedExecutor.shutdown();
         }
@@ -218,18 +219,28 @@ public final class ContactsIndexerUserInstance {
      * Performs a one-time sync of CP2 contacts into AppSearch.
      *
      * <p>This handles the scenario where this contacts indexer instance has been started for the
-     * current device user for the first time. The full-update job which syncs all CP2 contacts
-     * is scheduled to run when the device is idle and its battery is not low. It can take several
-     * minutes or hours for these constraints to be met. Additionally, the delta-update job which
-     * runs on each CP2 change notification is designed to sync only the changed contacts because
-     * the user might be actively using the device at that time.
-     * Schedules a one-off full update job to sync all CP2 contacts when the device is idle.
+     * current device user for the first time or the background full update job is not scheduled.
+     * The full-update job which syncs all CP2 contacts is scheduled to run when the device is idle
+     * and its battery is not low. It can take several minutes or hours for these constraints to be
+     * met. Additionally, the delta-update job which runs on each CP2 change notification is
+     * designed to sync only the changed contacts because the user might be actively using the
+     * device at that time.
      *
-     * <p>Schedules the initial full-update job, as well as syncs a configurable number of CP2
-     * contacts into the AppSearch Person corpus so that it's nominally functional.
+     * <p>Schedules a one-off full update job to sync all CP2 contacts when the device is idle.
+     * Also syncs a configurable number of CP2 contacts into the AppSearch Person corpus so that
+     * it's nominally functional.
      */
     private void doCp2SyncFirstRun() {
-        if (mSettings.getLastFullUpdateTimestampMillis() != 0) {
+        // If this is not the first run of contacts indexer (lastFullUpdateTimestampMillis is not 0)
+        // for the given user and a full update job is scheduled, this means that contacts indexer
+        // has been running recently and contacts should be up to date. The initial sync can be
+        // skipped in this case.
+        // If the job is not scheduled but lastFullUpdateTimestampMillis is not 0, the contacts
+        // indexer was disabled before. We need to reschedule the job and run a limited delta update
+        // to bring latest contact change in AppSearch right away, after it is re-enabled.
+        if (mSettings.getLastFullUpdateTimestampMillis() != 0 &&
+                ContactsIndexerMaintenanceService.isFullUpdateJobScheduled(mContext,
+                mContext.getUser().getIdentifier())) {
             return;
         }
         ContactsIndexerMaintenanceService.scheduleFullUpdateJob(mContext,
@@ -591,7 +602,16 @@ public final class ContactsIndexerUserInstance {
                 Log.w(TAG, "Executor is shutdown, not executing task");
                 return;
             }
-            mSingleThreadedExecutor.execute(command);
+            mSingleThreadedExecutor.execute(
+                    () -> {
+                        try {
+                            command.run();
+                        } catch (RuntimeException e) {
+                            Slog.wtf(TAG, "ContactsIndexerUserInstance"
+                                    + ".executeOnSingleThreadedExecutor() failed ", e);
+                        }
+                    }
+            );
         }
     }
 }

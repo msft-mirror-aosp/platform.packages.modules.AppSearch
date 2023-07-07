@@ -453,7 +453,10 @@ public final class PlatformLogger implements AppSearchLogger {
                     stats.getAclCheckLatencyMillis(),
                     stats.getNativeLockAcquisitionLatencyMillis(),
                     stats.getJavaToNativeJniLatencyMillis(),
-                    stats.getNativeToJavaJniLatencyMillis());
+                    stats.getNativeToJavaJniLatencyMillis(),
+                    stats.getJoinType(),
+                    stats.getNumJoinedResultsCurrentPage(),
+                    stats.getJoinLatencyMillis());
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
             // TODO(b/184204720) report hashing error to statsd
             //  We need to set a special value(e.g. 0xFFFFFFFF) for the hashing of the database,
@@ -703,7 +706,7 @@ public final class PlatformLogger implements AppSearchLogger {
             case CallStats.CALL_TYPE_GET_NAMESPACES:
             case CallStats.CALL_TYPE_GET_NEXT_PAGE:
             case CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN:
-            case CallStats.CALL_TYPE_WRITE_QUERY_RESULTS_TO_FILE:
+            case CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE:
             case CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE:
             case CallStats.CALL_TYPE_SEARCH_SUGGESTION:
             case CallStats.CALL_TYPE_REPORT_SYSTEM_USAGE:
@@ -711,6 +714,7 @@ public final class PlatformLogger implements AppSearchLogger {
             case CallStats.CALL_TYPE_GET_STORAGE_INFO:
             case CallStats.CALL_TYPE_REGISTER_OBSERVER_CALLBACK:
             case CallStats.CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK:
+            case CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE:
                 // TODO(b/173532925) Some of them above will have dedicated sampling ratio config
             default:
                 return mConfig.getCachedSamplingIntervalDefault();

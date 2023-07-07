@@ -16,6 +16,8 @@
 
 package android.app.appsearch;
 
+import static android.app.appsearch.AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE;
+import static android.app.appsearch.AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID;
 import static android.app.appsearch.SearchSessionUtil.safeExecute;
 
 import android.annotation.CallbackExecutor;
@@ -126,7 +128,14 @@ public class SearchResults implements Closeable {
                             wrapCallback(executor, callback));
                 }
             } else {
-                mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken,
+                // TODO(b/276349029): Log different join types when they get added.
+                @AppSearchSchema.StringPropertyConfig.JoinableValueType
+                int joinType = JOINABLE_VALUE_TYPE_NONE;
+                if (mSearchSpec.getJoinSpec() != null
+                        && !mSearchSpec.getJoinSpec().getChildPropertyExpression().isEmpty()) {
+                    joinType = JOINABLE_VALUE_TYPE_QUALIFIED_ID;
+                }
+                mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken, joinType,
                         mUserHandle, binderCallStartTimeMillis, wrapCallback(executor, callback));
             }
         } catch (RemoteException e) {
