@@ -108,8 +108,9 @@ public class VisibilityCheckerImplTest {
                 new UnlimitedLimitConfig(),
                 new DefaultIcingOptionsConfig(),
                 /*initStatsBuilder=*/ null,
-                ALWAYS_OPTIMIZE,
-                mVisibilityChecker);
+                mVisibilityChecker,
+                ALWAYS_OPTIMIZE
+        );
         mVisibilityStore = new VisibilityStore(appSearchImpl);
     }
 

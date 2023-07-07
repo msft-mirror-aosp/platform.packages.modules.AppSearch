@@ -34,10 +34,7 @@ import android.util.ArrayMap;
 
 import androidx.test.core.app.ApplicationProvider;
 
-import com.android.server.appsearch.AppSearchConfig;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
-
-import com.google.common.util.concurrent.MoreExecutors;
 
 import org.junit.Before;
 import org.junit.Test;
