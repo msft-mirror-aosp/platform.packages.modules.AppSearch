@@ -18,6 +18,7 @@ package android.app.appsearch.aidl;
 
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchBatchResult;
+import android.app.appsearch.ParcelableUtil;
 import android.app.appsearch.AppSearchResult;
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -47,7 +48,7 @@ public final class AppSearchBatchResultParcel<ValueType> implements Parcelable {
     private AppSearchBatchResultParcel(@NonNull Parcel in) {
         Parcel unmarshallParcel = Parcel.obtain();
         try {
-            byte[] dataBlob = Objects.requireNonNull(in.readBlob());
+            byte[] dataBlob = Objects.requireNonNull(ParcelableUtil.readBlob(in));
             unmarshallParcel.unmarshall(dataBlob, 0, dataBlob.length);
             unmarshallParcel.setDataPosition(0);
             AppSearchBatchResult.Builder<String, ValueType> builder =
@@ -87,7 +88,7 @@ public final class AppSearchBatchResultParcel<ValueType> implements Parcelable {
         } finally {
             data.recycle();
         }
-        dest.writeBlob(bytes);
+        ParcelableUtil.writeBlob(dest, bytes);
     }
 
     /** @hide */
