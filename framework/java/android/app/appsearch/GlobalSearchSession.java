@@ -109,9 +109,9 @@ public class GlobalSearchSession implements Closeable {
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
                                 }
+                            });
+                        }
                     });
-                }
-            });
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -133,18 +133,19 @@ public class GlobalSearchSession implements Closeable {
      * the gets will be handled as failures in an {@link AppSearchBatchResult} object in the
      * callback.
      *
-     * @param packageName the name of the package to get from
+     * @param packageName  the name of the package to get from
      * @param databaseName the name of the database to get from
-     * @param request a request containing a namespace and IDs to get documents for.
-     * @param executor Executor on which to invoke the callback.
-     * @param callback Callback to receive the pending result of performing this operation. The keys
-     *                 of the returned {@link AppSearchBatchResult} are the input IDs. The values
-     *                 are the returned {@link GenericDocument}s on success, or a failed
-     *                 {@link AppSearchResult} otherwise. IDs that are not found will return a
-     *                 failed {@link AppSearchResult} with a result code of
-     *                 {@link AppSearchResult#RESULT_NOT_FOUND}. If an unexpected internal error
-     *                 occurs in the AppSearch service, {@link BatchResultCallback#onSystemError}
-     *                 will be invoked with a {@link Throwable}.
+     * @param request      a request containing a namespace and IDs to get documents for.
+     * @param executor     Executor on which to invoke the callback.
+     * @param callback     Callback to receive the pending result of performing this operation. The
+     *                     keys of the returned {@link AppSearchBatchResult} are the input IDs. The
+     *                     values are the returned {@link GenericDocument}s on success, or a failed
+     *                     {@link AppSearchResult} otherwise. IDs that are not found will return a
+     *                     failed {@link AppSearchResult} with a result code of
+     *                     {@link AppSearchResult#RESULT_NOT_FOUND}. If an unexpected internal error
+     *                     occurs in the AppSearch service,
+     *                     {@link BatchResultCallback#onSystemError} will be invoked with a
+     *                     {@link Throwable}.
      */
     public void getByDocumentId(
             @NonNull String packageName,
@@ -168,7 +169,7 @@ public class GlobalSearchSession implements Closeable {
                     new ArrayList<>(request.getIds()),
                     request.getProjectionsInternal(),
                     mUserHandle,
-                    SystemClock.elapsedRealtime(),
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     SearchSessionUtil.createGetDocumentCallback(executor, callback));
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -190,8 +191,8 @@ public class GlobalSearchSession implements Closeable {
      * SearchResults#getNextPage}.
      *
      * @param queryExpression query string to search.
-     * @param searchSpec spec for setting document filters, adding projection, setting term match
-     *     type, etc.
+     * @param searchSpec      spec for setting document filters, adding projection, setting term
+     *                        match type, etc.
      * @return a {@link SearchResults} object for retrieved matched documents.
      */
     @NonNull
@@ -214,7 +215,7 @@ public class GlobalSearchSession implements Closeable {
      * {@link SearchSpec#RANKING_STRATEGY_SYSTEM_USAGE_COUNT} and
      * {@link SearchSpec#RANKING_STRATEGY_SYSTEM_USAGE_LAST_USED_TIMESTAMP}.
      *
-     * @param request The usage reporting request.
+     * @param request  The usage reporting request.
      * @param executor Executor on which to invoke the callback.
      * @param callback Callback to receive errors. If the operation succeeds, the callback will be
      *                 invoked with an {@link AppSearchResult} whose value is {@code null}. The
@@ -240,6 +241,7 @@ public class GlobalSearchSession implements Closeable {
                     request.getUsageTimestampMillis(),
                     /*systemUsage=*/ true,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -263,11 +265,11 @@ public class GlobalSearchSession implements Closeable {
      * <p>If the requested package/database combination does not exist or the caller has not been
      * granted access to it, then an empty GetSchemaResponse will be returned.
      *
-     * @param packageName the package that owns the requested {@link AppSearchSchema} instances.
+     * @param packageName  the package that owns the requested {@link AppSearchSchema} instances.
      * @param databaseName the database that owns the requested {@link AppSearchSchema} instances.
      * @return The pending {@link GetSchemaResponse} containing the schemas that the caller has
-     *     access to or an empty GetSchemaResponse if the request package and database does not
-     *     exist, has not set a schema or contains no schemas that are accessible to the caller.
+     *         access to or an empty GetSchemaResponse if the request package and database does not
+     *         exist, has not set a schema or contains no schemas that are accessible to the caller.
      */
     // This call hits disk; async API prevents us from treating these calls as properties.
     public void getSchema(
@@ -286,6 +288,7 @@ public class GlobalSearchSession implements Closeable {
                     packageName,
                     databaseName,
                     mUserHandle,
+                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -293,7 +296,7 @@ public class GlobalSearchSession implements Closeable {
                                 AppSearchResult<Bundle> result = resultParcel.getResult();
                                 if (result.isSuccess()) {
                                     GetSchemaResponse response = new GetSchemaResponse(
-                                        Objects.requireNonNull(result.getResultValue()));
+                                            Objects.requireNonNull(result.getResultValue()));
                                     callback.accept(AppSearchResult.newSuccessfulResult(response));
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
@@ -324,9 +327,9 @@ public class GlobalSearchSession implements Closeable {
      * later if {@code targetPackageName} is installed and starts indexing data.
      *
      * @param targetPackageName Package whose changes to monitor
-     * @param spec            Specification of what types of changes to listen for
-     * @param executor        Executor on which to call the {@code observer} callback methods.
-     * @param observer        Callback to trigger when a schema or document changes
+     * @param spec              Specification of what types of changes to listen for
+     * @param executor          Executor on which to call the {@code observer} callback methods.
+     * @param observer          Callback to trigger when a schema or document changes
      * @throws AppSearchException If an unexpected error occurs when trying to register an observer.
      */
     public void registerObserverCallback(
@@ -388,7 +391,8 @@ public class GlobalSearchSession implements Closeable {
                      * change notification delivery. {@link SearchSessionUtil#safeExecute} already
                      * includes a log message. So we just do nothing.
                      */
-                    private void suppressingErrorCallback(@NonNull AppSearchResult<?> unused) {}
+                    private void suppressingErrorCallback(@NonNull AppSearchResult<?> unused) {
+                    }
                 };
             }
 
@@ -401,6 +405,7 @@ public class GlobalSearchSession implements Closeable {
                         targetPackageName,
                         spec.getBundle(),
                         mUserHandle,
+                        /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                         stub);
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();
@@ -462,7 +467,11 @@ public class GlobalSearchSession implements Closeable {
             AppSearchResultParcel<Void> resultParcel;
             try {
                 resultParcel = mService.unregisterObserverCallback(
-                        mCallerAttributionSource, targetPackageName, mUserHandle, stub);
+                        mCallerAttributionSource,
+                        targetPackageName,
+                        mUserHandle,
+                        /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                        stub);
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();
             }

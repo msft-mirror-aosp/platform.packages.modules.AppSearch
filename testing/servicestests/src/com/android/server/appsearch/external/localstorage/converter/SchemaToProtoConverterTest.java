@@ -161,14 +161,15 @@ public class SchemaToProtoConverterTest {
                                         .setJoinableValueType(
                                                 AppSearchSchema.StringPropertyConfig
                                                         .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
-                                        .setDeletionPropagation(true)
                                         .build())
                         .build();
 
         JoinableConfig joinableConfig =
                 JoinableConfig.newBuilder()
                         .setValueType(JoinableConfig.ValueType.Code.QUALIFIED_ID)
-                        .setPropagateDelete(true)
+                        // TODO(b/274157614) change this to be "true" when we can access hidden API
+                        //  in servicestest or we unhide setPropagateDelete in AppSearchSchema.
+                        .setPropagateDelete(false)
                         .build();
 
         SchemaTypeConfigProto expectedAlbumProto =

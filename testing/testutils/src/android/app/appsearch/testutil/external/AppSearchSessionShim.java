@@ -156,6 +156,59 @@ public interface AppSearchSessionShim extends Closeable {
      *       the "subject" property.
      * </ul>
      *
+     * <p>The above description covers the query operators that are supported on all versions of
+     * AppSearch. Additional operators and their required features are described below.
+     *
+     * <p>{@link Features#LIST_FILTER_QUERY_LANGUAGE}: This feature covers the expansion of the
+     * query language to conform to the definition of the list filters language (https://aip
+     * .dev/160). This includes:
+     *
+     * <ul>
+     *   <li>addition of explicit 'AND' and 'NOT' operators
+     *   <li>property restricts are allowed with groupings (ex. "prop:(a OR b)")
+     *   <li>addition of custom functions to control matching
+     * </ul>
+     *
+     * <p>The newly added custom functions covered by this feature are:
+     *
+     * <ul>
+     *   <li>createList(String...)
+     *   <li>search(String, List<String>)
+     *   <li>propertyDefined(String)
+     * </ul>
+     *
+     * <p>createList takes a variable number of strings and returns a list of strings. It is for use
+     * with search.
+     *
+     * <p>search takes a query string that will be parsed according to the supported query language
+     * and an optional list of strings that specify the properties to be restricted to. This exists
+     * as a convenience for multiple property restricts. So, for example, the query `(subject:foo OR
+     * body:foo) (subject:bar OR body:bar)` could be rewritten as `search("foo bar",
+     * createList("subject", "bar"))`.
+     *
+     * <p>propertyDefined takes a string specifying the property of interest and matches all
+     * documents of any type that defines the specified property (ex.
+     * `propertyDefined("sender.name")`). Note that propertyDefined will match so long as the
+     * document's type defines the specified property. It does NOT require that the document
+     * actually hold any values for this property.
+     *
+     * <p>{@link Features#NUMERIC_SEARCH}: This feature covers numeric search expressions. In the
+     * query language, the values of properties that have {@link
+     * AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE} set can be matched with a numeric
+     * search expression (the property, a supported comparator and an integer value). Supported
+     * comparators are <, <=, ==, >= and >.
+     *
+     * <p>Ex. `price < 10` will match all documents that has a numeric value in its price property
+     * that is less than 10.
+     *
+     * <p>{@link Features#VERBATIM_SEARCH}: This feature covers the verbatim string operator
+     * (quotation marks).
+     *
+     * <p>Ex. `"foo/bar" OR baz` will ensure that 'foo/bar' is treated as a single 'verbatim' token.
+     *
+     * <p>The availability of each of these features can be checked by calling {@link
+     * Features#isFeatureSupported} with the desired feature.
+     *
      * <p>Additional search specifications, such as filtering by {@link AppSearchSchema} type or
      * adding projection, can be set by calling the corresponding {@link SearchSpec.Builder} setter.
      *
@@ -203,20 +256,17 @@ public interface AppSearchSessionShim extends Closeable {
      * </ul>
      *
      * <p>Search suggestions with the multiple term {@code suggestionQueryExpression} "org t", the
-     * suggested result will be "org term1" - The last token is completed by the suggested String,
-     * even if it won't return any result.
+     * suggested result will be "org term1" - The last token is completed by the suggested String.
      *
-     * <p>Search suggestions with operators. All operators will be considered as a normal term.
+     * <p>Operators in {@link #search} are supported.
      *
-     * <ul>
-     *   <li>Search suggestions with the {@code suggestionQueryExpression} "term1 OR", the suggested
-     *       result is "term1 org".
-     *   <li>Search suggestions with the {@code suggestionQueryExpression} "term3 OR t", the
-     *       suggested result is "term3 OR term1".
-     *   <li>Search suggestions with the {@code suggestionQueryExpression} "content:t", the
-     *       suggested result is empty. It cannot find a document that contains the term
-     *       "content:t".
-     * </ul>
+     * <p><b>NOTE:</b> Exclusion and Grouped Terms in the last term is not supported.
+     *
+     * <p>example: "apple -f": This Api will throw an {@link
+     * android.app.appsearch.exceptions.AppSearchException} with {@link
+     * AppSearchResult#RESULT_INVALID_ARGUMENT}.
+     *
+     * <p>example: "apple (f)": This Api will return an empty results.
      *
      * <p>Invalid example: All these input {@code suggestionQueryExpression} don't have a valid last
      * token, AppSearch will return an empty result list.
@@ -228,10 +278,6 @@ public interface AppSearchSessionShim extends Closeable {
      *   <li>"f " - Ending in trailing space.
      * </ul>
      *
-     * <p>Property restrict query like "subject:f" is not supported in suggestion API. It will
-     * return suggested String starting with "f" even if the term appears other than "subject"
-     * property.
-     *
      * @param suggestionQueryExpression the non empty query string to search suggestions
      * @param searchSuggestionSpec spec for setting document filters
      * @return The pending result of performing this operation which resolves to a List of {@link
@@ -239,11 +285,6 @@ public interface AppSearchSessionShim extends Closeable {
      *     number of {@link SearchResult} you could get by using that suggestion in {@link #search}.
      * @see #search(String, SearchSpec)
      */
-    // TODO(b/227356108) Change the comment in this API after fix following issues.
-    // 1: support property restrict tokenization, Example: [subject:car] will return ["cart",
-    // "carburetor"] if AppSearch has documents contain those terms.
-    // 2: support multiple terms, Example: [bar f] will return suggestions [bar foo] that could
-    // be used to retrieve documents that contain both terms "bar" and "foo".
     @NonNull
     ListenableFuture<List<SearchSuggestionResult>> searchSuggestionAsync(
             @NonNull String suggestionQueryExpression,
