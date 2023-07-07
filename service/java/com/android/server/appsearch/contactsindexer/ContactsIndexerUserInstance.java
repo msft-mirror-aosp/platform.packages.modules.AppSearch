@@ -27,21 +27,28 @@ import android.net.Uri;
 import android.os.CancellationSignal;
 import android.provider.ContactsContract;
 import android.util.Log;
+import android.util.Slog;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.appsearch.AppSearchEnvironmentFactory;
+import com.android.server.appsearch.AppSearchUserInstance;
 import com.android.server.appsearch.stats.AppSearchStatsLog;
+import com.android.server.appsearch.util.AdbDumpUtil;
+
+import com.google.android.icing.proto.DebugInfoProto;
+import com.google.android.icing.proto.DebugInfoVerbosity;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -104,7 +111,8 @@ public final class ContactsIndexerUserInstance {
         Objects.requireNonNull(contactsDir);
         Objects.requireNonNull(contactsIndexerConfig);
 
-        ExecutorService singleThreadedExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService singleThreadedExecutor = AppSearchEnvironmentFactory
+            .getEnvironmentInstance().createSingleThreadExecutor();
         return createInstance(userContext, contactsDir, contactsIndexerConfig,
                 singleThreadedExecutor);
     }
@@ -120,7 +128,7 @@ public final class ContactsIndexerUserInstance {
         Objects.requireNonNull(executorService);
 
         AppSearchHelper appSearchHelper = AppSearchHelper.createAppSearchHelper(context,
-                executorService);
+                executorService, contactsIndexerConfig);
         ContactsIndexerUserInstance indexer = new ContactsIndexerUserInstance(context,
                 contactsDir, appSearchHelper, contactsIndexerConfig, executorService);
         indexer.loadSettingsAsync();
@@ -185,8 +193,8 @@ public final class ContactsIndexerUserInstance {
         }
         mContext.getContentResolver().unregisterContentObserver(mContactsObserver);
 
-        ContactsIndexerMaintenanceService.cancelFullUpdateJob(mContext,
-                mContext.getUser().getIdentifier());
+        ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(mContext,
+                mContext.getUser());
         synchronized (mSingleThreadedExecutor) {
             mSingleThreadedExecutor.shutdown();
         }
@@ -211,18 +219,28 @@ public final class ContactsIndexerUserInstance {
      * Performs a one-time sync of CP2 contacts into AppSearch.
      *
      * <p>This handles the scenario where this contacts indexer instance has been started for the
-     * current device user for the first time. The full-update job which syncs all CP2 contacts
-     * is scheduled to run when the device is idle and its battery is not low. It can take several
-     * minutes or hours for these constraints to be met. Additionally, the delta-update job which
-     * runs on each CP2 change notification is designed to sync only the changed contacts because
-     * the user might be actively using the device at that time.
-     * Schedules a one-off full update job to sync all CP2 contacts when the device is idle.
+     * current device user for the first time or the background full update job is not scheduled.
+     * The full-update job which syncs all CP2 contacts is scheduled to run when the device is idle
+     * and its battery is not low. It can take several minutes or hours for these constraints to be
+     * met. Additionally, the delta-update job which runs on each CP2 change notification is
+     * designed to sync only the changed contacts because the user might be actively using the
+     * device at that time.
      *
-     * <p>Schedules the initial full-update job, as well as syncs a configurable number of CP2
-     * contacts into the AppSearch Person corpus so that it's nominally functional.
+     * <p>Schedules a one-off full update job to sync all CP2 contacts when the device is idle.
+     * Also syncs a configurable number of CP2 contacts into the AppSearch Person corpus so that
+     * it's nominally functional.
      */
     private void doCp2SyncFirstRun() {
-        if (mSettings.getLastFullUpdateTimestampMillis() != 0) {
+        // If this is not the first run of contacts indexer (lastFullUpdateTimestampMillis is not 0)
+        // for the given user and a full update job is scheduled, this means that contacts indexer
+        // has been running recently and contacts should be up to date. The initial sync can be
+        // skipped in this case.
+        // If the job is not scheduled but lastFullUpdateTimestampMillis is not 0, the contacts
+        // indexer was disabled before. We need to reschedule the job and run a limited delta update
+        // to bring latest contact change in AppSearch right away, after it is re-enabled.
+        if (mSettings.getLastFullUpdateTimestampMillis() != 0 &&
+                ContactsIndexerMaintenanceService.isFullUpdateJobScheduled(mContext,
+                mContext.getUser().getIdentifier())) {
             return;
         }
         ContactsIndexerMaintenanceService.scheduleFullUpdateJob(mContext,
@@ -254,6 +272,23 @@ public final class ContactsIndexerUserInstance {
         });
     }
 
+    /** Dumps the internal state of this {@link ContactsIndexerUserInstance}. */
+    public void dump(@NonNull PrintWriter pw, boolean verbose) {
+        // Those timestamps are not protected by any lock since in ContactsIndexerUserInstance
+        // we only have one thread to handle all the updates. It is possible we might run into
+        // race condition if there is an update running while those numbers are being printed.
+        // This is acceptable though for debug purpose, so still no lock here.
+        pw.println(
+                "last_delta_delete_timestamp: " +
+                        mSettings.getLastDeltaDeleteTimestampMillis() + " ms");
+        pw.println(
+                "last_delta_update_timestamp: " +
+                        mSettings.getLastDeltaUpdateTimestampMillis() + " ms");
+        pw.println(
+                "last_full_update_timestamp: " +
+                        mSettings.getLastFullUpdateTimestampMillis() + " ms");
+    }
+
     @VisibleForTesting
     CompletableFuture<Void> doFullUpdateInternalAsync(
             @Nullable CancellationSignal signal, @NonNull ContactsUpdateStats updateStats) {
@@ -275,11 +310,15 @@ public final class ContactsIndexerUserInstance {
                     // all_contacts_from_AppSearch - all_contacts_from_cp2 =
                     // contacts_needs_to_be_removed_from_AppSearch.
                     appsearchContactIds.removeAll(cp2ContactIds);
-                    if (LogUtil.DEBUG) {
-                        Log.d(TAG, "Performing a full sync (updated:" + cp2ContactIds.size()
+                    // Full update doesn't happen very often. In normal cases, it is scheduled to
+                    // be run every 15-30 days.
+                    // One-off full update can be scheduled if
+                    // 1) during startup, full update has never been run.
+                    // 2) or we get OUT_OF_SPACE from AppSearch.
+                    // So print a message once in 15-30 days should be acceptable.
+                    Log.i(TAG, "Performing a full sync (updated:" + cp2ContactIds.size()
                                 + ", deleted:" + appsearchContactIds.size()
                                 + ") of CP2 contacts in AppSearch");
-                    }
                     return mContactsIndexerImpl.updatePersonCorpusAsync(/*wantedContactIds=*/
                             cp2ContactIds, /*unwantedContactIds=*/ appsearchContactIds,
                             updateStats);
@@ -563,7 +602,16 @@ public final class ContactsIndexerUserInstance {
                 Log.w(TAG, "Executor is shutdown, not executing task");
                 return;
             }
-            mSingleThreadedExecutor.execute(command);
+            mSingleThreadedExecutor.execute(
+                    () -> {
+                        try {
+                            command.run();
+                        } catch (RuntimeException e) {
+                            Slog.wtf(TAG, "ContactsIndexerUserInstance"
+                                    + ".executeOnSingleThreadedExecutor() failed ", e);
+                        }
+                    }
+            );
         }
     }
 }
