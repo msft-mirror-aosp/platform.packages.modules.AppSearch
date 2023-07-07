@@ -24,7 +24,6 @@ import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.icing.proto.NamespaceDocumentUriGroup;
 import com.android.server.appsearch.icing.proto.SchemaTypeConfigProto;
 import com.android.server.appsearch.icing.proto.SuggestionSpecProto;
-import com.android.server.appsearch.icing.proto.TypePropertyMask;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;

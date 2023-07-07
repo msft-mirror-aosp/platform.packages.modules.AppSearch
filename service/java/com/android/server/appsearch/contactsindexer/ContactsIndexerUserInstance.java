@@ -27,6 +27,7 @@ import android.net.Uri;
 import android.os.CancellationSignal;
 import android.provider.ContactsContract;
 import android.util.Log;
+import android.util.Slog;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
@@ -601,7 +602,16 @@ public final class ContactsIndexerUserInstance {
                 Log.w(TAG, "Executor is shutdown, not executing task");
                 return;
             }
-            mSingleThreadedExecutor.execute(command);
+            mSingleThreadedExecutor.execute(
+                    () -> {
+                        try {
+                            command.run();
+                        } catch (RuntimeException e) {
+                            Slog.wtf(TAG, "ContactsIndexerUserInstance"
+                                    + ".executeOnSingleThreadedExecutor() failed ", e);
+                        }
+                    }
+            );
         }
     }
 }

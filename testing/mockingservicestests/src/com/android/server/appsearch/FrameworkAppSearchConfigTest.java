@@ -23,6 +23,7 @@ import static com.google.common.truth.Truth.assertThat;
 import android.provider.DeviceConfig;
 
 import com.android.modules.utils.testing.TestableDeviceConfig;
+import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 
 import org.junit.Assert;
@@ -54,11 +55,11 @@ public class FrameworkAppSearchConfigTest {
                 AppSearchConfig.DEFAULT_SAMPLING_INTERVAL);
         assertThat(appSearchConfig.getCachedSamplingIntervalForOptimizeStats()).isEqualTo(
                 AppSearchConfig.DEFAULT_SAMPLING_INTERVAL);
-        assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentSizeBytes()).isEqualTo(
+        assertThat(appSearchConfig.getMaxDocumentSizeBytes()).isEqualTo(
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES);
-        assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentCount()).isEqualTo(
+        assertThat(appSearchConfig.getMaxDocumentCount()).isEqualTo(
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT);
-        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(
+        assertThat(appSearchConfig.getMaxSuggestionCount()).isEqualTo(
                 AppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT);
         assertThat(appSearchConfig.getCachedBytesOptimizeThreshold()).isEqualTo(
                 AppSearchConfig.DEFAULT_BYTES_OPTIMIZE_THRESHOLD);
@@ -68,6 +69,42 @@ public class FrameworkAppSearchConfigTest {
                 AppSearchConfig.DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD);
         assertThat(appSearchConfig.getCachedApiCallStatsLimit()).isEqualTo(
                 AppSearchConfig.DEFAULT_API_CALL_STATS_LIMIT);
+        assertThat(appSearchConfig.getCachedDenylist()).isEqualTo(Denylist.EMPTY_INSTANCE);
+        assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_MAX_TOKEN_LENGTH);
+        assertThat(appSearchConfig.getIndexMergeSize()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_INDEX_MERGE_SIZE);
+        assertThat(appSearchConfig.getDocumentStoreNamespaceIdFingerprint()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT);
+        assertThat(appSearchConfig.getOptimizeRebuildIndexThreshold()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD);
+        assertThat(appSearchConfig.getCompressionLevel()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL);
+        assertThat(appSearchConfig.getUseReadOnlySearch()).isEqualTo(
+                AppSearchConfig.DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH);
+        assertThat(appSearchConfig.getUsePreMappingWithFileBackedVector()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR);
+        assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP);
+        assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(
+                IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT);
+        assertThat(appSearchConfig.getCachedRateLimitEnabled()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_ENABLED);
+        AppSearchRateLimitConfig rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+        // Check that rate limit api costs are set to default
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENT)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NEXT_PAGE)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
     }
 
     @Test
@@ -358,7 +395,7 @@ public class FrameworkAppSearchConfigTest {
     }
 
     @Test
-    public void testCustomizedValue_maxDocument() {
+    public void testCustomizedValueOverride_maxDocument() {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
                 Integer.toString(2001),
@@ -369,8 +406,21 @@ public class FrameworkAppSearchConfigTest {
                 /*makeDefault=*/ false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
-        assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentSizeBytes()).isEqualTo(2001);
-        assertThat(appSearchConfig.getCachedLimitConfigMaxDocumentCount()).isEqualTo(2002);
+        assertThat(appSearchConfig.getMaxDocumentSizeBytes()).isEqualTo(2001);
+        assertThat(appSearchConfig.getMaxDocumentCount()).isEqualTo(2002);
+
+        // Override
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
+                Integer.toString(1775),
+                /*makeDefault=*/ false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
+                Integer.toString(1776),
+                /*makeDefault=*/ false);
+
+        assertThat(appSearchConfig.getMaxDocumentSizeBytes()).isEqualTo(1775);
+        assertThat(appSearchConfig.getMaxDocumentCount()).isEqualTo(1776);
     }
 
     @Test
@@ -381,7 +431,7 @@ public class FrameworkAppSearchConfigTest {
                 /*makeDefault=*/ false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
-        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(2003);
+        assertThat(appSearchConfig.getMaxSuggestionCount()).isEqualTo(2003);
 
         // Override
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
@@ -389,7 +439,7 @@ public class FrameworkAppSearchConfigTest {
                 Integer.toString(1777),
                 /*makeDefault=*/ false);
 
-        assertThat(appSearchConfig.getCachedLimitConfigMaxSuggestionCount()).isEqualTo(1777);
+        assertThat(appSearchConfig.getMaxSuggestionCount()).isEqualTo(1777);
     }
 
     @Test
@@ -539,6 +589,171 @@ public class FrameworkAppSearchConfigTest {
     }
 
     @Test
+    public void testCustomizedValue_icingOptions() {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_TOKEN_LENGTH, Integer.toString(15), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_INDEX_MERGE_SIZE, Integer.toString(1000), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD,
+                Float.toString(0.5f), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_COMPRESSION_LEVEL, Integer.toString(5), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_READ_ONLY_SEARCH,
+                Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_PERSISTENT_HASHMAP,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+                Integer.toString(1001), false);
+
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(15);
+        assertThat(appSearchConfig.getIndexMergeSize()).isEqualTo(1000);
+        assertThat(appSearchConfig.getDocumentStoreNamespaceIdFingerprint()).isEqualTo(true);
+        assertThat(appSearchConfig.getOptimizeRebuildIndexThreshold()).isEqualTo(0.5f);
+        assertThat(appSearchConfig.getCompressionLevel()).isEqualTo(5);
+        assertThat(appSearchConfig.getUseReadOnlySearch()).isEqualTo(false);
+        assertThat(appSearchConfig.getUsePreMappingWithFileBackedVector()).isEqualTo(true);
+        assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(true);
+        assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(1001);
+    }
+
+    @Test
+    public void testCustomizedValueOverride_icingOptions() {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_TOKEN_LENGTH, Integer.toString(15), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_INDEX_MERGE_SIZE, Integer.toString(1000), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD,
+                Float.toString(0.5f), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_COMPRESSION_LEVEL, Integer.toString(5), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_READ_ONLY_SEARCH,
+                Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_PERSISTENT_HASHMAP,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+                Integer.toString(1001), false);
+
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+
+        // Override
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_TOKEN_LENGTH, Integer.toString(25), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_INDEX_MERGE_SIZE, Integer.toString(2000), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT,
+                Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD,
+                Float.toString(0.9f), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_COMPRESSION_LEVEL, Integer.toString(9), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_READ_ONLY_SEARCH,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
+                Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_USE_PERSISTENT_HASHMAP,
+                Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+                Integer.toString(1002), false);
+
+        assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(25);
+        assertThat(appSearchConfig.getIndexMergeSize()).isEqualTo(2000);
+        assertThat(appSearchConfig.getDocumentStoreNamespaceIdFingerprint()).isEqualTo(false);
+        assertThat(appSearchConfig.getOptimizeRebuildIndexThreshold()).isEqualTo(0.9f);
+        assertThat(appSearchConfig.getCompressionLevel()).isEqualTo(9);
+        assertThat(appSearchConfig.getUseReadOnlySearch()).isEqualTo(true);
+        assertThat(appSearchConfig.getUsePreMappingWithFileBackedVector()).isEqualTo(false);
+        assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(false);
+        assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(1002);
+    }
+
+    @Test
+    public void testCustomizedValueOverride_rateLimitConfig() {
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        assertThat(appSearchConfig.getCachedRateLimitEnabled()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_ENABLED);
+        AppSearchRateLimitConfig rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+
+        // Don't update rateLimitConfig when rateLimitEnabled=false.
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(false),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(12345),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.78f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localPutDocuments:5;localGetDocuments:11;localSetSchema:99",
+                false);
+
+        assertThat(appSearchConfig.getCachedRateLimitEnabled()).isFalse();
+        // RateLimitConfig still retains original value
+        rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
+                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+
+        // RateLimitConfig should update once rate limiting is enabled
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+
+        assertThat(appSearchConfig.getCachedRateLimitEnabled()).isTrue();
+        rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
+        assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(12345);
+        assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
+                (int) (12345 * 0.78));
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(5);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(11);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(99);
+        // Unset API costs still equal the default
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NAMESPACES)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(
+                AppSearchRateLimitConfig.DEFAULT_API_COST);
+    }
+
+    @Test
     public void testNotUsable_afterClose() {
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
@@ -570,6 +785,15 @@ public class FrameworkAppSearchConfigTest {
                 () -> appSearchConfig.getCachedSamplingIntervalForOptimizeStats());
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
+                () -> appSearchConfig.getMaxDocumentSizeBytes());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getMaxDocumentCount());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getMaxSuggestionCount());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
                 () -> appSearchConfig.getCachedBytesOptimizeThreshold());
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
@@ -583,5 +807,38 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getCachedDenylist());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getMaxTokenLength());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getIndexMergeSize());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getDocumentStoreNamespaceIdFingerprint());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getOptimizeRebuildIndexThreshold());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getCompressionLevel());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getUseReadOnlySearch());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getUsePreMappingWithFileBackedVector());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getUsePersistentHashMap());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getMaxPageBytesLimit());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getCachedRateLimitEnabled());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getCachedRateLimitConfig());
     }
 }

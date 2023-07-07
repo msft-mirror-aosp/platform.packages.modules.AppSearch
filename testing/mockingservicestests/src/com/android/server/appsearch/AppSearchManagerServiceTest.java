@@ -15,6 +15,7 @@
  */
 package com.android.server.appsearch;
 
+import static android.Manifest.permission.READ_GLOBAL_APP_SEARCH_DATA;
 import static android.system.OsConstants.O_RDONLY;
 import static android.system.OsConstants.O_WRONLY;
 
@@ -22,10 +23,14 @@ import static com.android.internal.util.ConcurrentUtils.DIRECT_EXECUTOR;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -46,11 +51,13 @@ import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.stats.SchemaMigrationStats;
+import android.content.AttributionSource;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.ParcelFileDescriptor;
@@ -58,14 +65,15 @@ import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.provider.DeviceConfig;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
+import com.android.modules.utils.testing.ExtendedMockitoRule;
 import com.android.modules.utils.testing.StaticMockFixture;
-import com.android.modules.utils.testing.StaticMockFixtureRule;
 import com.android.modules.utils.testing.TestableDeviceConfig;
 import com.android.server.LocalManagerRegistry;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
@@ -92,51 +100,26 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 public class AppSearchManagerServiceTest {
-    private static final class TestResultCallback extends IAppSearchResultCallback.Stub {
-        private final SettableFuture<AppSearchResult<Void>> future = SettableFuture.create();
-
-        @Override
-        public void onResult(AppSearchResultParcel appSearchResultParcel) throws RemoteException {
-            future.set(appSearchResultParcel.getResult());
-        }
-
-        public AppSearchResult<Void> get() throws InterruptedException, ExecutionException {
-            return future.get();
-        }
-    }
-
-    private static final class TestBatchResultErrorCallback extends
-            IAppSearchBatchResultCallback.Stub {
-        private final SettableFuture<AppSearchResult<Void>> future = SettableFuture.create();
-
-        @Override
-        public void onResult(AppSearchBatchResultParcel appSearchBatchResultParcel)
-                throws RemoteException {
-            future.set(null);
-        }
-
-        @Override
-        public void onSystemError(AppSearchResultParcel appSearchResultParcel)
-                throws RemoteException {
-            future.set(appSearchResultParcel.getResult());
-        }
-
-        public AppSearchResult<Void> get() throws InterruptedException, ExecutionException {
-            return future.get();
-        }
-    }
-
     private static final String DATABASE_NAME = "databaseName";
     private static final String NAMESPACE = "namespace";
     private static final String ID = "ID";
+    private static final Bundle SEARCH_SPEC_BUNDLE = new Bundle();
     // Mostly guarantees the logged estimated binder latency is positive and doesn't overflow
     private static final long BINDER_CALL_START_TIME = SystemClock.elapsedRealtime() - 1;
+    // TODO(b/279047435): use actual AppSearchResult.RESULT_DENIED constant after it's unhidden
+    private static final int RESULT_DENIED = 9;
+
+    // TODO(b/279047435): use actual AppSearchResult.RESULT_RATE_LIMITED constant after it's
+    //  unhidden
+    private static final int RESULT_RATE_LIMITED = 10;
+    private static final String FOO_PACKAGE_NAME = "foo";
 
     private final MockServiceManager mMockServiceManager = new MockServiceManager();
 
     @Rule
-    public StaticMockFixtureRule mStaticMockFixtureRule = new StaticMockFixtureRule(
-            mMockServiceManager, new TestableDeviceConfig());
+    public ExtendedMockitoRule mExtendedMockitoRule = new ExtendedMockitoRule.Builder()
+            .addStaticMockFixtures(()-> mMockServiceManager, TestableDeviceConfig::new)
+            .build();
 
     @Rule
     public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
@@ -155,14 +138,30 @@ public class AppSearchManagerServiceTest {
         mUserHandle = context.getUser();
         mUiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         mContext = new ContextWrapper(context) {
+            // Mock-able package manager for testing
+            final PackageManager mPackageManager = spy(context.getPackageManager());
+
             @Override
-            public Intent registerReceiverForAllUsers(
-                    @Nullable BroadcastReceiver receiver,
-                    @NonNull IntentFilter filter,
-                    @Nullable String broadcastPermission,
+            public Intent registerReceiverForAllUsers(@Nullable BroadcastReceiver receiver,
+                    @NonNull IntentFilter filter, @Nullable String broadcastPermission,
                     @Nullable Handler scheduler) {
                 // Do nothing
                 return null;
+            }
+
+            @Override
+            public Context createContextAsUser(UserHandle user, int flags) {
+                return new ContextWrapper(super.createContextAsUser(user, flags)) {
+                    @Override
+                    public PackageManager getPackageManager() {
+                        return mPackageManager;
+                    }
+                };
+            }
+
+            @Override
+            public PackageManager getPackageManager() {
+                return mPackageManager;
             }
         };
 
@@ -177,19 +176,24 @@ public class AppSearchManagerServiceTest {
                     }
                 });
 
+        // In AppSearchManagerService, FrameworkAppSearchConfig is a singleton. During tearDown for
+        // TestableDeviceConfig, the propertyChangedListeners are removed. Therefore we have to set
+        // a fresh config with listeners in setUp in order to set new properties.
+        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        AppSearchEnvironmentFactory.setConfigInstanceForTest(appSearchConfig);
+
         // Create the user instance and add a spy to its logger to verify logging
         // Note, SimpleTestLogger does not suffice for our tests since CallStats logging in
         // AppSearchManagerService occurs in a separate thread. With a spy, we can verify with a
         // timeout to catch asynchronous calls.
-        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
         mUserInstance = AppSearchUserInstanceManager.getInstance().getOrCreateUserInstance(mContext,
                 mUserHandle, appSearchConfig);
         mPlatformLogger = spy(mUserInstance.getLogger());
         mUserInstance.setLoggerForTest(mPlatformLogger);
 
         // Start the service
-        mAppSearchManagerService = new AppSearchManagerService(
-                mContext, new AppSearchModule.Lifecycle(mContext));
+        mAppSearchManagerService = new AppSearchManagerService(mContext,
+                new AppSearchModule.Lifecycle(mContext));
         mAppSearchManagerService.onStart();
         mAppSearchManagerServiceStub = mMockServiceManager.mStubCaptor.getValue();
         assertThat(mAppSearchManagerServiceStub).isNotNull();
@@ -209,23 +213,14 @@ public class AppSearchManagerServiceTest {
         mUiAutomation.adoptShellPermissionIdentity(Manifest.permission.INTERACT_ACROSS_USERS_FULL);
         try {
             // Try to initial a AppSearchSession for secondary user, but the calling package doesn't
-            // exists in there.
-            SettableFuture<AppSearchResult<Void>> future = SettableFuture.create();
-            mAppSearchManagerServiceStub.initialize(
-                    mContext.getAttributionSource(),
-                    testTargetUser,
-                    System.currentTimeMillis(),
-                    new IAppSearchResultCallback.Stub() {
-                        @Override
-                        public void onResult(AppSearchResultParcel resultParcel) {
-                            future.set(resultParcel.getResult());
-                        }
-                    });
-            assertThat(future.get().isSuccess()).isFalse();
-            assertThat(future.get().getErrorMessage()).contains(
+            // exist in there.
+            TestResultCallback callback = new TestResultCallback();
+            mAppSearchManagerServiceStub.initialize(mContext.getAttributionSource(), testTargetUser,
+                    System.currentTimeMillis(), callback);
+            assertThat(callback.get().isSuccess()).isFalse();
+            assertThat(callback.get().getErrorMessage()).contains(
                     "SecurityException: Package: " + mContext.getPackageName()
-                            + " haven't installed for user "
-                            + testTargetUser.getIdentifier());
+                            + " haven't installed for user " + testTargetUser.getIdentifier());
         } finally {
             mUiAutomation.dropShellPermissionIdentity();
         }
@@ -267,9 +262,8 @@ public class AppSearchManagerServiceTest {
     public void testGlobalGetSchemaStatsLogging() throws Exception {
         String otherPackageName = mContext.getPackageName() + "foo";
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getSchema(mContext.getAttributionSource(),
-                otherPackageName, DATABASE_NAME, mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+        mAppSearchManagerServiceStub.getSchema(mContext.getAttributionSource(), otherPackageName,
+                DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME, callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_GLOBAL_GET_SCHEMA);
@@ -313,10 +307,10 @@ public class AppSearchManagerServiceTest {
     public void testGlobalGetDocumentsStatsLogging() throws Exception {
         String otherPackageName = mContext.getPackageName() + "foo";
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
-        mAppSearchManagerServiceStub.getDocuments(mContext.getAttributionSource(),
-                otherPackageName, DATABASE_NAME, NAMESPACE,
-                /* ids= */ Collections.emptyList(), /* typePropertyPaths= */ Collections.emptyMap(),
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+        mAppSearchManagerServiceStub.getDocuments(mContext.getAttributionSource(), otherPackageName,
+                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(),
+                /* typePropertyPaths= */ Collections.emptyMap(), mUserHandle,
+                BINDER_CALL_START_TIME, callback);
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID);
@@ -398,9 +392,9 @@ public class AppSearchManagerServiceTest {
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_WRONLY);
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.writeQueryResultsToFile(mContext.getAttributionSource(),
-                DATABASE_NAME, new ParcelFileDescriptor(fd),
-                /* queryExpression= */ "", /* searchSpecBundle= */ new Bundle(), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                DATABASE_NAME, new ParcelFileDescriptor(fd), /* queryExpression= */ "",
+                /* searchSpecBundle= */ new Bundle(), mUserHandle, BINDER_CALL_START_TIME,
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE);
@@ -419,8 +413,8 @@ public class AppSearchManagerServiceTest {
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE);
         // putDocumentsFromFile also logs SchemaMigrationStats
-        ArgumentCaptor<SchemaMigrationStats> migrationStatsCaptor =
-                ArgumentCaptor.forClass(SchemaMigrationStats.class);
+        ArgumentCaptor<SchemaMigrationStats> migrationStatsCaptor = ArgumentCaptor.forClass(
+                SchemaMigrationStats.class);
         verify(mPlatformLogger, timeout(1000).times(1)).logStats(migrationStatsCaptor.capture());
         SchemaMigrationStats migrationStats = migrationStatsCaptor.getValue();
         assertThat(migrationStats.getStatusCode()).isEqualTo(AppSearchResult.RESULT_OK);
@@ -584,6 +578,782 @@ public class AppSearchManagerServiceTest {
         verifyCallStats(packageName, /* databaseName= */ null, callType);
     }
 
+    @Test
+    public void testDenylistMatchingCallingPackage() throws Exception {
+        String denylistString =
+                "pkg=com.android.appsearch.mockingservicestests&apis=localSetSchema,"
+                        + "globalGetSchema,localGetSchema,localGetNamespaces,localPutDocuments,"
+                        + "globalGetDocuments,localGetDocuments,localSearch,globalSearch,"
+                        + "globalGetNextPage,localGetNextPage,invalidateNextPageToken,"
+                        + "localWriteSearchResultsToFile,localPutDocumentsFromFile,"
+                        + "localSearchSuggestion,globalReportUsage,localReportUsage,"
+                        + "localRemoveByDocumentId,localRemoveBySearch,localGetStorageInfo,flush,"
+                        + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
+                        + "initialize";
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+        // We expect all local calls (pkg+db) and global calls (pkg only) to be denied since the
+        // denylist denies all api's for our calling package
+        verifyLocalCallsResults(RESULT_DENIED);
+        verifyGlobalCallsResults(RESULT_DENIED);
+    }
+
+    @Test
+    public void testDenylistNonMatchingCallingPackage() throws Exception {
+        String denylistString =
+                "pkg=foo&apis=localSetSchema,globalGetSchema,localGetSchema,localGetNamespaces,"
+                        + "localPutDocuments,globalGetDocuments,localGetDocuments,localSearch,"
+                        + "globalSearch,globalGetNextPage,localGetNextPage,invalidateNextPageToken,"
+                        + "localWriteSearchResultsToFile,localPutDocumentsFromFile,"
+                        + "localSearchSuggestion,globalReportUsage,localReportUsage,"
+                        + "localRemoveByDocumentId,localRemoveBySearch,localGetStorageInfo,flush,"
+                        + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
+                        + "initialize";
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+        // We expect none of the local calls (pkg+db) and global calls (pkg only) to be denied since
+        // the denylist denies all api's for a different calling package
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testDenylistMatchingCallingPackageAndDatabase() throws Exception {
+        String denylistString =
+                "pkg=com.android.appsearch.mockingservicestests&db=databaseName&apis="
+                        + "localSetSchema,globalGetSchema,localGetSchema,localGetNamespaces,"
+                        + "localPutDocuments,globalGetDocuments,localGetDocuments,localSearch,"
+                        + "globalSearch,globalGetNextPage,localGetNextPage,invalidateNextPageToken,"
+                        + "localWriteSearchResultsToFile,localPutDocumentsFromFile,"
+                        + "localSearchSuggestion,globalReportUsage,localReportUsage,"
+                        + "localRemoveByDocumentId,localRemoveBySearch,localGetStorageInfo,flush,"
+                        + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
+                        + "initialize";
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+        // We expect only the local calls (pkg+db) to be denied since the denylist specifies a
+        // package-database name pair
+        verifyLocalCallsResults(RESULT_DENIED);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testDenylistNonMatchingCallingPackageAndDatabase() throws Exception {
+        // This denylist has two entries both of which should not match any of the api calls below
+        // since either the package name or the database name will be different
+        String denylistString =
+                "pkg=foo&db=databaseName&apis=localSetSchema,globalGetSchema,localGetSchema,"
+                        + "localGetNamespaces,localPutDocuments,globalGetDocuments,"
+                        + "localGetDocuments,localSearch,globalSearch,globalGetNextPage,"
+                        + "localGetNextPage,invalidateNextPageToken,localWriteSearchResultsToFile,"
+                        + "localPutDocumentsFromFile,localSearchSuggestion,globalReportUsage,"
+                        + "localReportUsage,localRemoveByDocumentId,localRemoveBySearch,"
+                        + "localGetStorageInfo,flush,globalRegisterObserverCallback,"
+                        + "globalUnregisterObserverCallback,initialize;"
+                        + "pkg=com.android.appsearch.mockingservicestests&db=foo&apis="
+                        + "localSetSchema,globalGetSchema,localGetSchema,localGetNamespaces,"
+                        + "localPutDocuments,globalGetDocuments,localGetDocuments,localSearch,"
+                        + "globalSearch,globalGetNextPage,localGetNextPage,invalidateNextPageToken,"
+                        + "localWriteSearchResultsToFile,localPutDocumentsFromFile,"
+                        + "localSearchSuggestion,globalReportUsage,localReportUsage,"
+                        + "localRemoveByDocumentId,localRemoveBySearch,localGetStorageInfo,flush,"
+                        + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
+                        + "initialize";
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testDenylistMatchingCallingDatabase() throws Exception {
+        String denylistString =
+                "db=databaseName&apis=localSetSchema,globalGetSchema,localGetSchema,"
+                        + "localGetNamespaces,localPutDocuments,globalGetDocuments,"
+                        + "localGetDocuments,localSearch,globalSearch,globalGetNextPage,"
+                        + "localGetNextPage,invalidateNextPageToken,localWriteSearchResultsToFile,"
+                        + "localPutDocumentsFromFile,localSearchSuggestion,globalReportUsage,"
+                        + "localReportUsage,localRemoveByDocumentId,localRemoveBySearch,"
+                        + "localGetStorageInfo,flush,globalRegisterObserverCallback,"
+                        + "globalUnregisterObserverCallback,initialize";
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+
+        verifyLocalCallsResults(RESULT_DENIED);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+
+        // Add mocking to spy'd package manager to return current uid for package foo
+        // This is necessary to pass call verification using a different package name
+        PackageManager spyPackageManager = mContext.getPackageManager();
+        int uid = mContext.getAttributionSource().getUid();
+        doReturn(uid).when(spyPackageManager).getPackageUid(FOO_PACKAGE_NAME, /* flags= */ 0);
+        // Specifically grant permission for report system usage to package foo
+        doReturn(PackageManager.PERMISSION_GRANTED).when(spyPackageManager).checkPermission(
+                READ_GLOBAL_APP_SEARCH_DATA, FOO_PACKAGE_NAME);
+
+        // Change the calling package name used in the helper methods indirectly through a newly
+        // wrapped context
+        Context context = ApplicationProvider.getApplicationContext();
+        mContext = new ContextWrapper(context) {
+            @Override
+            public String getPackageName() {
+                return FOO_PACKAGE_NAME;
+            }
+
+            @Override
+            public AttributionSource getAttributionSource() {
+                return super.getAttributionSource().withPackageName(FOO_PACKAGE_NAME);
+            }
+        };
+
+        // Confirm that we're using a different package name
+        assertThat(mContext.getPackageName()).isEqualTo(FOO_PACKAGE_NAME);
+        assertThat(mContext.getAttributionSource().getPackageName()).isEqualTo(FOO_PACKAGE_NAME);
+
+        verifyLocalCallsResults(RESULT_DENIED);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testDenylistNonMatchingCallingDatabase() throws Exception {
+        String denylistString =
+                "db=foo&apis=localSetSchema,globalGetSchema,localGetSchema,localGetNamespaces,"
+                        + "localPutDocuments,globalGetDocuments,localGetDocuments,localSearch,"
+                        + "globalSearch,globalGetNextPage,localGetNextPage,invalidateNextPageToken,"
+                        + "localWriteSearchResultsToFile,localPutDocumentsFromFile,"
+                        + "localSearchSuggestion,globalReportUsage,localReportUsage,"
+                        + "localRemoveByDocumentId,localRemoveBySearch,localGetStorageInfo,flush,"
+                        + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
+                        + "initialize";
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testDenylistSomeApis() throws Exception {
+        String denylistString =
+                "pkg=com.android.appsearch.mockingservicestests&apis=localSetSchema,localGetSchema,"
+                        + "localGetNamespaces";
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+        // Specified APIs
+        verifySetSchemaResult(RESULT_DENIED);
+        verifyLocalGetSchemaResult(RESULT_DENIED);
+        verifyGetNamespacesResult(RESULT_DENIED);
+        // Everything else
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetSchemaResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyWriteQueryResultsToFileResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsFromFileResult(AppSearchResult.RESULT_OK);
+        verifySearchSuggestionResult(AppSearchResult.RESULT_OK);
+        verifyLocalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyRemoveByDocumentIdResult(AppSearchResult.RESULT_OK);
+        verifyRemoveByQueryResult(AppSearchResult.RESULT_OK);
+        verifyGetStorageInfoResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOff_acceptTasksAndIgnoreCapacities()
+            throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(false),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+
+        // All rate limits should be ignored when rate limit is off
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOn_dropTaskDueToCapacitiesExceeded()
+            throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+
+        // Set Schema call is rejected because of per-package capacity exceeded
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        // Set Schema call is rejected because of total capacity exceeded
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+        // Other calls should be fine
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOn_noTasksDropped() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(1000),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOnToOff() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+
+        // All calls should be fine after switching rate limiting to off
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(false),
+                false);
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitOffToOn() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(false),
+                false);
+        verifyLocalCallsResults(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(5),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+        // Some calls are rejected once rate limiting gets enabled
+        verifyQueryResult(RESULT_RATE_LIMITED);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitChangeToHigherLimit() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+
+        // Only getSchema call should be rejected after setting to higher limit
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(15),
+                false);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+
+        verifySetSchemaResult(AppSearchResult.RESULT_OK);
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    @Test
+    public void testAppSearchRateLimit_rateLimitChangeToLowerLimit() throws Exception {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
+                Boolean.toString(true),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                Integer.toString(10),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.8f),
+                false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                "localSearch:6;localSetSchema:9;localGetSchema:15",
+                false);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+
+        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+
+        // Query call should also get rejected after setting a lower limit
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                Float.toString(0.5f),
+                false);
+        verifyQueryResult(RESULT_RATE_LIMITED);
+        verifySetSchemaResult(RESULT_RATE_LIMITED);
+        verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
+
+        verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
+        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
+        verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
+        verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
+        verifyPersistToDiskResult(AppSearchResult.RESULT_OK);
+        verifyRegisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyUnregisterObserverCallbackResult(AppSearchResult.RESULT_OK);
+        verifyInitializeResult(AppSearchResult.RESULT_OK);
+        verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
+    }
+
+    private void verifyLocalCallsResults(int resultCode) throws Exception {
+        // These APIs are local calls since they specify a database. If the API specifies a target
+        // package, then the target package matches the calling package
+        verifySetSchemaResult(resultCode);
+        verifyLocalGetSchemaResult(resultCode);
+        verifyGetNamespacesResult(resultCode);
+        verifyPutDocumentsResult(resultCode);
+        verifyLocalGetDocumentsResult(resultCode);
+        verifyQueryResult(resultCode);
+        verifyLocalGetNextPageResult(resultCode);
+        verifyWriteQueryResultsToFileResult(resultCode);
+        verifyPutDocumentsFromFileResult(resultCode);
+        verifySearchSuggestionResult(resultCode);
+        verifyLocalReportUsageResult(resultCode);
+        verifyRemoveByDocumentIdResult(resultCode);
+        verifyRemoveByQueryResult(resultCode);
+        verifyGetStorageInfoResult(resultCode);
+    }
+
+    private void verifyGlobalCallsResults(int resultCode) throws Exception {
+        // These APIs are global calls since either they do not specify a database or if they do,
+        // they specify the database along with a target package that does not match the calling
+        // package
+        verifyGlobalGetSchemaResult(resultCode);
+        verifyGlobalGetDocumentsResult(resultCode);
+        verifyGlobalQueryResult(resultCode);
+        verifyGlobalGetNextPageResult(resultCode);
+        verifyInvalidateNextPageTokenResult(resultCode);
+        verifyGlobalReportUsageResult(resultCode);
+        verifyPersistToDiskResult(resultCode);
+        verifyRegisterObserverCallbackResult(resultCode);
+        verifyUnregisterObserverCallbackResult(resultCode);
+        verifyInitializeResult(resultCode);
+    }
+
+    private void verifySetSchemaResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.setSchema(mContext.getAttributionSource(), DATABASE_NAME,
+                /* schemaBundles= */ Collections.emptyList(),
+                /* visibilityBundles= */ Collections.emptyList(), /* forceOverride= */ false,
+                /* schemaVersion= */ 0, mUserHandle, BINDER_CALL_START_TIME,
+                SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_SET_SCHEMA, callback.get());
+    }
+
+    private void verifyLocalGetSchemaResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.getSchema(mContext.getAttributionSource(),
+                mContext.getPackageName(), DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME,
+                callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_SCHEMA, callback.get());
+    }
+
+    private void verifyGlobalGetSchemaResult(int resultCode) throws Exception {
+        String otherPackageName = mContext.getPackageName() + "foo";
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.getSchema(mContext.getAttributionSource(), otherPackageName,
+                DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_GET_SCHEMA, callback.get());
+    }
+
+    private void verifyGetNamespacesResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.getNamespaces(mContext.getAttributionSource(), DATABASE_NAME,
+                mUserHandle, BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_NAMESPACES, callback.get());
+    }
+
+    private void verifyPutDocumentsResult(int resultCode) throws Exception {
+        TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
+        mAppSearchManagerServiceStub.putDocuments(mContext.getAttributionSource(), DATABASE_NAME,
+                new DocumentsParcel(Collections.emptyList()), mUserHandle, BINDER_CALL_START_TIME,
+                callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_PUT_DOCUMENTS, callback.get());
+    }
+
+    private void verifyLocalGetDocumentsResult(int resultCode) throws Exception {
+        TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
+        mAppSearchManagerServiceStub.getDocuments(mContext.getAttributionSource(),
+                mContext.getPackageName(), DATABASE_NAME, NAMESPACE,
+                /* ids= */ Collections.emptyList(), /* typePropertyPaths= */ Collections.emptyMap(),
+                mUserHandle, BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_DOCUMENTS, callback.get());
+    }
+
+    private void verifyGlobalGetDocumentsResult(int resultCode) throws Exception {
+        String otherPackageName = mContext.getPackageName() + "foo";
+        TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
+        mAppSearchManagerServiceStub.getDocuments(mContext.getAttributionSource(), otherPackageName,
+                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(),
+                /* typePropertyPaths= */ Collections.emptyMap(), mUserHandle,
+                BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID, callback.get());
+    }
+
+    private void verifyQueryResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.query(mContext.getAttributionSource(), DATABASE_NAME,
+                /* queryExpression= */ "", SEARCH_SPEC_BUNDLE, mUserHandle, BINDER_CALL_START_TIME,
+                callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_SEARCH, callback.get());
+    }
+
+    private void verifyGlobalQueryResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.globalQuery(mContext.getAttributionSource(),
+                /* queryExpression= */ "", SEARCH_SPEC_BUNDLE, mUserHandle, BINDER_CALL_START_TIME,
+                callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_SEARCH, callback.get());
+    }
+
+    private void verifyLocalGetNextPageResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.getNextPage(mContext.getAttributionSource(), DATABASE_NAME,
+                /* nextPageToken= */ 0,
+                AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
+                BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_NEXT_PAGE, callback.get());
+    }
+
+    private void verifyGlobalGetNextPageResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.getNextPage(mContext.getAttributionSource(),
+                /* databaseName= */ null, /* nextPageToken= */ 0,
+                AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
+                BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE, callback.get());
+    }
+
+    private void verifyInvalidateNextPageTokenResult(int resultCode) throws Exception {
+        mAppSearchManagerServiceStub.invalidateNextPageToken(mContext.getAttributionSource(),
+                /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, /* result= */
+                null);
+    }
+
+    private void verifyWriteQueryResultsToFileResult(int resultCode) throws Exception {
+        File tempFile = mTemporaryFolder.newFile();
+        FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_WRONLY);
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.writeQueryResultsToFile(mContext.getAttributionSource(),
+                DATABASE_NAME, new ParcelFileDescriptor(fd), /* queryExpression= */ "",
+                SEARCH_SPEC_BUNDLE, mUserHandle, BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE,
+                callback.get());
+    }
+
+    private void verifyPutDocumentsFromFileResult(int resultCode) throws Exception {
+        File tempFile = mTemporaryFolder.newFile();
+        FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_RDONLY);
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.putDocumentsFromFile(mContext.getAttributionSource(),
+                DATABASE_NAME, new ParcelFileDescriptor(fd), mUserHandle,
+                /* schemaMigrationStatsBundle= */ new Bundle(),
+                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, callback.get());
+    }
+
+    private void verifySearchSuggestionResult(int resultCode) throws Exception {
+        Bundle searchSuggestionSpecBundle = new Bundle();
+        searchSuggestionSpecBundle.putInt("maximumResultCount", 1);
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.searchSuggestion(mContext.getAttributionSource(),
+                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpecBundle,
+                mUserHandle, BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_SEARCH_SUGGESTION, callback.get());
+    }
+
+    private void verifyLocalReportUsageResult(int resultCode) throws Exception {
+        setUpTestSchema(mContext.getPackageName(), DATABASE_NAME);
+        setUpTestDocument(mContext.getPackageName(), DATABASE_NAME, NAMESPACE, ID);
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.reportUsage(mContext.getAttributionSource(),
+                mContext.getPackageName(), DATABASE_NAME, NAMESPACE, ID,
+                /* usageTimestampMillis= */ 0, /* systemUsage= */ false, mUserHandle,
+                BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_REPORT_USAGE, callback.get());
+        removeTestSchema(mContext.getPackageName(), DATABASE_NAME);
+    }
+
+    private void verifyGlobalReportUsageResult(int resultCode) throws Exception {
+        // Grant system access for global report usage
+        mUiAutomation.adoptShellPermissionIdentity(Manifest.permission.READ_GLOBAL_APP_SEARCH_DATA);
+        try {
+            String otherPackageName = mContext.getPackageName() + "foo";
+            setUpTestSchema(otherPackageName, DATABASE_NAME);
+            setUpTestDocument(otherPackageName, DATABASE_NAME, NAMESPACE, ID);
+            TestResultCallback callback = new TestResultCallback();
+            mAppSearchManagerServiceStub.reportUsage(mContext.getAttributionSource(),
+                    otherPackageName, DATABASE_NAME, NAMESPACE, ID, /* usageTimestampMillis= */ 0,
+                    /* systemUsage= */ true, mUserHandle, BINDER_CALL_START_TIME, callback);
+            verifyCallResult(resultCode, CallStats.CALL_TYPE_REPORT_SYSTEM_USAGE, callback.get());
+            removeTestSchema(otherPackageName, DATABASE_NAME);
+        } finally {
+            mUiAutomation.dropShellPermissionIdentity();
+        }
+    }
+
+    private void verifyRemoveByDocumentIdResult(int resultCode) throws Exception {
+        TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
+        mAppSearchManagerServiceStub.removeByDocumentId(mContext.getAttributionSource(),
+                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
+                BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID, callback.get());
+    }
+
+    private void verifyRemoveByQueryResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.removeByQuery(mContext.getAttributionSource(), DATABASE_NAME,
+                /* queryExpression= */ "", SEARCH_SPEC_BUNDLE, mUserHandle, BINDER_CALL_START_TIME,
+                callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH,
+                callback.get());
+    }
+
+    private void verifyGetStorageInfoResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.getStorageInfo(mContext.getAttributionSource(), DATABASE_NAME,
+                mUserHandle, BINDER_CALL_START_TIME, callback);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_STORAGE_INFO, callback.get());
+    }
+
+    private void verifyPersistToDiskResult(int resultCode) throws Exception {
+        mAppSearchManagerServiceStub.persistToDisk(mContext.getAttributionSource(), mUserHandle,
+                BINDER_CALL_START_TIME);
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_FLUSH, /* result= */ null);
+    }
+
+    private void verifyRegisterObserverCallbackResult(int resultCode) throws Exception {
+        AppSearchResultParcel<Void> resultParcel =
+                mAppSearchManagerServiceStub.registerObserverCallback(
+                        mContext.getAttributionSource(), mContext.getPackageName(),
+                        /* observerSpecBundle= */ new Bundle(), mUserHandle, BINDER_CALL_START_TIME,
+                        new IAppSearchObserverProxy.Stub() {
+                            @Override
+                            public void onSchemaChanged(String packageName, String databaseName,
+                                    List<String> changedSchemaNames) throws RemoteException {
+                            }
+
+                            @Override
+                            public void onDocumentChanged(String packageName, String databaseName,
+                                    String namespace, String schemaName,
+                                    List<String> changedDocumentIds) throws RemoteException {
+                            }
+                        });
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_REGISTER_OBSERVER_CALLBACK,
+                resultParcel.getResult());
+    }
+
+    private void verifyUnregisterObserverCallbackResult(int resultCode) throws Exception {
+        AppSearchResultParcel<Void> resultParcel =
+                mAppSearchManagerServiceStub.unregisterObserverCallback(
+                        mContext.getAttributionSource(), mContext.getPackageName(), mUserHandle,
+                        BINDER_CALL_START_TIME, new IAppSearchObserverProxy.Stub() {
+                            @Override
+                            public void onSchemaChanged(String packageName, String databaseName,
+                                    List<String> changedSchemaNames) throws RemoteException {
+                            }
+
+                            @Override
+                            public void onDocumentChanged(String packageName, String databaseName,
+                                    String namespace, String schemaName,
+                                    List<String> changedDocumentIds) throws RemoteException {
+                            }
+                        });
+        verifyCallResult(resultCode, CallStats.CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK,
+                resultParcel.getResult());
+    }
+
+    private void verifyInitializeResult(int resultCode) throws Exception {
+        TestResultCallback callback = new TestResultCallback();
+        mAppSearchManagerServiceStub.initialize(mContext.getAttributionSource(), mUserHandle,
+                BINDER_CALL_START_TIME, callback);
+        if (resultCode == RESULT_DENIED) {
+            verify(mPlatformLogger, never()).logStats(any(CallStats.class));
+        } else {
+            verifyCallResult(resultCode, CallStats.CALL_TYPE_INITIALIZE, /* result= */ null);
+        }
+        assertThat(callback.get().getResultCode()).isEqualTo(resultCode);
+    }
+
+    private void verifyCallResult(int resultCode, int callType, AppSearchResult<Void> result) {
+        ArgumentCaptor<CallStats> captor = ArgumentCaptor.forClass(CallStats.class);
+        verify(mPlatformLogger, timeout(1000).times(1)).logStats(captor.capture());
+        assertThat(captor.getValue().getCallType()).isEqualTo(callType);
+        assertThat(captor.getValue().getStatusCode()).isEqualTo(resultCode);
+        assertThat(captor.getValue().getEstimatedBinderLatencyMillis()).isGreaterThan(0);
+        clearInvocations(mPlatformLogger);
+        // Not all calls return a result
+        if (result != null) {
+            assertThat(result.getResultCode()).isEqualTo(resultCode);
+        }
+    }
+
     private void setUpTestSchema(String packageName, String databaseName) throws Exception {
         // Insert schema
         List<AppSearchSchema> schemas = Collections.singletonList(
@@ -618,8 +1388,8 @@ public class AppSearchManagerServiceTest {
     }
 
     private static class MockServiceManager implements StaticMockFixture {
-        ArgumentCaptor<IAppSearchManager.Stub> mStubCaptor =
-                ArgumentCaptor.forClass(IAppSearchManager.Stub.class);
+        ArgumentCaptor<IAppSearchManager.Stub> mStubCaptor = ArgumentCaptor.forClass(
+                IAppSearchManager.Stub.class);
 
         @Override
         public StaticMockitoSessionBuilder setUpMockedClasses(
@@ -631,15 +1401,47 @@ public class AppSearchManagerServiceTest {
 
         @Override
         public void setUpMockBehaviors() {
-            ExtendedMockito.doReturn(mock(StorageStatsManagerLocal.class))
-                    .when(() -> LocalManagerRegistry.getManager(StorageStatsManagerLocal.class));
+            ExtendedMockito.doReturn(mock(StorageStatsManagerLocal.class)).when(
+                    () -> LocalManagerRegistry.getManager(StorageStatsManagerLocal.class));
             ExtendedMockito.doNothing().when(
-                    () -> ServiceManager.addService(
-                            anyString(), mStubCaptor.capture(), anyBoolean(), anyInt()));
+                    () -> ServiceManager.addService(anyString(), mStubCaptor.capture(),
+                            anyBoolean(), anyInt()));
         }
 
         @Override
         public void tearDown() {
+        }
+    }
+
+    private static final class TestResultCallback extends IAppSearchResultCallback.Stub {
+        private final SettableFuture<AppSearchResult<Void>> future = SettableFuture.create();
+
+        @Override
+        public void onResult(AppSearchResultParcel appSearchResultParcel) {
+            future.set(appSearchResultParcel.getResult());
+        }
+
+        public AppSearchResult<Void> get() throws InterruptedException, ExecutionException {
+            return future.get();
+        }
+    }
+
+    private static final class TestBatchResultErrorCallback extends
+            IAppSearchBatchResultCallback.Stub {
+        private final SettableFuture<AppSearchResult<Void>> future = SettableFuture.create();
+
+        @Override
+        public void onResult(AppSearchBatchResultParcel appSearchBatchResultParcel) {
+            future.set(null);
+        }
+
+        @Override
+        public void onSystemError(AppSearchResultParcel appSearchResultParcel) {
+            future.set(appSearchResultParcel.getResult());
+        }
+
+        public AppSearchResult<Void> get() throws InterruptedException, ExecutionException {
+            return future.get();
         }
     }
 }

@@ -46,4 +46,29 @@ public class DefaultIcingOptionsConfig implements IcingOptionsConfig {
     public int getCompressionLevel() {
         return DEFAULT_COMPRESSION_LEVEL;
     }
+
+    @Override
+    public boolean getAllowCircularSchemaDefinitions() {
+        return true;
+    }
+
+    @Override
+    public boolean getUseReadOnlySearch() {
+        return true;
+    }
+
+    @Override
+    public boolean getUsePreMappingWithFileBackedVector() {
+        return false;
+    }
+
+    @Override
+    public boolean getUsePersistentHashMap() {
+        return true;
+    }
+
+    @Override
+    public int getMaxPageBytesLimit() {
+        return DEFAULT_MAX_PAGE_BYTES_LIMIT;
+    }
 }

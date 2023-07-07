@@ -672,7 +672,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         try {
             uiAutomation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG);
             maxDocumentCountBeforeTest = FrameworkAppSearchConfig.getInstance(
-                    mSingleThreadedExecutor).getCachedLimitConfigMaxDocumentCount();
+                    mSingleThreadedExecutor).getMaxDocumentCount();
             int totalContactCount = 250;
             int maxDocumentCount = 100;
             // Override the configs in AppSearch. This is hard to be mocked since we are not testing
