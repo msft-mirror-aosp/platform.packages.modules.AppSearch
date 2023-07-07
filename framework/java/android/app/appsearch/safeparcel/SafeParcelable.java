@@ -110,191 +110,189 @@ import android.os.Parcelable;
  * @hide
  */
 public interface SafeParcelable extends Parcelable {
-  // Note: the field name and value are accessed using reflection for backwards compatibility, and
-  // must not be changed.
-  /** @hide */
-  public static final String NULL = "SAFE_PARCELABLE_NULL_STRING";
-
-  /**
-   * This annotates your class and specifies the name of the generated "creator" class for
-   * marshalling/unmarshalling a SafeParcelable to/from a {@link Parcel}. The "creator" class is
-   * generated in the same package as the SafeParcelable class. You can also set "validate" to true,
-   * which will cause the "creator" to invoke the method validateContents() on your class after
-   * constructing an instance.
-   */
-  public @interface Class {
-    /**
-     * Simple name of the generated "creator" class generated in the same package as the
-     * SafeParceable.
-     */
-    String creator();
+    // Note: the field name and value are accessed using reflection for backwards compatibility, and
+    // must not be changed.
+    /** @hide */
+    public static final String NULL = "SAFE_PARCELABLE_NULL_STRING";
 
     /**
-     * When set to true, invokes the validateContents() method in this SafeParcelable object after
-     * constructing a new instance.
+     * This annotates your class and specifies the name of the generated "creator" class for
+     * marshalling/unmarshalling a SafeParcelable to/from a {@link Parcel}. The "creator" class is
+     * generated in the same package as the SafeParcelable class. You can also set "validate" to
+     * true, which will cause the "creator" to invoke the method validateContents() on your class
+     * after constructing an instance.
      */
-    boolean validate() default false;
+    public @interface Class {
+        /**
+         * Simple name of the generated "creator" class generated in the same package as the
+         * SafeParceable.
+         */
+        String creator();
+
+        /**
+         * When set to true, invokes the validateContents() method in this SafeParcelable object
+         * after constructing a new instance.
+         */
+        boolean validate() default false;
+
+        /**
+         * When set to true, it will not write type default values to the Parcel.
+         *
+         * <p>boolean: false byte/char/short/int/long: 0 float: 0.0f double: 0.0 Objects/arrays:
+         * null
+         *
+         * <p>Cannot be used with Field(defaultValue)
+         */
+        boolean doNotParcelTypeDefaultValues() default false;
+    }
+
+    /** Use this annotation on members that you wish to be marshalled in the SafeParcelable. */
+    public @interface Field {
+        /**
+         * Valid values for id are between 1 and 65535. This field id is marshalled into a Parcel.
+         * To maintain backwards compatibility, never reuse old id's. It is okay to no longer use
+         * old id's and add new ones in subsequent versions of a SafeParcelable.
+         */
+        int id();
+
+        /**
+         * This specifies the name of the getter method for retrieving the value of this field. This
+         * must be specified for fields that do not have at least package visibility because the
+         * "creator" class will be unable to access the value when attempting to marshall this
+         * field. The getter method should take no parameters and return the type of this field
+         * (unless overridden by the "type" attribute below).
+         */
+        String getter() default NULL;
+
+        /**
+         * For advanced uses, this specifies the type for the field when marshalling and
+         * unmarshalling by the "creator" class to be something different than the declared type of
+         * the member variable. This is useful if you want to incorporate an object that is not
+         * SafeParcelable (or a system Parcelable object). Be sure to enter the fully qualified name
+         * for the class (i.e., android.os.Bundle and not Bundle). For example,
+         *
+         * <pre>
+         *   &#64;Class(creator="MyAdvancedCreator")
+         *   public class MyAdvancedSafeParcelable implements SafeParcelable {
+         *       public static final Parcelable.Creator&#60;MyAdvancedSafeParcelable&#62; CREATOR =
+         *               new MyAdvancedCreator();
+         *
+         *       &#64;Field(id=1, getter="getObjectAsBundle", type="android.os.Bundle")
+         *       private final MyCustomObject myObject;
+         *
+         *       &#64;Constructor
+         *       MyAdvancedSafeParcelable(
+         *               &#64;Param(id=1) Bundle objectAsBundle) {
+         *           myObject = myConvertFromBundleToObject(objectAsBundle);
+         *       }
+         *
+         *       Bundle getObjectAsBundle() {
+         *           // The code here can convert your custom object to one that can be parcelled.
+         *           return myConvertFromObjectToBundle(myObject);
+         *       }
+         *
+         *       ...
+         *   }
+         * </pre>
+         */
+        String type() default NULL;
+
+        /**
+         * This can be used to specify the default value for primitive types (e.g., boolean, int,
+         * long), primitive type object wrappers (e.g., Boolean, Integer, Long) and String in the
+         * case a value for a field was not explicitly set in the marshalled Parcel. This performs
+         * compile-time checks for the type of the field and inserts the appropriate quotes or
+         * double quotes around strings and chars or removes them completely for booleans and
+         * numbers. To insert a generic string for initializing field, use {@link
+         * #defaultValueUnchecked()}. You can specify at most one of {@link #defaultValue()} or
+         * {@link #defaultValueUnchecked()}. For example,
+         *
+         * <pre>
+         *   &#64;Field(id=2, defaultValue="true")
+         *   boolean myBoolean;
+         *
+         *   &#64;Field(id=3, defaultValue="13")
+         *   Integer myInteger;
+         *
+         *   &#64;Field(id=4, defaultValue="foo")
+         *   String myString;
+         * </pre>
+         */
+        String defaultValue() default NULL;
+
+        /**
+         * This can be used to specify the default value for any object and the string value is
+         * literally added to the generated creator class code unchecked. You can specify at most
+         * one of {@link #defaultValue()} or {@link #defaultValueUnchecked()}. You must fully
+         * qualify any classes you reference within the string. For example,
+         *
+         * <pre>
+         *   &#64;Field(id=2, defaultValueUnchecked="new android.os.Bundle()")
+         *   Bundle myBundle;
+         * </pre>
+         */
+        String defaultValueUnchecked() default NULL;
+    }
 
     /**
-     * When set to true, it will not write type default values to the Parcel.
-     *
-     * boolean: false
-     * byte/char/short/int/long: 0
-     * float: 0.0f
-     * double: 0.0
-     * Objects/arrays: null
-     *
-     * <p>Cannot be used with Field(defaultValue)
+     * There may be exactly one member annotated with VersionField, which represents the version of
+     * this safe parcelable. The attributes are the same as those of {@link Field}. Note you can use
+     * any type you want for your version field, although most people use int's.
      */
-    boolean doNotParcelTypeDefaultValues() default false;
-  }
+    public @interface VersionField {
+        int id();
 
-  /** Use this annotation on members that you wish to be marshalled in the SafeParcelable. */
-  public @interface Field {
-    /**
-     * Valid values for id are between 1 and 65535. This field id is marshalled into a Parcel. To
-     * maintain backwards compatibility, never reuse old id's. It is okay to no longer use old id's
-     * and add new ones in subsequent versions of a SafeParcelable.
-     */
-    int id();
+        String getter() default NULL;
+
+        String type() default NULL;
+    }
 
     /**
-     * This specifies the name of the getter method for retrieving the value of this field. This
-     * must be specified for fields that do not have at least package visibility because the
-     * "creator" class will be unable to access the value when attempting to marshall this field.
-     * The getter method should take no parameters and return the type of this field (unless
-     * overridden by the "type" attribute below).
+     * Use this to indicate the member field that holds whether a field was set or not. The member
+     * field type currently supported is a HashSet&#60;Integer&#62; which is the set of safe
+     * parcelable field id's that have been explicitly set.
+     *
+     * <p>This annotation should also be used to annotate one of the parameters to the constructor
+     * annotated with &#64;Constructor. Note that this annotation should either be present on
+     * exactly one member field and one constructor parameter or left out completely.
      */
-    String getter() default NULL;
+    public @interface Indicator {
+        String getter() default NULL;
+    }
 
     /**
-     * For advanced uses, this specifies the type for the field when marshalling and unmarshalling
-     * by the "creator" class to be something different than the declared type of the member
-     * variable. This is useful if you want to incorporate an object that is not SafeParcelable (or
-     * a system Parcelable object). Be sure to enter the fully qualified name for the class (i.e.,
-     * android.os.Bundle and not Bundle). For example,
-     *
-     * <pre>
-     *   &#64;Class(creator="MyAdvancedCreator")
-     *   public class MyAdvancedSafeParcelable implements SafeParcelable {
-     *       public static final Parcelable.Creator&#60;MyAdvancedSafeParcelable&#62; CREATOR =
-     *               new MyAdvancedCreator();
-     *
-     *       &#64;Field(id=1, getter="getObjectAsBundle", type="android.os.Bundle")
-     *       private final MyCustomObject myObject;
-     *
-     *       &#64;Constructor
-     *       MyAdvancedSafeParcelable(
-     *               &#64;Param(id=1) Bundle objectAsBundle) {
-     *           myObject = myConvertFromBundleToObject(objectAsBundle);
-     *       }
-     *
-     *       Bundle getObjectAsBundle() {
-     *           // The code here can convert your custom object to one that can be parcelled.
-     *           return myConvertFromObjectToBundle(myObject);
-     *       }
-     *
-     *       ...
-     *   }
-     * </pre>
+     * Use this to indicate the constructor that the creator should use. The constructor annotated
+     * with this must be package or public visibility, so that the generated "creator" class can
+     * invoke this.
      */
-    String type() default NULL;
+    public @interface Constructor {}
 
     /**
-     * This can be used to specify the default value for primitive types (e.g., boolean, int, long),
-     * primitive type object wrappers (e.g., Boolean, Integer, Long) and String in the case a value
-     * for a field was not explicitly set in the marshalled Parcel. This performs compile-time
-     * checks for the type of the field and inserts the appropriate quotes or double quotes around
-     * strings and chars or removes them completely for booleans and numbers. To insert a generic
-     * string for initializing field, use {@link #defaultValueUnchecked()}. You can specify at most
-     * one of {@link #defaultValue()} or {@link #defaultValueUnchecked()}. For example,
-     *
-     * <pre>
-     *   &#64;Field(id=2, defaultValue="true")
-     *   boolean myBoolean;
-     *
-     *   &#64;Field(id=3, defaultValue="13")
-     *   Integer myInteger;
-     *
-     *   &#64;Field(id=4, defaultValue="foo")
-     *   String myString;
-     * </pre>
+     * Use this on each parameter passed in to the Constructor to indicate to which field id each
+     * formal parameter corresponds.
      */
-    String defaultValue() default NULL;
+    public @interface Param {
+        int id();
+    }
 
     /**
-     * This can be used to specify the default value for any object and the string value is
-     * literally added to the generated creator class code unchecked. You can specify at most one of
-     * {@link #defaultValue()} or {@link #defaultValueUnchecked()}. You must fully qualify any
-     * classes you reference within the string. For example,
-     *
-     * <pre>
-     *   &#64;Field(id=2, defaultValueUnchecked="new android.os.Bundle()")
-     *   Bundle myBundle;
-     * </pre>
+     * Use this on a parameter passed in to the Constructor to indicate that a removed field should
+     * be read on construction. If the field is not present when read, the default value will be
+     * used instead.
      */
-    String defaultValueUnchecked() default NULL;
-  }
+    public @interface RemovedParam {
+        int id();
 
-  /**
-   * There may be exactly one member annotated with VersionField, which represents the version of
-   * this safe parcelable. The attributes are the same as those of {@link Field}. Note you can use
-   * any type you want for your version field, although most people use int's.
-   */
-  public @interface VersionField {
-    int id();
+        String defaultValue() default NULL;
 
-    String getter() default NULL;
+        String defaultValueUnchecked() default NULL;
+    }
 
-    String type() default NULL;
-  }
-
-  /**
-   * Use this to indicate the member field that holds whether a field was set or not. The member
-   * field type currently supported is a HashSet&#60;Integer&#62; which is the set of safe
-   * parcelable field id's that have been explicitly set.
-   *
-   * <p>This annotation should also be used to annotate one of the parameters to the constructor
-   * annotated with &#64;Constructor. Note that this annotation should either be present on exactly
-   * one member field and one constructor parameter or left out completely.
-   */
-  public @interface Indicator {
-    String getter() default NULL;
-  }
-
-  /**
-   * Use this to indicate the constructor that the creator should use. The constructor annotated
-   * with this must be package or public visibility, so that the generated "creator" class can
-   * invoke this.
-   */
-  public @interface Constructor {}
-
-  /**
-   * Use this on each parameter passed in to the Constructor to indicate to which field id each
-   * formal parameter corresponds.
-   */
-  public @interface Param {
-    int id();
-  }
-
-  /**
-   * Use this on a parameter passed in to the Constructor to indicate that a removed field should be
-   * read on construction. If the field is not present when read, the default value will be used
-   * instead.
-   */
-  public @interface RemovedParam {
-    int id();
-
-    String defaultValue() default NULL;
-
-    String defaultValueUnchecked() default NULL;
-  }
-
-  /**
-   * Use this to mark tombstones for removed {@link Field Fields} or {@link VersionField
-   * VersionFields}.
-   */
-  public @interface Reserved {
-    int[] value();
-  }
+    /**
+     * Use this to mark tombstones for removed {@link Field Fields} or {@link VersionField
+     * VersionFields}.
+     */
+    public @interface Reserved {
+        int[] value();
+    }
 }
