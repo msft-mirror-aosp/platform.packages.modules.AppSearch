@@ -37,8 +37,6 @@ import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
 
-import com.android.server.appsearch.external.localstorage.AlwaysSupportedFeatures;
-
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -142,7 +140,7 @@ public class GlobalSearchSessionShimImpl implements GlobalSearchSessionShim {
     @NonNull
     @Override
     public Features getFeatures() {
-        return new AlwaysSupportedFeatures();
+        return new MainlineFeaturesImpl();
     }
 
     @Override

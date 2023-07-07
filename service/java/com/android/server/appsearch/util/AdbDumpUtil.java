@@ -53,7 +53,7 @@ public class AdbDumpUtil {
      * @return The hash value of str in hex format.
      */
     @NonNull
-    private static String generateFingerprintMD5(@NonNull String str) {
+    public static String generateFingerprintMd5(@NonNull String str) {
         Objects.requireNonNull(str);
 
         try {
@@ -91,8 +91,8 @@ public class AdbDumpUtil {
             DocumentDebugInfoProto.CorpusInfo.Builder corpusInfoBuilder =
                     documentInfoBuilder.getCorpusInfo(i).toBuilder();
             corpusInfoBuilder.setNamespace(
-                    generateFingerprintMD5(corpusInfoBuilder.getNamespace()));
-            corpusInfoBuilder.setSchema(generateFingerprintMD5(corpusInfoBuilder.getSchema()));
+                    generateFingerprintMd5(corpusInfoBuilder.getNamespace()));
+            corpusInfoBuilder.setSchema(generateFingerprintMd5(corpusInfoBuilder.getSchema()));
             documentInfoBuilder.setCorpusInfo(i, corpusInfoBuilder);
         }
 
@@ -102,7 +102,7 @@ public class AdbDumpUtil {
             NamespaceStorageInfoProto.Builder namespaceStorageInfoBuilder =
                     documentStorageInfoBuilder.getNamespaceStorageInfo(i).toBuilder();
             namespaceStorageInfoBuilder.setNamespace(
-                    generateFingerprintMD5(namespaceStorageInfoBuilder.getNamespace()));
+                    generateFingerprintMd5(namespaceStorageInfoBuilder.getNamespace()));
             documentStorageInfoBuilder.setNamespaceStorageInfo(i, namespaceStorageInfoBuilder);
         }
         documentInfoBuilder.setDocumentStorageInfo(documentStorageInfoBuilder);
@@ -114,13 +114,13 @@ public class AdbDumpUtil {
         SchemaProto.Builder schemaBuilder = schemaInfoBuilder.getSchema().toBuilder();
         for (int i = 0; i < schemaBuilder.getTypesCount(); ++i) {
             SchemaTypeConfigProto.Builder typeBuilder = schemaBuilder.getTypes(i).toBuilder();
-            typeBuilder.setSchemaType(generateFingerprintMD5(typeBuilder.getSchemaType()));
+            typeBuilder.setSchemaType(generateFingerprintMd5(typeBuilder.getSchemaType()));
             for (int j = 0; j < typeBuilder.getPropertiesCount(); ++j) {
                 PropertyConfigProto property = typeBuilder.getProperties(j);
                 if (property.getDataType() == PropertyConfigProto.DataType.Code.DOCUMENT) {
                     PropertyConfigProto.Builder propertyBuilder = property.toBuilder();
                     propertyBuilder.setSchemaType(
-                            generateFingerprintMD5(propertyBuilder.getSchemaType()));
+                            generateFingerprintMd5(propertyBuilder.getSchemaType()));
                     typeBuilder.setProperties(j, propertyBuilder);
                 }
             }
