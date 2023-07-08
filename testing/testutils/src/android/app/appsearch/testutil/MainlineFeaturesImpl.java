@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package com.android.server.appsearch.external.localstorage;
+package android.app.appsearch.testutil;
 
 import android.annotation.NonNull;
 import android.app.appsearch.Features;
+import android.os.Build;
 
 /**
- * An implementation of {@link Features}. This implementation always returns true. This is
- * sufficient for the use in the local backend because all features are always available on the
- * local backend.
- *
+ * An implementation of {@link Features}. It returns true for most of the features, as all features
+ * should be ready in the AppSearch platform backend. However, some features are disabled manually
+ * because we have chosen to only land them after a specific Android version.
  * @hide
  */
-public class AlwaysSupportedFeatures implements Features {
+public class MainlineFeaturesImpl implements Features {
 
     @Override
     public boolean isFeatureSupported(@NonNull String feature) {
@@ -60,9 +60,9 @@ public class AlwaysSupportedFeatures implements Features {
             case Features.SEARCH_SUGGESTION:
                 // fall through
             case Features.SCHEMA_SET_DELETION_PROPAGATION:
-                // fall through
-            case Features.SET_SCHEMA_CIRCULAR_REFERENCES:
                 return true;
+            case Features.SET_SCHEMA_CIRCULAR_REFERENCES:
+                return Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE;
             default:
                 return false;
         }

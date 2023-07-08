@@ -76,6 +76,9 @@ public interface Features {
      * Feature for {@link #isFeatureSupported(String)}. This feature covers {@link
      * AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE} and all other numeric search
      * features.
+     *
+     * <p>For details on the numeric search expressions in the query language, see {@link
+     * AppSearchSession#search}.
      */
     String NUMERIC_SEARCH = FeatureConstants.NUMERIC_SEARCH;
 
@@ -85,36 +88,16 @@ public interface Features {
      * features within the query language that allows clients to search using the verbatim string
      * operator.
      *
-     * <p>Ex. '"foo/bar" OR baz' will ensure that 'foo/bar' is treated as a single 'verbatim' token.
+     * <p>For details on the verbatim string operator, see {@link AppSearchSession#search}.
      */
     String VERBATIM_SEARCH = FeatureConstants.VERBATIM_SEARCH;
 
     /**
      * Feature for {@link #isFeatureSupported(String)}. This feature covers the expansion of the
      * query language to conform to the definition of the list filters language
-     * (https://aip.dev/160). This includes:
+     * (https://aip.dev/160).
      *
-     * <ul>
-     *   <li>addition of explicit 'AND' and 'NOT' operators
-     *   <li>property restricts are allowed with grouping (ex. "prop:(a OR b)")
-     *   <li>addition of custom functions to control matching
-     * </ul>
-     *
-     * <p>The newly added custom functions covered by this feature are:
-     *
-     * <ul>
-     *   <li>createList(String...)
-     *   <li>termSearch(String, List<String>)
-     * </ul>
-     *
-     * <p>createList takes a variable number of strings and returns a list of strings. It is for use
-     * with termSearch.
-     *
-     * <p>termSearch takes a query string that will be parsed according to the supported query
-     * language and an optional list of strings that specify the properties to be restricted to.
-     * This exists as a convenience for multiple property restricts. So, for example, the query
-     * "(subject:foo OR body:foo) (subject:bar OR body:bar)" could be rewritten as "termSearch(\"foo
-     * bar\", createList(\"subject\", \"bar\"))"
+     * <p>For more details, see {@link AppSearchSession#search}.
      */
     String LIST_FILTER_QUERY_LANGUAGE = FeatureConstants.LIST_FILTER_QUERY_LANGUAGE;
 
@@ -154,6 +137,15 @@ public interface Features {
      * AppSearchSchema.StringPropertyConfig.Builder#setDeletionPropagation}.
      */
     String SCHEMA_SET_DELETION_PROPAGATION = "SCHEMA_SET_DELETION_PROPAGATION";
+
+    /**
+     * Feature for {@link #isFeatureSupported(String)}. This feature covers setting schemas with
+     * circular references for {@link AppSearchSession#setSchema}
+     *
+     * @hide TODO(b/280698121): Unhide and request jetpack API approval after this is synced to
+     *     framework.
+     */
+    String SET_SCHEMA_CIRCULAR_REFERENCES = "SET_SCHEMA_CIRCULAR_REFERENCES";
 
     /**
      * Returns whether a feature is supported at run-time. Feature support depends on the feature in

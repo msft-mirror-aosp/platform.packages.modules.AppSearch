@@ -30,6 +30,7 @@ import android.util.SparseIntArray;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.AppSearchConfig;
+import com.android.server.appsearch.AppSearchInternalLogger;
 import com.android.server.appsearch.external.localstorage.AppSearchLogger;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
@@ -58,7 +59,7 @@ import java.util.Random;
  *
  * @hide
  */
-public final class PlatformLogger implements AppSearchLogger {
+public final class PlatformLogger implements AppSearchInternalLogger {
     private static final String TAG = "AppSearchPlatformLogger";
 
     // Context of the user we're logging for.
@@ -226,13 +227,19 @@ public final class PlatformLogger implements AppSearchLogger {
         }
     }
 
+    @Override
+    public void removeCacheForPackage(@NonNull String packageName) {
+        int unused = removeCachedUidForPackage(packageName);
+    }
+
     /**
      * Removes cached UID for package.
      *
      * @return removed UID for the package, or {@code INVALID_UID} if package was not previously
      * cached.
      */
-    public int removeCachedUidForPackage(@NonNull String packageName) {
+    @VisibleForTesting
+    int removeCachedUidForPackage(@NonNull String packageName) {
         // TODO(b/173532925) This needs to be called when we get PACKAGE_REMOVED intent
         Objects.requireNonNull(packageName);
         synchronized (mLock) {
@@ -244,6 +251,7 @@ public final class PlatformLogger implements AppSearchLogger {
     /**
      * Return a copy of the recorded {@link ApiCallRecord}.
      */
+    @Override
     @NonNull
     public List<ApiCallRecord> getLastCalledApis() {
         synchronized (mLock) {
