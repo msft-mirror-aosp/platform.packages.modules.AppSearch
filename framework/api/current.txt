@@ -559,10 +559,13 @@ package android.app.appsearch {
     method @NonNull public String getSchemaType();
   }
 
-  public class StorageInfo {
+  public final class StorageInfo implements android.os.Parcelable {
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") public final int describeContents();
     method public int getAliveDocumentsCount();
     method public int getAliveNamespacesCount();
     method public long getSizeBytes();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.StorageInfo> CREATOR;
   }
 
   public static final class StorageInfo.Builder {

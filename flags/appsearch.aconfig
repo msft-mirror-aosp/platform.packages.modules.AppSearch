@@ -1,0 +1,8 @@
+package: "com.android.appsearch.flags"
+
+flag {
+    name: "enable_safe_parcelable"
+    namespace: "appsearch"
+    description: "Use SafeParcelable to serialize data through binder"
+    bug: "275629842"
+}
