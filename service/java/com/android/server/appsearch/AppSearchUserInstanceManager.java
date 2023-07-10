@@ -28,7 +28,8 @@ import android.util.Log;
 import com.android.internal.annotations.GuardedBy;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
-import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
+import com.android.server.appsearch.stats.PlatformLogger;
+import com.android.server.appsearch.visibilitystore.VisibilityCheckerImpl;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -211,23 +212,21 @@ public final class AppSearchUserInstanceManager {
         InitializeStats.Builder initStatsBuilder = new InitializeStats.Builder();
 
         // Initialize the classes that make up AppSearchUserInstance
-        AppSearchInternalLogger logger = AppSearchEnvironmentFactory
-                .getLoggerInstance(userContext, config);
+        PlatformLogger logger = new PlatformLogger(userContext, config);
 
         File appSearchDir = AppSearchEnvironmentFactory
             .getEnvironmentInstance()
             .getAppSearchDir(userContext, userHandle);
         File icingDir = new File(appSearchDir, "icing");
         Log.i(TAG, "Creating new AppSearch instance at: " + icingDir);
-        VisibilityChecker visibilityCheckerImpl = AppSearchEnvironmentFactory
-                .getVisibilityCheckerInstance(userContext);
+        VisibilityCheckerImpl visibilityCheckerImpl = new VisibilityCheckerImpl(userContext);
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
                 icingDir,
                 /* limitConfig= */ config,
                 /* icingOptionsConfig= */ config,
                 initStatsBuilder,
-                visibilityCheckerImpl,
-                new FrameworkOptimizeStrategy(config));
+                new FrameworkOptimizeStrategy(config),
+                visibilityCheckerImpl);
 
         // Update storage info file
         UserStorageInfo userStorageInfo = getOrCreateUserStorageInfoInstance(
