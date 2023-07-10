@@ -1,17 +1,32 @@
-// Copyright 2012 Google Inc. All Rights Reserved.
+/*
+ * Copyright (C) 2023 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-package com.google.android.gms.common.internal.safeparcel;
+package android.app.appsearch.safeparcel;
 
 /**
- * For docs, see SafeParcelable definition in OneUp/client/common/...
+ * This is here for the SafeParcelProcessor to link against and is intentionally not implementing a
+ * Parcelable, so that it is not necessary to link in the Android framework to compile this.
  *
- * <p>This is here for the SafeParcelProcessor to link against and is intentionally not implementing
- * a Parcelable, so that it is not necessary to link in the Android framework to compile this.
+ * @hide
  */
+// Include the SafeParcel source code directly in AppSearch until it gets officially open-sourced.
 public interface SafeParcelable {
-    public static final String NULL = "SAFE_PARCELABLE_NULL_STRING";
+    String NULL = "SAFE_PARCELABLE_NULL_STRING";
 
-    public @interface Class {
+    @interface Class {
         String creator();
 
         boolean validate() default false;
@@ -19,7 +34,7 @@ public interface SafeParcelable {
         boolean doNotParcelTypeDefaultValues() default false;
     }
 
-    public @interface Field {
+    @interface Field {
         int id();
 
         String getter() default NULL;
@@ -31,7 +46,7 @@ public interface SafeParcelable {
         String defaultValueUnchecked() default NULL;
     }
 
-    public @interface VersionField {
+    @interface VersionField {
         int id();
 
         String getter() default NULL;
@@ -39,17 +54,17 @@ public interface SafeParcelable {
         String type() default NULL;
     }
 
-    public @interface Indicator {
+    @interface Indicator {
         String getter() default NULL;
     }
 
-    public @interface Constructor {}
+    @interface Constructor {}
 
-    public @interface Param {
+    @interface Param {
         int id();
     }
 
-    public @interface RemovedParam {
+    @interface RemovedParam {
         int id();
 
         String defaultValue() default NULL;
@@ -57,7 +72,7 @@ public interface SafeParcelable {
         String defaultValueUnchecked() default NULL;
     }
 
-    public @interface Reserved {
+    @interface Reserved {
         int[] value();
     }
 }

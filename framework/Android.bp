@@ -21,15 +21,6 @@ package {
     default_applicable_licenses: ["packages_modules_appsearch_license"],
 }
 
-// TODO(b/275629842) remove in follow-up changes once safeparcel is being used.
-filegroup {
-    name: "framework-appsearch-safeparcel-sources",
-    srcs: [
-        "java/android/app/appsearch/safeparcel/**/*.java",
-    ],
-    path: "java/android/app/appsearch/safeparcel",
-}
-
 filegroup {
     name: "framework-appsearch-sources",
     defaults: ["framework-sources-module-defaults"],
@@ -48,8 +39,6 @@ filegroup {
     ],
     exclude_srcs: [
         ":framework-appsearch-external-sources",
-        // TODO(b/275629842) remove in follow-up changes once safeparcel is being used.
-        ":framework-appsearch-safeparcel-sources",
     ],
     path: "java",
 }
