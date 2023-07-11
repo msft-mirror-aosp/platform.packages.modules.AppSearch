@@ -19,7 +19,8 @@ import android.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
-import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
+import com.android.server.appsearch.stats.PlatformLogger;
+import com.android.server.appsearch.visibilitystore.VisibilityCheckerImpl;
 
 import java.util.Objects;
 
@@ -28,21 +29,21 @@ import java.util.Objects;
  * the core of the AppSearch system.
  */
 public final class AppSearchUserInstance {
-    private volatile AppSearchInternalLogger mLogger;
+    private volatile PlatformLogger mLogger;
     private final AppSearchImpl mAppSearchImpl;
-    private final VisibilityChecker mVisibilityChecker;
+    private final VisibilityCheckerImpl mVisibilityCheckerImpl;
 
     AppSearchUserInstance(
-            @NonNull AppSearchInternalLogger logger,
+            @NonNull PlatformLogger logger,
             @NonNull AppSearchImpl appSearchImpl,
-            @NonNull VisibilityChecker visibilityChecker) {
+            @NonNull VisibilityCheckerImpl visibilityCheckerImpl) {
         mLogger = Objects.requireNonNull(logger);
         mAppSearchImpl = Objects.requireNonNull(appSearchImpl);
-        mVisibilityChecker = Objects.requireNonNull(visibilityChecker);
+        mVisibilityCheckerImpl = Objects.requireNonNull(visibilityCheckerImpl);
     }
 
     @NonNull
-    public AppSearchInternalLogger getLogger() {
+    public PlatformLogger getLogger() {
         return mLogger;
     }
 
@@ -52,12 +53,12 @@ public final class AppSearchUserInstance {
     }
 
     @NonNull
-    public VisibilityChecker getVisibilityChecker() {
-        return mVisibilityChecker;
+    public VisibilityCheckerImpl getVisibilityChecker() {
+        return mVisibilityCheckerImpl;
     }
 
     @VisibleForTesting
-    void setLoggerForTest(@NonNull AppSearchInternalLogger logger) {
+    void setLoggerForTest(@NonNull PlatformLogger logger) {
         mLogger = Objects.requireNonNull(logger);
     }
 }

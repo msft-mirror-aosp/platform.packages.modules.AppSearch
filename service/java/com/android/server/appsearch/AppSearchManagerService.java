@@ -81,9 +81,10 @@ import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
-import com.android.server.appsearch.util.AdbDumpUtil;
 import com.android.server.appsearch.util.ApiCallRecord;
+import com.android.server.appsearch.util.AdbDumpUtil;
 import com.android.server.appsearch.util.ExecutorManager;
+import com.android.server.appsearch.util.RateLimitedExecutor;
 import com.android.server.appsearch.util.ServiceImplHelper;
 import com.android.server.appsearch.visibilitystore.FrameworkCallerAccess;
 import com.android.server.usage.StorageStatsManagerLocal;
@@ -273,7 +274,7 @@ public class AppSearchManagerService extends SystemService {
                                     mAppSearchConfig);
                     instance.getAppSearchImpl().clearPackageData(packageName);
                     dispatchChangeNotifications(instance);
-                    instance.getLogger().removeCacheForPackage(packageName);
+                    instance.getLogger().removeCachedUidForPackage(packageName);
                 } catch (Throwable t) {
                     Log.e(TAG, "Unable to remove data for package: " + packageName, t);
                 }
