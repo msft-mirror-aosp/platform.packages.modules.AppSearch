@@ -1,6 +1,20 @@
-// Copyright 2012 Google Inc. All Rights Reserved.
+/*
+ * Copyright (C) 2023 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-package com.google.android.gms.common.internal.safeparcel;
+package android.app.appsearch.safeparcel;
 
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -109,11 +123,12 @@ import android.os.Parcelable;
  *
  * @hide
  */
+// Include the SafeParcel source code directly in AppSearch until it gets officially open-sourced.
 public interface SafeParcelable extends Parcelable {
+    /** @hide */
     // Note: the field name and value are accessed using reflection for backwards compatibility, and
     // must not be changed.
-    /** @hide */
-    public static final String NULL = "SAFE_PARCELABLE_NULL_STRING";
+    String NULL = "SAFE_PARCELABLE_NULL_STRING";
 
     /**
      * This annotates your class and specifies the name of the generated "creator" class for
@@ -122,7 +137,8 @@ public interface SafeParcelable extends Parcelable {
      * true, which will cause the "creator" to invoke the method validateContents() on your class
      * after constructing an instance.
      */
-    public @interface Class {
+    @SuppressWarnings("JavaLangClash")
+    @interface Class {
         /**
          * Simple name of the generated "creator" class generated in the same package as the
          * SafeParceable.
@@ -147,9 +163,9 @@ public interface SafeParcelable extends Parcelable {
     }
 
     /** Use this annotation on members that you wish to be marshalled in the SafeParcelable. */
-    public @interface Field {
+    @interface Field {
         /**
-         * Valid values for id are between 1 and 65535. This field id is marshalled into a Parcel.
+         * Valid values for id are between 1 and 65535. This field id is marshalled into a Parcel .
          * To maintain backwards compatibility, never reuse old id's. It is okay to no longer use
          * old id's and add new ones in subsequent versions of a SafeParcelable.
          */
@@ -239,7 +255,7 @@ public interface SafeParcelable extends Parcelable {
      * this safe parcelable. The attributes are the same as those of {@link Field}. Note you can use
      * any type you want for your version field, although most people use int's.
      */
-    public @interface VersionField {
+    @interface VersionField {
         int id();
 
         String getter() default NULL;
@@ -256,7 +272,7 @@ public interface SafeParcelable extends Parcelable {
      * annotated with &#64;Constructor. Note that this annotation should either be present on
      * exactly one member field and one constructor parameter or left out completely.
      */
-    public @interface Indicator {
+    @interface Indicator {
         String getter() default NULL;
     }
 
@@ -265,13 +281,13 @@ public interface SafeParcelable extends Parcelable {
      * with this must be package or public visibility, so that the generated "creator" class can
      * invoke this.
      */
-    public @interface Constructor {}
+    @interface Constructor {}
 
     /**
      * Use this on each parameter passed in to the Constructor to indicate to which field id each
      * formal parameter corresponds.
      */
-    public @interface Param {
+    @interface Param {
         int id();
     }
 
@@ -280,7 +296,7 @@ public interface SafeParcelable extends Parcelable {
      * be read on construction. If the field is not present when read, the default value will be
      * used instead.
      */
-    public @interface RemovedParam {
+    @interface RemovedParam {
         int id();
 
         String defaultValue() default NULL;
@@ -292,7 +308,7 @@ public interface SafeParcelable extends Parcelable {
      * Use this to mark tombstones for removed {@link Field Fields} or {@link VersionField
      * VersionFields}.
      */
-    public @interface Reserved {
+    @interface Reserved {
         int[] value();
     }
 }

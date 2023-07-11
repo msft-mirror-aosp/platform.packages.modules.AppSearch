@@ -77,8 +77,8 @@ public class VisibilityStoreMigrationHelperFromV1Test {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
         InternalSetSchemaResponse internalSetSchemaResponse =
                 appSearchImplInV1.setSchema(
                         VisibilityStore.VISIBILITY_PACKAGE_NAME,
@@ -132,8 +132,8 @@ public class VisibilityStoreMigrationHelperFromV1Test {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         VisibilityDocument actualDocument =
                 new VisibilityDocument(

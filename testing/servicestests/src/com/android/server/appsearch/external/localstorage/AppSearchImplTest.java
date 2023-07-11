@@ -26,7 +26,6 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertThrows;
 
-import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
@@ -119,8 +118,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
     }
 
     @After
@@ -584,8 +583,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         initStatsBuilder,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Check recovery state
         InitializeStats initStats = initStatsBuilder.build();
@@ -2878,8 +2877,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
         getResult =
                 appSearchImpl2.getDocument(
                         "package", "database", "namespace1", "id1", Collections.emptyMap());
@@ -2954,8 +2953,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
         assertThrows(
                 AppSearchException.class,
                 () ->
@@ -3047,8 +3046,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
         assertThrows(
                 AppSearchException.class,
                 () ->
@@ -3178,8 +3177,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3273,8 +3272,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3339,8 +3338,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Make sure the limit is maintained
         e =
@@ -3384,8 +3383,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3522,8 +3521,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3631,8 +3630,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // package1 should still be out of space
         e =
@@ -3702,8 +3701,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3882,8 +3881,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3976,8 +3975,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -4040,8 +4039,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         // Index id2. This should pass but only because we check for replacements.
         mAppSearchImpl.putDocument(
@@ -4095,8 +4094,8 @@ public class AppSearchImplTest {
                         },
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         AppSearchException e =
                 assertThrows(
@@ -4198,15 +4197,16 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker = new MockVisibilityChecker(false);
+        VisibilityChecker mockVisibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> false;
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        mockVisibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        mockVisibilityChecker);
 
         InternalSetSchemaResponse internalSetSchemaResponse =
                 mAppSearchImpl.setSchema(
@@ -4253,15 +4253,16 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker = new MockVisibilityChecker(true);
+        VisibilityChecker mockVisibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        mockVisibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        mockVisibilityChecker);
 
         InternalSetSchemaResponse internalSetSchemaResponse =
                 mAppSearchImpl.setSchema(
@@ -4304,15 +4305,16 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker = new MockVisibilityChecker(true);
+        VisibilityChecker mockVisibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        mockVisibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        mockVisibilityChecker);
 
         InternalSetSchemaResponse internalSetSchemaResponse =
                 mAppSearchImpl.setSchema(
@@ -4358,27 +4360,17 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return callerAccess.getCallingPackageName().equals("visiblePackage");
-            }
-
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+        VisibilityChecker mockVisibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
+                        callerAccess.getCallingPackageName().equals("visiblePackage");
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        mockVisibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        mockVisibilityChecker);
 
         InternalSetSchemaResponse internalSetSchemaResponse =
                 mAppSearchImpl.setSchema(
@@ -4765,8 +4757,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         String prefix = PrefixUtil.createPrefix("packageName", "databaseName");
         VisibilityDocument expectedDocument =
@@ -4809,8 +4801,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
 
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email")).isNull();
         // Verify the VisibilityDocument is removed from AppSearchImpl.
@@ -4837,15 +4829,16 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker = new MockVisibilityChecker(true);
+        VisibilityChecker mockVisibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        mockVisibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        mockVisibilityChecker);
 
         // Add a schema type that is not displayed by the system
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -4940,27 +4933,17 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return prefixedSchema.endsWith("VisibleType");
-            }
-
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+        VisibilityChecker mockVisibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
+                        prefixedSchema.endsWith("VisibleType");
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        mockVisibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        mockVisibilityChecker);
 
         // Add two schema types that are not displayed by the system.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5042,7 +5025,8 @@ public class AppSearchImplTest {
     @Test
     public void testDispatchObserver_samePackage_withVisStore_accept() throws Exception {
         // Make a visibility checker that rejects everything
-        final VisibilityChecker rejectChecker = new MockVisibilityChecker(false);
+        final VisibilityChecker rejectChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> false;
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5050,7 +5034,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        rejectChecker, ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        rejectChecker);
 
         // Add a schema type
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5144,19 +5129,9 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.listening.package";
 
         // Make a visibility checker that allows only fakeListeningPackage.
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return callerAccess.getCallingPackageName().equals(fakeListeningPackage);
-            }
-
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+        final VisibilityChecker visibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
+                        callerAccess.getCallingPackageName().equals(fakeListeningPackage);
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5164,8 +5139,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        visibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        visibilityChecker);
 
         // Add a schema type
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5218,7 +5193,8 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.Listening.package";
 
         // Make a visibility checker that rejects everything.
-        final VisibilityChecker rejectChecker = new MockVisibilityChecker(false);
+        final VisibilityChecker rejectChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> false;
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5226,7 +5202,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        rejectChecker, ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        rejectChecker);
 
         // Add a schema type
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5562,24 +5539,18 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.listening.package";
 
         // Make a fake visibility checker that actually looks at visibility store
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                if (!callerAccess.getCallingPackageName().equals(fakeListeningPackage)) {
-                    return false;
-                }
-                Set<String> allowedPackages = new ArraySet<>(
-                        visibilityStore.getVisibility(prefixedSchema).getPackageNames());
-                return allowedPackages.contains(fakeListeningPackage);
-            }
-
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+        final VisibilityChecker visibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> {
+                    if (!callerAccess.getCallingPackageName().equals(fakeListeningPackage)) {
+                        return false;
+                    }
+                    Set<String> allowedPackages =
+                            new ArraySet<>(
+                                    visibilityStore
+                                            .getVisibility(prefixedSchema)
+                                            .getPackageNames());
+                    return allowedPackages.contains(fakeListeningPackage);
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5587,8 +5558,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        visibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        visibilityChecker);
 
         // Register an observer
         TestObserverCallback observer = new TestObserverCallback();
@@ -5749,20 +5720,10 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.listening.package";
 
         // Make a visibility checker that allows fakeListeningPackage access only to Type2.
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return callerAccess.getCallingPackageName().equals(fakeListeningPackage)
-                        && prefixedSchema.endsWith("Type2");
-            }
-
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+        final VisibilityChecker visibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
+                        callerAccess.getCallingPackageName().equals(fakeListeningPackage)
+                                && prefixedSchema.endsWith("Type2");
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5770,8 +5731,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        visibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        visibilityChecker);
 
         // Add a schema.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5858,20 +5819,10 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.listening.package";
 
         // Make a visibility checker that allows fakeListeningPackage access only to Type2.
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return callerAccess.getCallingPackageName().equals(fakeListeningPackage)
-                        && prefixedSchema.endsWith("Type2");
-            }
-
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+        final VisibilityChecker visibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
+                        callerAccess.getCallingPackageName().equals(fakeListeningPackage)
+                                && prefixedSchema.endsWith("Type2");
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5879,8 +5830,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        visibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        visibilityChecker);
 
         // Add a schema.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5953,29 +5904,20 @@ public class AppSearchImplTest {
 
         final String fakePackage2 = "com.fake.listening.package2";
 
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                if (prefixedSchema.endsWith("Type1")) {
-                    return callerAccess.getCallingPackageName().equals(fakePackage1);
-                } else if (prefixedSchema.endsWith("Type2")) {
-                    return callerAccess.getCallingPackageName().equals(fakePackage2);
-                } else if (prefixedSchema.endsWith("Type3")) {
-                    return false;
-                } else if (prefixedSchema.endsWith("Type4")) {
-                    return true;
-                } else {
-                    throw new IllegalArgumentException(prefixedSchema);
-                }
-            }
-
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+        final VisibilityChecker visibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> {
+                    if (prefixedSchema.endsWith("Type1")) {
+                        return callerAccess.getCallingPackageName().equals(fakePackage1);
+                    } else if (prefixedSchema.endsWith("Type2")) {
+                        return callerAccess.getCallingPackageName().equals(fakePackage2);
+                    } else if (prefixedSchema.endsWith("Type3")) {
+                        return false;
+                    } else if (prefixedSchema.endsWith("Type4")) {
+                        return true;
+                    } else {
+                        throw new IllegalArgumentException(prefixedSchema);
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5983,8 +5925,8 @@ public class AppSearchImplTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        visibilityChecker,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        visibilityChecker);
 
         // Add a schema.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -6172,25 +6114,5 @@ public class AppSearchImplTest {
                                 "database1",
                                 ImmutableSet.of("Type1", "Type2")));
         assertThat(observer.getDocumentChanges()).isEmpty();
-    }
-
-    private class MockVisibilityChecker implements VisibilityChecker {
-
-        private final boolean mIsSchemaSearchableByCaller;
-        MockVisibilityChecker(boolean isSchemaSearchableByCaller) {
-            mIsSchemaSearchableByCaller = isSchemaSearchableByCaller;
-        }
-
-        @Override
-        public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                @NonNull String packageName, @NonNull String prefixedSchema,
-                @NonNull VisibilityStore visibilityStore) {
-            return mIsSchemaSearchableByCaller;
-        }
-
-        @Override
-        public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-            return false;
-        }
     }
 }

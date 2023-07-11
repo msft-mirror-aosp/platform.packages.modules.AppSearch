@@ -1,6 +1,20 @@
-// Copyright (C) 2012 Google Inc. All Rights Reserved.
+/*
+ * Copyright 2023 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-package com.google.android.gms.common.internal.safeparcel;
+package android.app.appsearch.safeparcel;
 
 import static java.lang.Math.max;
 import static java.util.Comparator.comparing;
@@ -30,6 +44,7 @@ import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -48,18 +63,19 @@ import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 
+/**
+ * Annotation Processor for {@link SafeParcelable}.
+ *
+ * @hide
+ */
+// Include the SafeParcel source code directly in AppSearch until it gets officially open-sourced.
 @SupportedAnnotationTypes({SafeParcelProcessor.CLASS_ANNOTATION_NAME})
+@SupportedSourceVersion(SourceVersion.RELEASE_17)
 public class SafeParcelProcessor extends AbstractProcessor {
-
-    @Override
-    public SourceVersion getSupportedSourceVersion() {
-        return SourceVersion.latestSupported();
-    }
-
     public static final String SAFE_PARCELABLE_NAME =
-            "com.google.android.gms.common.internal.safeparcel.SafeParcelable";
+            "android.app.appsearch.safeparcel.SafeParcelable";
     public static final String REFLECTED_PARCELABLE_NAME =
-            "com.google.android.gms.common.internal.ReflectedParcelable";
+            "android.app.appsearch.safeparcel.ReflectedParcelable";
     public static final String CLASS_ANNOTATION_NAME = SAFE_PARCELABLE_NAME + ".Class";
     public static final String FIELD_ANNOTATION_NAME = SAFE_PARCELABLE_NAME + ".Field";
     public static final String LOCAL_VARIABLE_PREFIX = "_local_safe_0a1b_";
@@ -100,56 +116,56 @@ public class SafeParcelProcessor extends AbstractProcessor {
     TypeMirror mReflectedParcelableType;
 
     static class ParcelableField {
-        VariableElement variable;
-        int id;
-        String name;
-        String readName;
-        TypeMirror type;
-        String getter;
-        SerializationMethods sm;
-        String defaultValue;
+        VariableElement mVariable;
+        int mId;
+        String mName;
+        String mReadName;
+        TypeMirror mType;
+        String mGetter;
+        SerializationMethods mSm;
+        String mDefaultValue;
 
         ParcelableField(VariableElement variable) {
-            this.variable = variable;
+            this.mVariable = variable;
         }
     }
 
     static class ParcelableConstructor {
-        ArrayList<ParcelableField> parameters = new ArrayList<>();
+        ArrayList<ParcelableField> mParameters = new ArrayList<>();
     }
 
     class ParcelableClass {
-        TypeElement parcelableClass;
-        SafeParcelable.Class annotation;
-        String qualifiedName;
-        String generatedClassName;
-        HashMap<Integer, ParcelableField> fields = new HashMap<>();
-        ParcelableConstructor constructor;
-        ParcelableField indicatorField;
-        Integer requiresApi = null;
+        TypeElement mParcelableClass;
+        SafeParcelable.Class mAnnotation;
+        String mQualifiedName;
+        String mGeneratedClassName;
+        HashMap<Integer, ParcelableField> mFields = new HashMap<>();
+        ParcelableConstructor mConstructor;
+        ParcelableField mIndicatorField;
+        Integer mRequiresApi = null;
 
         ParcelableClass(TypeElement parcelableClass) {
-            this.parcelableClass = parcelableClass;
-            this.qualifiedName = parcelableClass.getQualifiedName().toString();
-            this.annotation = parcelableClass.getAnnotation(SafeParcelable.Class.class);
+            this.mParcelableClass = parcelableClass;
+            this.mQualifiedName = parcelableClass.getQualifiedName().toString();
+            this.mAnnotation = parcelableClass.getAnnotation(SafeParcelable.Class.class);
             RequiresApi requiresApiAnnotation = parcelableClass.getAnnotation(RequiresApi.class);
             if (requiresApiAnnotation != null) {
-                requiresApi = max(requiresApiAnnotation.value(), requiresApiAnnotation.api());
+                mRequiresApi = max(requiresApiAnnotation.value(), requiresApiAnnotation.api());
             }
 
             PackageElement parcelablePackage = mElements.getPackageOf(parcelableClass);
-            this.generatedClassName =
-                    parcelablePackage.getQualifiedName() + "." + this.annotation.creator();
+            this.mGeneratedClassName =
+                    parcelablePackage.getQualifiedName() + "." + this.mAnnotation.creator();
         }
     }
 
     static class SerializationMethods {
-        String write;
-        boolean writeWithFlags;
-        boolean isAssignment;
-        String read;
-        String creator;
-        boolean hasWriteNull;
+        String mWrite;
+        boolean mWriteWithFlags;
+        boolean mIsAssignment;
+        String mRead;
+        String mCreator;
+        boolean mHasWriteNull;
 
         SerializationMethods(
                 String write,
@@ -158,12 +174,12 @@ public class SafeParcelProcessor extends AbstractProcessor {
                 String read,
                 String creator,
                 Boolean hasWriteNull) {
-            this.write = write;
-            this.writeWithFlags = writeWithFlags;
-            this.isAssignment = isAssignment;
-            this.read = read;
-            this.creator = creator;
-            this.hasWriteNull = hasWriteNull;
+            this.mWrite = write;
+            this.mWriteWithFlags = writeWithFlags;
+            this.mIsAssignment = isAssignment;
+            this.mRead = read;
+            this.mCreator = creator;
+            this.mHasWriteNull = hasWriteNull;
         }
     }
 
@@ -266,8 +282,8 @@ public class SafeParcelProcessor extends AbstractProcessor {
                                         + annotatedElement.getSimpleName()
                                         + "\nA non-class type "
                                         + annotatedElement.asType().getKind()
-                                        + " is returned by"
-                                        + " RoundEnvironment.getElementsAnnotatedWith.");
+                                        + " is returned by RoundEnvironment"
+                                        + ".getElementsAnnotatedWith.");
                     }
                 }
             }
@@ -294,7 +310,7 @@ public class SafeParcelProcessor extends AbstractProcessor {
         }
 
         // Check that if the annotation has validate=true the class has a validateContents() method.
-        if (cl.annotation.validate()) {
+        if (cl.mAnnotation.validate()) {
             if (!hasValidateContents(parcelableClass)) {
                 mMessager.printMessage(
                         Diagnostic.Kind.ERROR,
@@ -306,11 +322,11 @@ public class SafeParcelProcessor extends AbstractProcessor {
         }
 
         // Check that the class has a CREATOR method.
-        if (!hasCreator(parcelableClass, cl.generatedClassName)) {
+        if (!hasCreator(parcelableClass, cl.mGeneratedClassName)) {
             mMessager.printMessage(
                     Diagnostic.Kind.ERROR,
                     "Class tagged @SafeParcelable.Class must have a public static final "
-                            + cl.generatedClassName
+                            + cl.mGeneratedClassName
                             + " CREATOR field.",
                     parcelableClass);
             isOkay = false;
@@ -351,9 +367,10 @@ public class SafeParcelProcessor extends AbstractProcessor {
         if (constructor == null) {
             mMessager.printMessage(
                     Diagnostic.Kind.ERROR,
-                    "SafeParcelable class must have exactly one constructor annotated with"
-                        + " @Constructor, which is used to construct this SafeParcelable"
-                        + " implementing object from a Parcel.");
+                    "SafeParcelable class must have exactly"
+                            + " one constructor annotated with @Constructor, which is used to "
+                            + "construct"
+                            + " this SafeParcelable implementing object from a Parcel.");
             isOkay = false;
         }
 
@@ -399,7 +416,7 @@ public class SafeParcelProcessor extends AbstractProcessor {
                             "Found a reserved field id=" + fieldInfo.id() + ".",
                             field);
                     isOkay = false;
-                } else if (cl.annotation.doNotParcelTypeDefaultValues()
+                } else if (cl.mAnnotation.doNotParcelTypeDefaultValues()
                         && !fieldInfo.defaultValue().equals(SafeParcelable.NULL)) {
                     mMessager.printMessage(
                             Diagnostic.Kind.ERROR,
@@ -425,8 +442,10 @@ public class SafeParcelProcessor extends AbstractProcessor {
                 if (versionFieldFound) {
                     mMessager.printMessage(
                             Diagnostic.Kind.ERROR,
-                            "More than one field has been annotated with VersionField.  One and"
-                                + " only one member may be annotated with VersionField.",
+                            "More than one field has been"
+                                    + " annotated with VersionField.  One and only one member may"
+                                    + " be"
+                                    + " annotated with VersionField.",
                             field);
                     isOkay = false;
                 }
@@ -462,8 +481,10 @@ public class SafeParcelProcessor extends AbstractProcessor {
                 if (indicatorFieldFound) {
                     mMessager.printMessage(
                             Diagnostic.Kind.ERROR,
-                            "More than one field has been annotated with Indicator.  Only one"
-                                + " member may be annotated with Indicator.",
+                            "More than one field has been"
+                                    + " annotated with Indicator.  Only one member may be "
+                                    + "annotated with"
+                                    + " Indicator.",
                             field);
                     isOkay = false;
                 }
@@ -481,7 +502,7 @@ public class SafeParcelProcessor extends AbstractProcessor {
         }
 
         if (isOkay) {
-            mParcelableClasses.put(cl.generatedClassName, cl);
+            mParcelableClasses.put(cl.mGeneratedClassName, cl);
         } else {
             mMessager.printMessage(
                     Diagnostic.Kind.NOTE,
@@ -571,8 +592,9 @@ public class SafeParcelProcessor extends AbstractProcessor {
         if (modifiers.contains(Modifier.PRIVATE) || modifiers.contains(Modifier.PROTECTED)) {
             mMessager.printMessage(
                     Diagnostic.Kind.ERROR,
-                    "A SafeParcelable class constructor annotated with @Constructor must be either"
-                        + " public or package private.",
+                    "A SafeParcelable class constructor"
+                            + " annotated with @Constructor must be either public or package "
+                            + "private.",
                     constructor);
             isOkay = false;
         }
@@ -583,7 +605,7 @@ public class SafeParcelProcessor extends AbstractProcessor {
         for (VariableElement parameter : parameters) {
             SafeParcelable.Param paramInfo = parameter.getAnnotation(SafeParcelable.Param.class);
             if (paramInfo == null) {
-                if (cl.indicatorField != null) {
+                if (cl.mIndicatorField != null) {
                     // Check if the parameter has an Indicator annotation.
                     SafeParcelable.Indicator indicatorInfo =
                             parameter.getAnnotation(SafeParcelable.Indicator.class);
@@ -593,19 +615,23 @@ public class SafeParcelProcessor extends AbstractProcessor {
                             // Already found an indicator, so this is an error
                             mMessager.printMessage(
                                     Diagnostic.Kind.ERROR,
-                                    "Found more than two parameters in the constructor that have"
-                                        + " been annoatated with @Indicator",
+                                    "Found more than two"
+                                            + " parameters in the constructor that have been "
+                                            + "annoatated"
+                                            + " with @Indicator",
                                     parameter);
                             isOkay = false;
                         }
                         foundIndicator = true;
-                        parcelableConstructor.parameters.add(cl.indicatorField);
+                        parcelableConstructor.mParameters.add(cl.mIndicatorField);
                     } else {
                         // Parameter has no annotation
                         mMessager.printMessage(
                                 Diagnostic.Kind.ERROR,
-                                "All parameters of the constructor annotated with @Constructor must"
-                                    + " be annotated with @Param, @RemovedParam, or @Indicator.",
+                                "All parameters of the constructor"
+                                        + " annotated with @Constructor must be annotated with "
+                                        + "@Param,"
+                                        + " @RemovedParam, or @Indicator.",
                                 parameter);
                         isOkay = false;
                     }
@@ -620,8 +646,10 @@ public class SafeParcelProcessor extends AbstractProcessor {
                                     Diagnostic.Kind.ERROR,
                                     "@RemovedParam(id="
                                             + paramId
-                                            + ") has already been used.  Each parameter must map to"
-                                            + " a distinct field id.",
+                                            + ") has"
+                                            + " already been used.  Each parameter must map to a "
+                                            + "distinct field"
+                                            + " id.",
                                     parameter);
                             isOkay = false;
                         } else {
@@ -630,9 +658,9 @@ public class SafeParcelProcessor extends AbstractProcessor {
                                         Diagnostic.Kind.ERROR,
                                         "@RemovedParam(id="
                                                 + paramId
-                                                + ") not found as a reserved id. Every"
-                                                + " @RemovedParam must be listed as a @Reserved id"
-                                                + " as well.",
+                                                + ") not found as a reserved id. Every "
+                                                + "@RemovedParam must be listed as a "
+                                                + "@Reserved id as well.",
                                         parameter);
                                 isOkay = false;
                             } else {
@@ -646,21 +674,22 @@ public class SafeParcelProcessor extends AbstractProcessor {
                                         removedParamInfo.defaultValueUnchecked(),
                                         false);
                                 ParcelableField field =
-                                        Objects.requireNonNull(cl.fields.get(paramId));
+                                        Objects.requireNonNull(cl.mFields.get(paramId));
                                 // ensure field will not participate in writeToParcel()
-                                field.sm.write = null;
-                                parcelableConstructor.parameters.add(field);
-                                cl.fields.put(paramId, field);
+                                field.mSm.mWrite = null;
+                                parcelableConstructor.mParameters.add(field);
+                                cl.mFields.put(paramId, field);
                             }
                         }
                     } else {
-                        // A parameter in this constructor does not have a Param annotation.  This
-                        // is an
-                        // error.
+                        // A parameter in this constructor does not have a Param annotation. This
+                        // is an error.
                         mMessager.printMessage(
                                 Diagnostic.Kind.ERROR,
-                                "All parameters of the constructor annotated with @Constructor must"
-                                    + " be annotated with @Param or @RemovedParam.",
+                                "All parameters of the"
+                                        + " constructor annotated with @Constructor must be "
+                                        + "annotated with"
+                                        + " @Param or @RemovedParam.",
                                 parameter);
                         isOkay = false;
                     }
@@ -674,12 +703,14 @@ public class SafeParcelProcessor extends AbstractProcessor {
                             Diagnostic.Kind.ERROR,
                             "@Param(id="
                                     + paramId
-                                    + ") has already been used.  Each parameter must map to a"
-                                    + " distinct field id.",
+                                    + ") has"
+                                    + " already been used.  Each parameter must map to a distinct"
+                                    + " field"
+                                    + " id.",
                             parameter);
                     isOkay = false;
                 } else {
-                    ParcelableField field = cl.fields.get(paramId);
+                    ParcelableField field = cl.mFields.get(paramId);
                     if (field == null) {
                         // There is no field corresponding to the given parameter id.
                         mMessager.printMessage(
@@ -688,17 +719,17 @@ public class SafeParcelProcessor extends AbstractProcessor {
                                 parameter);
                         isOkay = false;
                     } else {
-                        parcelableConstructor.parameters.add(field);
+                        parcelableConstructor.mParameters.add(field);
                     }
                 }
             }
         }
 
         // Check that all fields are in the constructor list
-        if ((cl.indicatorField == null
-                        && parcelableConstructor.parameters.size() != cl.fields.size())
-                || (cl.indicatorField != null
-                        && parcelableConstructor.parameters.size() != (cl.fields.size() + 1))) {
+        if ((cl.mIndicatorField == null
+                        && parcelableConstructor.mParameters.size() != cl.mFields.size())
+                || (cl.mIndicatorField != null
+                        && parcelableConstructor.mParameters.size() != (cl.mFields.size() + 1))) {
             mMessager.printMessage(
                     Diagnostic.Kind.ERROR,
                     "Not all fields have been included in"
@@ -706,7 +737,7 @@ public class SafeParcelProcessor extends AbstractProcessor {
                     constructor);
             isOkay = false;
         } else {
-            cl.constructor = parcelableConstructor;
+            cl.mConstructor = parcelableConstructor;
         }
 
         return isOkay;
@@ -746,13 +777,13 @@ public class SafeParcelProcessor extends AbstractProcessor {
         }
 
         ParcelableField indicatorField = new ParcelableField(field);
-        indicatorField.id = INDICATOR_FIELD_ID;
-        indicatorField.name = field.getSimpleName().toString();
-        indicatorField.readName = LOCAL_VARIABLE_PREFIX + indicatorField.name;
-        indicatorField.type = fieldType;
-        indicatorField.getter = getter;
-        indicatorField.sm = null;
-        cl.indicatorField = indicatorField;
+        indicatorField.mId = INDICATOR_FIELD_ID;
+        indicatorField.mName = field.getSimpleName().toString();
+        indicatorField.mReadName = LOCAL_VARIABLE_PREFIX + indicatorField.mName;
+        indicatorField.mType = fieldType;
+        indicatorField.mGetter = getter;
+        indicatorField.mSm = null;
+        cl.mIndicatorField = indicatorField;
 
         return isOkay;
     }
@@ -841,16 +872,20 @@ public class SafeParcelProcessor extends AbstractProcessor {
                 // allowed to be specified.
                 mMessager.printMessage(
                         Diagnostic.Kind.ERROR,
-                        "Both defaultValue and defaultValueUnchecked have been specified in the"
-                            + " Field annotation.  You can specify at most only one of these.");
+                        "Both defaultValue and"
+                                + " defaultValueUnchecked have been specified in the Field "
+                                + "annotation.  You"
+                                + " can specify at most only one of these.");
                 resolvedDefaultValue = null;
             } else {
                 // Only defaultValue has been specified, so do checks and set things
                 if (!allowsDefaultValue(fieldType)) {
                     mMessager.printMessage(
                             Diagnostic.Kind.ERROR,
-                            "defaultValue in Field annotation is allowed only for primitive types,"
-                                + " primitive type object wrappers and String.",
+                            "defaultValue in Field annotation"
+                                    + " is allowed only for primitive types, primitive type "
+                                    + "object wrappers"
+                                    + " and String.",
                             field);
                     resolvedDefaultValue = null;
                 } else {
@@ -858,8 +893,9 @@ public class SafeParcelProcessor extends AbstractProcessor {
                     if (resolvedDefaultValue == null) {
                         mMessager.printMessage(
                                 Diagnostic.Kind.ERROR,
-                                "defaultValue in Field annotation must be a proper value of"
-                                    + " annotated field's type.",
+                                "defaultValue in Field"
+                                        + " annotation must be a proper value of annotated "
+                                        + "field's type.",
                                 field);
                     }
                 }
@@ -874,29 +910,30 @@ public class SafeParcelProcessor extends AbstractProcessor {
         SerializationMethods sm = getSerializationMethod(field, fieldType);
         if (sm != null) {
             ParcelableField f = new ParcelableField(field);
-            f.id = id;
-            f.name = field.getSimpleName().toString();
-            f.readName = LOCAL_VARIABLE_PREFIX + f.name;
-            f.type = fieldType;
-            f.getter = getter;
-            f.sm = sm;
-            f.defaultValue = resolvedDefaultValue;
+            f.mId = id;
+            f.mName = field.getSimpleName().toString();
+            f.mReadName = LOCAL_VARIABLE_PREFIX + f.mName;
+            f.mType = fieldType;
+            f.mGetter = getter;
+            f.mSm = sm;
+            f.mDefaultValue = resolvedDefaultValue;
 
             // Special case of generic list
-            if (sm.write.equals("writeList")) {
+            if (sm.mWrite.equals("writeList")) {
                 // When instantiating a List, this will be an ArrayList
-                f.type = mTypes.erasure(f.type);
+                f.mType = mTypes.erasure(f.mType);
             }
 
-            cl.fields.put(f.id, f);
+            cl.mFields.put(f.mId, f);
         } else {
             mMessager.printMessage(
                     Diagnostic.Kind.ERROR,
                     fieldType
                             + " field tagged @SafeParcelable.Field is not supported in a"
                             + " SafeParcelable.  The field must be a primitive type, a concrete"
-                            + " class implementing SafeParcelable, or a Parcelable class in the"
-                            + " Android framework.",
+                            + " class implementing SafeParcelable, or a Parcelable class in the "
+                            + "Android"
+                            + " framework.",
                     field);
         }
     }
@@ -1488,7 +1525,7 @@ public class SafeParcelProcessor extends AbstractProcessor {
             JavaFileObject file =
                     this.processingEnv
                             .getFiler()
-                            .createSourceFile(cl.generatedClassName, cl.parcelableClass);
+                            .createSourceFile(cl.mGeneratedClassName, cl.mParcelableClass);
             writer = new PrintWriter(file.openOutputStream());
 
             JSilver jSilver =
@@ -1499,55 +1536,55 @@ public class SafeParcelProcessor extends AbstractProcessor {
             Data data = jSilver.createData();
 
             Data annotations = data.createChild("annotations");
-            if (cl.requiresApi != null) {
+            if (cl.mRequiresApi != null) {
                 annotations.setValue(
                         "0",
                         String.format(
                                 Locale.ROOT,
                                 "@androidx.annotation.RequiresApi(%d)",
-                                cl.requiresApi));
+                                cl.mRequiresApi));
             }
 
             // Creator class name
-            int index = cl.generatedClassName.lastIndexOf('.');
+            int index = cl.mGeneratedClassName.lastIndexOf('.');
             if (index > 0) {
-                data.setValue("creator_package", cl.generatedClassName.substring(0, index));
-                data.setValue("creator_name", cl.generatedClassName.substring(index + 1));
+                data.setValue("creator_package", cl.mGeneratedClassName.substring(0, index));
+                data.setValue("creator_name", cl.mGeneratedClassName.substring(index + 1));
             } else {
-                data.setValue("creator_name", cl.generatedClassName);
+                data.setValue("creator_name", cl.mGeneratedClassName);
             }
 
             // Data class name
-            data.setValue("class", cl.qualifiedName);
+            data.setValue("class", cl.mQualifiedName);
 
             // Set the constructor parameters
-            data.setValue("params", generateFormalParameters(cl.constructor));
+            data.setValue("params", generateFormalParameters(cl.mConstructor));
 
             // Call validate on the object
-            if (cl.annotation.validate()) {
+            if (cl.mAnnotation.validate()) {
                 data.setValue("call_validateContents", "true");
             }
 
-            if (cl.annotation.doNotParcelTypeDefaultValues()) {
+            if (cl.mAnnotation.doNotParcelTypeDefaultValues()) {
                 data.setValue("doNotParcelTypeDefaultValues", "true");
             }
 
-            if (cl.indicatorField != null) {
-                data.setValue("indicator.read_name", cl.indicatorField.readName);
-                if (cl.indicatorField.getter == null) {
-                    data.setValue("indicator.write_name", cl.indicatorField.name);
+            if (cl.mIndicatorField != null) {
+                data.setValue("indicator.read_name", cl.mIndicatorField.mReadName);
+                if (cl.mIndicatorField.mGetter == null) {
+                    data.setValue("indicator.write_name", cl.mIndicatorField.mName);
                 } else {
-                    data.setValue("indicator.write_name", cl.indicatorField.getter + "()");
+                    data.setValue("indicator.write_name", cl.mIndicatorField.mGetter + "()");
                 }
             }
 
             // temporary variable declarations
             Data declarations = data.createChild("declarations");
             int i = 0;
-            for (ParcelableField f : cl.constructor.parameters) {
+            for (ParcelableField f : cl.mConstructor.mParameters) {
                 Data declaration = declarations.createChild(Integer.toString(i++));
-                declaration.setValue("type", typeOrSuper(f.type));
-                declaration.setValue("var_name", f.readName);
+                declaration.setValue("type", typeOrSuper(f.mType));
+                declaration.setValue("var_name", f.mReadName);
                 declaration.setValue("initial_value", getDefaultValueForField(f));
             }
 
@@ -1555,34 +1592,34 @@ public class SafeParcelProcessor extends AbstractProcessor {
             Data fields = data.createChild("fields");
             i = 0;
             for (ParcelableField f :
-                    cl.fields.values().stream().sorted(comparing(f -> f.id)).collect(toList())) {
-                SerializationMethods sm = f.sm;
+                    cl.mFields.values().stream().sorted(comparing(f -> f.mId)).collect(toList())) {
+                SerializationMethods sm = f.mSm;
                 Data field = fields.createChild(Integer.toString(i++));
-                field.setValue("id", Integer.toString(f.id));
-                if (sm.isAssignment) {
+                field.setValue("id", Integer.toString(f.mId));
+                if (sm.mIsAssignment) {
                     field.setValue("is_assignment", "true");
                 }
-                field.setValue("read_name", f.readName);
-                if (f.getter == null) {
-                    field.setValue("write_name", f.name);
+                field.setValue("read_name", f.mReadName);
+                if (f.mGetter == null) {
+                    field.setValue("write_name", f.mName);
                 } else {
-                    field.setValue("write_name", f.getter + "()");
+                    field.setValue("write_name", f.mGetter + "()");
                 }
-                field.setValue("write", sm.write);
-                if (sm.writeWithFlags) {
+                field.setValue("write", sm.mWrite);
+                if (sm.mWriteWithFlags) {
                     field.setValue("writeWithFlags", "1");
                 }
-                field.setValue("create", sm.read);
-                if (sm.creator != null) {
-                    field.setValue("creator", sm.creator);
+                field.setValue("create", sm.mRead);
+                if (sm.mCreator != null) {
+                    field.setValue("creator", sm.mCreator);
                 }
-                if (sm.hasWriteNull) {
+                if (sm.mHasWriteNull) {
                     field.setValue("hasWriteNull", "1");
                 }
             }
 
             // Write to the file.
-            if (cl.indicatorField == null) {
+            if (cl.mIndicatorField == null) {
                 jSilver.render("template.cs", data, writer);
             } else {
                 jSilver.render("templateWithIndicator.cs", data, writer);
@@ -1591,7 +1628,7 @@ public class SafeParcelProcessor extends AbstractProcessor {
             mMessager.printMessage(
                     Diagnostic.Kind.ERROR,
                     "Error writing class file for "
-                            + cl.generatedClassName
+                            + cl.mGeneratedClassName
                             + ": "
                             + ex.getMessage());
         } finally {
@@ -1617,10 +1654,10 @@ public class SafeParcelProcessor extends AbstractProcessor {
     }
 
     private String getDefaultValueForField(ParcelableField field) {
-        if (field.defaultValue != null) {
-            return field.defaultValue;
+        if (field.mDefaultValue != null) {
+            return field.mDefaultValue;
         }
-        TypeMirror type = field.type;
+        TypeMirror type = field.mType;
         switch (type.getKind()) {
             case BOOLEAN:
                 return "false";
@@ -1654,9 +1691,9 @@ public class SafeParcelProcessor extends AbstractProcessor {
 
     private static String generateFormalParameters(ParcelableConstructor constructor) {
         StringBuffer sb = new StringBuffer();
-        ArrayList<ParcelableField> parameters = constructor.parameters;
+        ArrayList<ParcelableField> parameters = constructor.mParameters;
         for (int i = 0; i < parameters.size(); i++) {
-            sb.append(parameters.get(i).readName);
+            sb.append(parameters.get(i).mReadName);
             if (i < parameters.size() - 1) {
                 sb.append(", ");
             }
