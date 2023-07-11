@@ -45,8 +45,6 @@ import android.os.UserHandle;
 
 import androidx.test.core.app.ApplicationProvider;
 
-import com.android.server.appsearch.external.localstorage.AlwaysSupportedFeatures;
-
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
@@ -216,7 +214,7 @@ public class AppSearchSessionShimImpl implements AppSearchSessionShim {
     @Override
     @NonNull
     public Features getFeatures() {
-        return new AlwaysSupportedFeatures();
+        return new MainlineFeaturesImpl();
     }
 
     @Override
