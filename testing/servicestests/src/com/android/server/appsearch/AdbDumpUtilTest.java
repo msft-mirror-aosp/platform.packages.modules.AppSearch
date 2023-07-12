@@ -133,8 +133,8 @@ public class AdbDumpUtilTest {
         AppSearchImpl appSearchImpl = AppSearchImpl.create(mTemporaryFolder.newFolder(),
                 new UnlimitedLimitConfig(),
                 new DefaultIcingOptionsConfig(),
-                /*initStatsBuilder=*/ null, /*visibilityChecker=*/ null,
-                optimizeInfo -> true);
+                /*initStatsBuilder=*/ null, optimizeInfo -> true,
+                /*visibilityChecker=*/ null);
         List<AppSearchSchema> schemas = Collections.singletonList(new AppSearchSchema.Builder(
                 PERSON_TYPE).addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
                 "name").setIndexingType(
