@@ -105,6 +105,8 @@ public class FrameworkAppSearchConfigTest {
                 AppSearchRateLimitConfig.DEFAULT_API_COST);
         assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(
                 AppSearchRateLimitConfig.DEFAULT_API_COST);
+        assertThat(appSearchConfig.getIntegerIndexBucketSplitThreshold()).isEqualTo(
+                AppSearchConfig.DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD);
     }
 
     @Test
@@ -614,6 +616,9 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
                 Integer.toString(1001), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
+                Integer.toString(1002), false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
         assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(15);
@@ -625,6 +630,7 @@ public class FrameworkAppSearchConfigTest {
         assertThat(appSearchConfig.getUsePreMappingWithFileBackedVector()).isEqualTo(true);
         assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(true);
         assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(1001);
+        assertThat(appSearchConfig.getIntegerIndexBucketSplitThreshold()).isEqualTo(1002);
     }
 
     @Test
@@ -653,6 +659,9 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
                 Integer.toString(1001), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
+                Integer.toString(1002), false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
@@ -681,6 +690,9 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_MAX_PAGE_BYTES_LIMIT,
                 Integer.toString(1002), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
+                Integer.toString(1003), false);
 
         assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(25);
         assertThat(appSearchConfig.getIndexMergeSize()).isEqualTo(2000);
@@ -691,6 +703,7 @@ public class FrameworkAppSearchConfigTest {
         assertThat(appSearchConfig.getUsePreMappingWithFileBackedVector()).isEqualTo(false);
         assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(false);
         assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(1002);
+        assertThat(appSearchConfig.getIntegerIndexBucketSplitThreshold()).isEqualTo(1003);
     }
 
     @Test
@@ -840,5 +853,8 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getCachedRateLimitConfig());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getIntegerIndexBucketSplitThreshold());
     }
 }
