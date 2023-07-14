@@ -264,6 +264,15 @@ public class PrefixUtil {
                 typeConfigBuilder.setProperties(propertyIdx, propertyConfigBuilder);
             }
         }
+
+        // Rewrite SchemaProto.types.parent_types
+        for (int parentTypeIdx = 0;
+                parentTypeIdx < typeConfigBuilder.getParentTypesCount();
+                parentTypeIdx++) {
+            String newParentType =
+                    typeConfigBuilder.getParentTypes(parentTypeIdx).substring(typePrefix.length());
+            typeConfigBuilder.setParentTypes(parentTypeIdx, newParentType);
+        }
         return typePrefix;
     }
 }

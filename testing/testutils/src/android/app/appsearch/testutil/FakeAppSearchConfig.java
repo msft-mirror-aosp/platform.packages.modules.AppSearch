@@ -19,9 +19,9 @@ package android.app.appsearch.testutil;
 import android.os.Build;
 
 import com.android.server.appsearch.AppSearchConfig;
+import com.android.server.appsearch.AppSearchRateLimitConfig;
 import com.android.server.appsearch.Denylist;
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
-import com.android.server.appsearch.AppSearchRateLimitConfig;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -217,6 +217,12 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
     public AppSearchRateLimitConfig getCachedRateLimitConfig() {
         throwIfClosed();
         return DEFAULT_APPSEARCH_RATE_LIMIT_CONFIG;
+    }
+
+    @Override
+    public int getIntegerIndexBucketSplitThreshold() {
+        throwIfClosed();
+        return DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD;
     }
 
     private void throwIfClosed() {
