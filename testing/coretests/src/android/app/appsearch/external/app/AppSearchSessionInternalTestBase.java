@@ -146,8 +146,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone
         List<SearchSuggestionResult> suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterSchemas("Type1")
                                         .addFilterProperties(
                                                 "Type1", ImmutableList.of("propertyone"))
@@ -158,8 +158,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone and type1/propertytwo
         suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterSchemas("Type1")
                                         .addFilterProperties(
                                                 "Type1",
@@ -171,8 +171,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone and type2/propertythree
         suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterSchemas("Type1", "Type2")
                                         .addFilterProperties(
                                                 "Type1", ImmutableList.of("propertyone"))
@@ -185,8 +185,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone and type2/propertyfour, in addFilterPropertyPaths
         suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterSchemas("Type1", "Type2")
                                         .addFilterProperties(
                                                 "Type1", ImmutableList.of("propertyone"))
@@ -200,8 +200,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone and everything in type2
         suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterProperties(
                                                 "Type1", ImmutableList.of("propertyone"))
                                         .build())
@@ -375,11 +375,9 @@ public abstract class AppSearchSessionInternalTestBase {
         assertThat(exception.getResultCode()).isEqualTo(RESULT_INVALID_ARGUMENT);
         assertThat(exception)
                 .hasMessageThat()
-                .contains(
-                        "Property sender from child type "
-                                + "com.android.appsearch.coretests$/Email is not"
-                                + " compatible to the parent type"
-                                + " com.android.appsearch.coretests$/Message.");
+                .containsMatch(
+                        "Property sender from child type .*\\$/Email is not compatible"
+                                + " to the parent type .*\\$/Message.");
     }
 
     // TODO(b/291122592): move to CTS once the APIs it uses are public
@@ -392,7 +390,8 @@ public abstract class AppSearchSessionInternalTestBase {
         AppSearchSchema messageSchema =
                 new AppSearchSchema.Builder("Message")
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("sender", "Artist")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "sender", "Artist")
                                         .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
                                         .build())
                         .build();
@@ -403,7 +402,8 @@ public abstract class AppSearchSessionInternalTestBase {
                         // requires "sender"'s type here to be a subtype of Artist. Thus, this is
                         // incompatible because Person is not a subtype of Artist.
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("sender", "Person")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "sender", "Person")
                                         .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
                                         .build())
                         .build();
@@ -423,11 +423,9 @@ public abstract class AppSearchSessionInternalTestBase {
         assertThat(exception.getResultCode()).isEqualTo(RESULT_INVALID_ARGUMENT);
         assertThat(exception)
                 .hasMessageThat()
-                .contains(
-                        "Property sender from child type "
-                                + "com.android.appsearch.coretests$/Email is not"
-                                + " compatible to the parent type"
-                                + " com.android.appsearch.coretests$/Message.");
+                .containsMatch(
+                        "Property sender from child type .*\\$/Email is not compatible"
+                                + " to the parent type .*\\$/Message.");
     }
 
     // TODO(b/291122592): move to CTS once the APIs it uses are public
@@ -440,7 +438,8 @@ public abstract class AppSearchSessionInternalTestBase {
         AppSearchSchema messageSchema =
                 new AppSearchSchema.Builder("Message")
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("sender", "Person")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "sender", "Person")
                                         .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
                                         .build())
                         .addProperty(
@@ -456,7 +455,8 @@ public abstract class AppSearchSessionInternalTestBase {
                         .addParentType("Message")
                         .addProperty(
                                 // Artist is a subtype of Person, so compatible
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("sender", "Artist")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "sender", "Artist")
                                         .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
                                         .build())
                         .addProperty(
@@ -719,7 +719,8 @@ public abstract class AppSearchSessionInternalTestBase {
         AppSearchSchema messageSchema =
                 new AppSearchSchema.Builder("Message")
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("sender", "Person")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "sender", "Person")
                                         .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
                                         .setShouldIndexNestedProperties(true)
                                         .build())
@@ -793,7 +794,8 @@ public abstract class AppSearchSessionInternalTestBase {
                                         .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("worksFor", "Organization")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "worksFor", "Organization")
                                         .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
                                         .setShouldIndexNestedProperties(false)
                                         .addIndexableNestedProperties("name")
@@ -894,7 +896,8 @@ public abstract class AppSearchSessionInternalTestBase {
                                         .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("worksFor", "Organization")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "worksFor", "Organization")
                                         .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
                                         .setShouldIndexNestedProperties(false)
                                         .addIndexableNestedProperties("name")
@@ -948,7 +951,8 @@ public abstract class AppSearchSessionInternalTestBase {
                                         .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("worksFor", "Organization")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "worksFor", "Organization")
                                         .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
                                         .setShouldIndexNestedProperties(false)
                                         .addIndexableNestedProperties("name")
@@ -1046,14 +1050,16 @@ public abstract class AppSearchSessionInternalTestBase {
                                         .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("sender", "Person")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "sender", "Person")
                                         .setCardinality(PropertyConfig.CARDINALITY_REPEATED)
                                         .setShouldIndexNestedProperties(false)
                                         .addIndexableNestedProperties(
                                                 "name", "worksFor.name", "worksFor.notes")
                                         .build())
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("recipient", "Person")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "recipient", "Person")
                                         .setCardinality(PropertyConfig.CARDINALITY_REPEATED)
                                         .setShouldIndexNestedProperties(true)
                                         .build())
@@ -1075,7 +1081,8 @@ public abstract class AppSearchSessionInternalTestBase {
                                         .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("worksFor", "Organization")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "worksFor", "Organization")
                                         .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
                                         .setShouldIndexNestedProperties(false)
                                         .addIndexableNestedProperties("name", "id")
@@ -1249,7 +1256,8 @@ public abstract class AppSearchSessionInternalTestBase {
                                         .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("worksFor", "Organization")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "worksFor", "Organization")
                                         .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
                                         .setShouldIndexNestedProperties(false)
                                         .addIndexableNestedProperties(
@@ -1273,7 +1281,8 @@ public abstract class AppSearchSessionInternalTestBase {
                                         .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .addProperty(
-                                new AppSearchSchema.DocumentPropertyConfig.Builder("funder", "Person")
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "funder", "Person")
                                         .setCardinality(PropertyConfig.CARDINALITY_REPEATED)
                                         .setShouldIndexNestedProperties(false)
                                         .addIndexableNestedProperties(
@@ -1427,7 +1436,7 @@ public abstract class AppSearchSessionInternalTestBase {
         assertThat(outDocuments).containsExactly(org2);
     }
 
-    // TODO(b/258715421): move this test to cts test once we un-hide schema type grouping API.
+    // TODO(b/291122592): move to CTS once the APIs it uses are public
     @Test
     public void testQuery_ResultGroupingLimits_SchemaGroupingSupported() throws Exception {
         assumeTrue(
@@ -1532,7 +1541,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_PACKAGE, /*resultLimit=*/ 1)
+                                        SearchSpec.GROUPING_TYPE_PER_PACKAGE, /* resultLimit= */ 1)
                                 .build());
         List<GenericDocument> documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3);
@@ -1545,7 +1554,8 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_NAMESPACE, /*resultLimit=*/ 1)
+                                        SearchSpec.GROUPING_TYPE_PER_NAMESPACE,
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail2);
@@ -1558,7 +1568,8 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_NAMESPACE, /*resultLimit=*/ 2)
+                                        SearchSpec.GROUPING_TYPE_PER_NAMESPACE,
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents)
@@ -1572,7 +1583,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_SCHEMA, /*resultLimit=*/ 1)
+                                        SearchSpec.GROUPING_TYPE_PER_SCHEMA, /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inEmail5);
@@ -1585,7 +1596,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_SCHEMA, /*resultLimit=*/ 2)
+                                        SearchSpec.GROUPING_TYPE_PER_SCHEMA, /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail4);
@@ -1600,7 +1611,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 1)
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail2);
@@ -1616,7 +1627,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 2)
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents)
@@ -1632,7 +1643,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 1)
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inEmail5);
@@ -1647,7 +1658,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 2)
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail4);
@@ -1662,7 +1673,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
-                                        /*resultLimit=*/ 1)
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail2);
@@ -1678,7 +1689,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
-                                        /*resultLimit=*/ 2)
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents)
@@ -1695,7 +1706,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 1)
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail2);
@@ -1712,14 +1723,14 @@ public abstract class AppSearchSessionInternalTestBase {
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 2)
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents)
                 .containsExactly(inDoc3, inDoc2, inDoc1, inEmail5, inEmail4, inEmail2, inEmail1);
     }
 
-    // TODO(b/258715421): move this test to cts test once we un-hide schema type grouping API.
+    // TODO(b/291122592): move to CTS once the APIs it uses are public
     @Test
     public void testQuery_ResultGroupingLimits_SchemaGroupingNotSupported() throws Exception {
         assumeFalse(
@@ -1777,7 +1788,8 @@ public abstract class AppSearchSessionInternalTestBase {
         SearchSpec searchSpec1 =
                 new SearchSpec.Builder()
                         .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
-                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_SCHEMA, /*resultLimit=*/ 1)
+                        .setResultGrouping(
+                                SearchSpec.GROUPING_TYPE_PER_SCHEMA, /* resultLimit= */ 1)
                         .build();
         UnsupportedOperationException exception =
                 assertThrows(
@@ -1798,7 +1810,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         .setResultGrouping(
                                 SearchSpec.GROUPING_TYPE_PER_PACKAGE
                                         | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
-                                /*resultLimit=*/ 1)
+                                /* resultLimit= */ 1)
                         .build();
         exception =
                 assertThrows(
@@ -1819,7 +1831,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         .setResultGrouping(
                                 SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                         | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
-                                /*resultLimit=*/ 1)
+                                /* resultLimit= */ 1)
                         .build();
         exception =
                 assertThrows(
@@ -1841,7 +1853,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                         | SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                         | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                /*resultLimit=*/ 1)
+                                /* resultLimit= */ 1)
                         .build();
         exception =
                 assertThrows(
