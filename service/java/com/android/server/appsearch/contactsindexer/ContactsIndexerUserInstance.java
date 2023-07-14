@@ -509,7 +509,8 @@ public final class ContactsIndexerUserInstance {
     }
 
     // Logs the stats to statsd.
-    private void logStats(@NonNull ContactsUpdateStats updateStats) {
+    @VisibleForTesting
+    void logStats(@NonNull ContactsUpdateStats updateStats) {
         int totalUpdateLatency =
                 (int) (System.currentTimeMillis()
                         - updateStats.mUpdateAndDeleteStartTimeMillis);
@@ -541,7 +542,7 @@ public final class ContactsIndexerUserInstance {
             updateStatusArr[updateIdx] = updateStatus;
             ++updateIdx;
         }
-        for (int deleteStatus : updateStats.mUpdateStatuses) {
+        for (int deleteStatus : updateStats.mDeleteStatuses) {
             deleteStatusArr[deleteIdx] = deleteStatus;
             ++deleteIdx;
         }

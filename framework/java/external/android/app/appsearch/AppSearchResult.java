@@ -112,6 +112,7 @@ public final class AppSearchResult<ValueType> {
      *
      * @hide
      */
+
     // TODO(b/279047435): unhide this the next time we can make API changes
     public static final int RESULT_RATE_LIMITED = 10;
 
