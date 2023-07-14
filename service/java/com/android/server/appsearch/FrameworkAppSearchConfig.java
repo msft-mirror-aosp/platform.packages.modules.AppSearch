@@ -96,6 +96,8 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             "icing_use_pre_mapping_with_file_backed_vector";
     public static final String KEY_ICING_USE_PERSISTENT_HASHMAP = "icing_use_persistent_hashmap";
     public static final String KEY_ICING_MAX_PAGE_BYTES_LIMIT = "icing_max_page_bytes_limit";
+    public static final String KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD =
+            "icing_integer_index_bucket_split_threshold";
 
     /**
      * This config does not need to be cached in FrameworkAppSearchConfig as it is only accessed
@@ -134,7 +136,8 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             KEY_ICING_USE_READ_ONLY_SEARCH,
             KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
             KEY_ICING_USE_PERSISTENT_HASHMAP,
-            KEY_ICING_MAX_PAGE_BYTES_LIMIT
+            KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+            KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
     };
 
     // Lock needed for all the operations in this class.
@@ -506,6 +509,16 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
         }
     }
 
+    @Override
+    public int getIntegerIndexBucketSplitThreshold() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getInt(
+                    KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
+                    DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD);
+        }
+    }
+
     @GuardedBy("mLock")
     private void throwIfClosedLocked() {
         if (mIsClosedLocked) {
@@ -690,6 +703,11 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                             IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT));
                 }
                 break;
+            case KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD:
+                synchronized (mLock) {
+                    mBundleLocked.putInt(key, properties.getInt(key,
+                            IcingOptionsConfig.DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD));
+                }
             default:
                 break;
         }
