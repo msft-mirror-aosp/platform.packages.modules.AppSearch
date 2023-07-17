@@ -112,7 +112,7 @@ public final class ContactsIndexerUserInstance {
         Objects.requireNonNull(contactsIndexerConfig);
 
         ExecutorService singleThreadedExecutor = AppSearchEnvironmentFactory
-            .getEnvironmentInstance().createSingleThreadExecutor();
+                .getEnvironmentInstance().createSingleThreadExecutor();
         return createInstance(userContext, contactsDir, contactsIndexerConfig,
                 singleThreadedExecutor);
     }
@@ -139,12 +139,12 @@ public final class ContactsIndexerUserInstance {
     /**
      * Constructs a {@link ContactsIndexerUserInstance}.
      *
-     * @param context                 Context object passed from
-     *                                {@link ContactsIndexerManagerService}
-     * @param dataDir                 data directory for storing contacts indexer state.
-     * @param contactsIndexerConfig   configuration for the Contacts Indexer.
-     * @param singleThreadedExecutor  an {@link ExecutorService} with at most one thread to ensure
-     *                                the thread safety of this class.
+     * @param context                Context object passed from
+     *                               {@link ContactsIndexerManagerService}
+     * @param dataDir                data directory for storing contacts indexer state.
+     * @param contactsIndexerConfig  configuration for the Contacts Indexer.
+     * @param singleThreadedExecutor an {@link ExecutorService} with at most one thread to ensure
+     *                               the thread safety of this class.
      */
     private ContactsIndexerUserInstance(@NonNull Context context, @NonNull File dataDir,
             @NonNull AppSearchHelper appSearchHelper,
@@ -240,7 +240,7 @@ public final class ContactsIndexerUserInstance {
         // to bring latest contact change in AppSearch right away, after it is re-enabled.
         if (mSettings.getLastFullUpdateTimestampMillis() != 0 &&
                 ContactsIndexerMaintenanceService.isFullUpdateJobScheduled(mContext,
-                mContext.getUser().getIdentifier())) {
+                        mContext.getUser().getIdentifier())) {
             return;
         }
         ContactsIndexerMaintenanceService.scheduleFullUpdateJob(mContext,
@@ -317,8 +317,8 @@ public final class ContactsIndexerUserInstance {
                     // 2) or we get OUT_OF_SPACE from AppSearch.
                     // So print a message once in 15-30 days should be acceptable.
                     Log.i(TAG, "Performing a full sync (updated:" + cp2ContactIds.size()
-                                + ", deleted:" + appsearchContactIds.size()
-                                + ") of CP2 contacts in AppSearch");
+                            + ", deleted:" + appsearchContactIds.size()
+                            + ") of CP2 contacts in AppSearch");
                     return mContactsIndexerImpl.updatePersonCorpusAsync(/*wantedContactIds=*/
                             cp2ContactIds, /*unwantedContactIds=*/ appsearchContactIds,
                             updateStats);

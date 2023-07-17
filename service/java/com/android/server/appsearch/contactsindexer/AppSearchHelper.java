@@ -264,7 +264,6 @@ public class AppSearchHelper {
                     int numDocsSucceeded = result.getSuccesses().size();
                     int numDocsFailed = result.getFailures().size();
                     updateStats.mContactsUpdateSucceededCount += numDocsSucceeded;
-                    updateStats.mContactsUpdateFailedCount += numDocsFailed;
                     if (result.isSuccess()) {
                         if (LogUtil.DEBUG) {
                             Log.v(TAG,
@@ -324,13 +323,15 @@ public class AppSearchHelper {
                 @Override
                 public void onResult(AppSearchBatchResult<String, Void> result) {
                     int numSuccesses = result.getSuccesses().size();
-                    int numFailures = 0;
+                    int numNotFound = 0;
                     AppSearchResult<Void> firstFailure = null;
                     for (AppSearchResult<Void> failedResult : result.getFailures().values()) {
-                        // Ignore document not found errors.
+                        // Don't treat document not found errors as failed results but still count
+                        // them for stats logging
                         int errorCode = failedResult.getResultCode();
-                        if (errorCode != AppSearchResult.RESULT_NOT_FOUND) {
-                            numFailures++;
+                        if (errorCode == AppSearchResult.RESULT_NOT_FOUND) {
+                            numNotFound++;
+                        } else {
                             updateStats.mDeleteStatuses.add(errorCode);
                             if (firstFailure == null) {
                                 firstFailure = failedResult;
@@ -338,10 +339,10 @@ public class AppSearchHelper {
                         }
                     }
                     updateStats.mContactsDeleteSucceededCount += numSuccesses;
-                    updateStats.mContactsDeleteFailedCount += numFailures;
+                    updateStats.mContactsDeleteNotFoundCount += numNotFound;
                     if (firstFailure != null) {
-                        Log.w(TAG, "Failed to delete "
-                                + numFailures + " contacts from AppSearch");
+                        Log.w(TAG, "Failed to delete " + (result.getFailures().size() - numNotFound)
+                                + " contacts from AppSearch");
                         future.completeExceptionally(new AppSearchException(
                                 firstFailure.getResultCode(), firstFailure.getErrorMessage()));
                         return;
