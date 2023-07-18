@@ -205,8 +205,7 @@ public final class SearchSpec {
      * Results should be grouped together by schema type for the purpose of enforcing a limit on the
      * number of results returned per schema type.
      *
-     * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are
-     *   possible.
+     * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are possible.
      */
     public static final int GROUPING_TYPE_PER_SCHEMA = 1 << 2;
 

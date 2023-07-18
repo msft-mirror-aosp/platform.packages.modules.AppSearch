@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 The Android Open Source Project
+ * Copyright 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import org.junit.Test;
 
 import java.util.List;
 
+/** Tests for private APIs of {@link AppSearchSchema}. */
 public class AppSearchSchemaInternalTest {
     // TODO(b/291122592): move to CTS once the APIs it uses are public
     @Test
@@ -115,56 +116,73 @@ public class AppSearchSchemaInternalTest {
                 new AppSearchSchema.Builder("Test")
                         .addProperty(
                                 new AppSearchSchema.StringPropertyConfig.Builder("string")
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_REQUIRED)
                                         .setIndexingType(
-                                                AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_EXACT_TERMS)
-                                        .setTokenizerType(AppSearchSchema.StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .INDEXING_TYPE_EXACT_TERMS)
+                                        .setTokenizerType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.LongPropertyConfig.Builder("long")
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
-                                        .setIndexingType(AppSearchSchema.LongPropertyConfig.INDEXING_TYPE_NONE)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setIndexingType(
+                                                AppSearchSchema.LongPropertyConfig
+                                                        .INDEXING_TYPE_NONE)
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.LongPropertyConfig.Builder("indexableLong")
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
-                                        .setIndexingType(AppSearchSchema.LongPropertyConfig.INDEXING_TYPE_RANGE)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setIndexingType(
+                                                AppSearchSchema.LongPropertyConfig
+                                                        .INDEXING_TYPE_RANGE)
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.DoublePropertyConfig.Builder("double")
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.BooleanPropertyConfig.Builder("boolean")
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_REQUIRED)
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.BytesPropertyConfig.Builder("bytes")
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.DocumentPropertyConfig.Builder(
-                                        "document1", AppSearchEmail.SCHEMA_TYPE)
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                                                "document1", AppSearchEmail.SCHEMA_TYPE)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
                                         .setShouldIndexNestedProperties(true)
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.DocumentPropertyConfig.Builder(
-                                        "document2", AppSearchEmail.SCHEMA_TYPE)
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
+                                                "document2", AppSearchEmail.SCHEMA_TYPE)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_REPEATED)
                                         .setShouldIndexNestedProperties(false)
                                         .addIndexableNestedProperties("path1", "path2", "path3")
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.StringPropertyConfig.Builder("qualifiedId1")
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
                                         .setJoinableValueType(
                                                 AppSearchSchema.StringPropertyConfig
                                                         .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
                                         .build())
                         .addProperty(
                                 new AppSearchSchema.StringPropertyConfig.Builder("qualifiedId2")
-                                        .setCardinality(AppSearchSchema.PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_REQUIRED)
                                         .setJoinableValueType(
                                                 AppSearchSchema.StringPropertyConfig
                                                         .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
@@ -216,8 +234,8 @@ public class AppSearchSchemaInternalTest {
         assertThat(((AppSearchSchema.DocumentPropertyConfig) properties.get(6)).getSchemaType())
                 .isEqualTo(AppSearchEmail.SCHEMA_TYPE);
         assertThat(
-                ((AppSearchSchema.DocumentPropertyConfig) properties.get(6))
-                        .shouldIndexNestedProperties())
+                        ((AppSearchSchema.DocumentPropertyConfig) properties.get(6))
+                                .shouldIndexNestedProperties())
                 .isEqualTo(true);
 
         assertThat(properties.get(7).getName()).isEqualTo("document2");
@@ -226,24 +244,28 @@ public class AppSearchSchemaInternalTest {
         assertThat(((AppSearchSchema.DocumentPropertyConfig) properties.get(7)).getSchemaType())
                 .isEqualTo(AppSearchEmail.SCHEMA_TYPE);
         assertThat(
-                ((AppSearchSchema.DocumentPropertyConfig) properties.get(7))
-                        .shouldIndexNestedProperties())
+                        ((AppSearchSchema.DocumentPropertyConfig) properties.get(7))
+                                .shouldIndexNestedProperties())
                 .isEqualTo(false);
         assertThat(
-                ((AppSearchSchema.DocumentPropertyConfig) properties.get(7))
-                        .getIndexableNestedProperties())
+                        ((AppSearchSchema.DocumentPropertyConfig) properties.get(7))
+                                .getIndexableNestedProperties())
                 .containsExactly("path1", "path2", "path3");
 
         assertThat(properties.get(8).getName()).isEqualTo("qualifiedId1");
         assertThat(properties.get(8).getCardinality())
                 .isEqualTo(AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL);
-        assertThat(((AppSearchSchema.StringPropertyConfig) properties.get(8)).getJoinableValueType())
+        assertThat(
+                        ((AppSearchSchema.StringPropertyConfig) properties.get(8))
+                                .getJoinableValueType())
                 .isEqualTo(AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID);
 
         assertThat(properties.get(9).getName()).isEqualTo("qualifiedId2");
         assertThat(properties.get(9).getCardinality())
                 .isEqualTo(AppSearchSchema.PropertyConfig.CARDINALITY_REQUIRED);
-        assertThat(((AppSearchSchema.StringPropertyConfig) properties.get(9)).getJoinableValueType())
+        assertThat(
+                        ((AppSearchSchema.StringPropertyConfig) properties.get(9))
+                                .getJoinableValueType())
                 .isEqualTo(AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID);
     }
 
