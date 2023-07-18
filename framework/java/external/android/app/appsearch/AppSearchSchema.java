@@ -142,6 +142,7 @@ public final class AppSearchSchema {
 
     /**
      * Returns the list of parent types of this schema for polymorphism.
+     *
      * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are possible.
      */
     @NonNull
@@ -266,7 +267,6 @@ public final class AppSearchSchema {
          *
          * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are possible.
          */
-        // TODO(b/280698873): Disallow polymorphism in AppSearch framework for Android T.
         @CanIgnoreReturnValue
         @NonNull
         public AppSearchSchema.Builder addParentType(@NonNull String parentSchemaType) {
@@ -1180,6 +1180,7 @@ public final class AppSearchSchema {
 
         /**
          * Returns the list of indexable nested properties for the nested document.
+         *
          * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are possible.
          */
         @NonNull
@@ -1279,7 +1280,7 @@ public final class AppSearchSchema {
              * {@link IllegalArgumentException}.
              *
              * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are
-             *   possible.
+             *     possible.
              */
             @CanIgnoreReturnValue
             @NonNull
@@ -1294,7 +1295,7 @@ public final class AppSearchSchema {
              *
              * @see #addIndexableNestedProperties(String...)
              * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are
-             *   possible.
+             *     possible.
              */
             @CanIgnoreReturnValue
             @SuppressLint("MissingGetterMatchingBuilder")
@@ -1310,7 +1311,7 @@ public final class AppSearchSchema {
              *
              * @see #addIndexableNestedProperties(String...)
              * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are
-             *   possible.
+             *     possible.
              */
             @CanIgnoreReturnValue
             @NonNull
@@ -1326,7 +1327,7 @@ public final class AppSearchSchema {
              *
              * @see #addIndexableNestedProperties(String...)
              * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are
-             *   possible.
+             *     possible.
              */
             @CanIgnoreReturnValue
             @SuppressLint("MissingGetterMatchingBuilder")
@@ -1382,9 +1383,12 @@ public final class AppSearchSchema {
                     .append(shouldIndexNestedProperties())
                     .append(",\n");
 
-            builder.append("indexableNestedProperties: ")
-                    .append(getIndexableNestedProperties())
-                    .append(",\n");
+            List<String> indexableNestedProperties = getIndexableNestedProperties();
+            if (!indexableNestedProperties.isEmpty()) {
+                builder.append("indexableNestedProperties: ")
+                        .append(indexableNestedProperties)
+                        .append(",\n");
+            }
 
             builder.append("schemaType: \"").append(getSchemaType()).append("\",\n");
         }
