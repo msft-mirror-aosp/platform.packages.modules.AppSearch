@@ -29,6 +29,7 @@ import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.SchemaMigrationUtil;
 import android.content.AttributionSource;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -153,6 +154,12 @@ public final class AppSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         List<Bundle> schemaBundles = new ArrayList<>(request.getSchemas().size());
         for (AppSearchSchema schema : request.getSchemas()) {
+            if (!schema.getParentTypes().isEmpty()
+                    && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                throw new UnsupportedOperationException(
+                        "SCHEMA_ADD_PARENT_TYPE is not available on this AppSearch "
+                                + "implementation.");
+            }
             schemaBundles.add(schema.getBundle());
         }
 
