@@ -30,9 +30,9 @@ android_test {
     ],
     libs: [
         "android.test.runner",
-        "framework-appsearch.impl",
         "android.test.mock",
         "android.test.base",
+        "framework-appsearch.impl",
     ],
     test_suites: [
         "general-tests",
