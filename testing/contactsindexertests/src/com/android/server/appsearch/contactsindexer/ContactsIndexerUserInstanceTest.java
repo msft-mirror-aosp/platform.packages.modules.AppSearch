@@ -301,18 +301,22 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
         }
 
-        instance.startAsync();
+        try {
+            instance.startAsync();
 
-        // Wait for all async tasks to complete
-        latch.await(30L, TimeUnit.SECONDS);
+            // Wait for all async tasks to complete
+            latch.await(30L, TimeUnit.SECONDS);
 
-        ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
-        verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
-        JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
-        assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
-        assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
-        assertThat(fullUpdateJob.isPersisted()).isTrue();
-        assertThat(fullUpdateJob.isPeriodic()).isFalse();
+            ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
+            verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
+            JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
+            assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
+            assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
+            assertThat(fullUpdateJob.isPersisted()).isTrue();
+            assertThat(fullUpdateJob.isPeriodic()).isFalse();
+        } finally {
+            instance.shutdown();
+        }
     }
 
     @Test
@@ -359,18 +363,22 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
         }
 
-        instance.startAsync();
+        try {
+            instance.startAsync();
 
-        // Wait for all async tasks to complete
-        latch.await(30L, TimeUnit.SECONDS);
+            // Wait for all async tasks to complete
+            latch.await(30L, TimeUnit.SECONDS);
 
-        ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
-        verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
-        JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
-        assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
-        assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
-        assertThat(fullUpdateJob.isPersisted()).isTrue();
-        assertThat(fullUpdateJob.isPeriodic()).isFalse();
+            ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
+            verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
+            JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
+            assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
+            assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
+            assertThat(fullUpdateJob.isPersisted()).isTrue();
+            assertThat(fullUpdateJob.isPeriodic()).isFalse();
+        } finally {
+            instance.shutdown();
+        }
     }
 
     @Test
@@ -420,12 +428,16 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
         }
 
-        instance.startAsync();
+        try {
+            instance.startAsync();
 
-        // Wait for all async tasks to complete
-        latch.await(30L, TimeUnit.SECONDS);
+            // Wait for all async tasks to complete
+            latch.await(30L, TimeUnit.SECONDS);
 
-        verify(mockJobScheduler, never()).schedule(any());
+            verify(mockJobScheduler, never()).schedule(any());
+        } finally {
+            instance.shutdown();
+        }
     }
 
     @Test
@@ -784,9 +796,12 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         mContextWrapper.setJobScheduler(mockJobScheduler);
         mInstance = ContactsIndexerUserInstance.createInstance(mContext, mContactsDir,
                 mConfigForTest, mSingleThreadedExecutor);
-        mInstance.startAsync();
-
-        verifyZeroInteractions(mockJobScheduler);
+        try {
+            mInstance.startAsync();
+            verifyZeroInteractions(mockJobScheduler);
+        } finally {
+            mInstance.shutdown();
+        }
     }
 
     @Test
@@ -849,10 +864,13 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         mContextWrapper.setJobScheduler(mockJobScheduler);
         mInstance = ContactsIndexerUserInstance.createInstance(mContext, mContactsDir,
                 mConfigForTest, mSingleThreadedExecutor);
-        mInstance.startAsync();
-        latch.await(30L, TimeUnit.SECONDS);
-
-        verify(mockJobScheduler).schedule(any());
+        try {
+            mInstance.startAsync();
+            latch.await(30L, TimeUnit.SECONDS);
+            verify(mockJobScheduler).schedule(any());
+        } finally {
+            mInstance.shutdown();
+        }
     }
 
     @Test
