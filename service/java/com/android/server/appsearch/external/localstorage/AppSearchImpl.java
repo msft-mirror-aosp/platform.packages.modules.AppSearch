@@ -321,6 +321,8 @@ public final class AppSearchImpl implements Closeable {
                             .setPreMappingFbv(
                                     icingOptionsConfig.getUsePreMappingWithFileBackedVector())
                             .setUsePersistentHashMap(icingOptionsConfig.getUsePersistentHashMap())
+                            .setIntegerIndexBucketSplitThreshold(
+                                    icingOptionsConfig.getIntegerIndexBucketSplitThreshold())
                             .build();
             LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
             mIcingSearchEngineLocked = new IcingSearchEngine(options);
@@ -1472,8 +1474,29 @@ public final class AppSearchImpl implements Closeable {
             throwIfClosedLocked();
 
             long aclLatencyStartMillis = SystemClock.elapsedRealtime();
+
+            // The two scenarios where we want to limit package filters are if the outer
+            // SearchSpec has package filters and there is no JoinSpec, or if both outer and
+            // nested SearchSpecs have package filters. If outer SearchSpec has no package
+            // filters or the nested SearchSpec has no package filters, then we pass the key set of
+            // mNamespaceMapLocked to the SearchSpecToProtoConverter, signifying that there is a
+            // SearchSpec that wants to query every visible package.
+            Set<String> packageFilters = new ArraySet<>();
+            if (!searchSpec.getFilterPackageNames().isEmpty()) {
+                if (searchSpec.getJoinSpec() == null) {
+                    packageFilters.addAll(searchSpec.getFilterPackageNames());
+                } else if (!searchSpec
+                        .getJoinSpec()
+                        .getNestedSearchSpec()
+                        .getFilterPackageNames()
+                        .isEmpty()) {
+                    packageFilters.addAll(searchSpec.getFilterPackageNames());
+                    packageFilters.addAll(
+                            searchSpec.getJoinSpec().getNestedSearchSpec().getFilterPackageNames());
+                }
+            }
+
             // Convert package filters to prefix filters
-            Set<String> packageFilters = new ArraySet<>(searchSpec.getFilterPackageNames());
             Set<String> prefixFilters = new ArraySet<>();
             if (packageFilters.isEmpty()) {
                 // Client didn't restrict their search over packages. Try to query over all
@@ -2524,6 +2547,14 @@ public final class AppSearchImpl implements Closeable {
                     propertyConfigBuilder.setSchemaType(newPropertySchemaType);
                     typeConfigBuilder.setProperties(propertyIdx, propertyConfigBuilder);
                 }
+            }
+
+            // Rewrite SchemaProto.types.parent_types
+            for (int parentTypeIdx = 0;
+                    parentTypeIdx < typeConfigBuilder.getParentTypesCount();
+                    parentTypeIdx++) {
+                String newParentType = prefix + typeConfigBuilder.getParentTypes(parentTypeIdx);
+                typeConfigBuilder.setParentTypes(parentTypeIdx, newParentType);
             }
 
             newTypesToProto.put(newSchemaType, typeConfigBuilder.build());
