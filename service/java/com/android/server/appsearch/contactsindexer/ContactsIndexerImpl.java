@@ -85,7 +85,6 @@ public final class ContactsIndexerImpl {
     private final ContactDataHandler mContactDataHandler;
     private final String[] mProjection;
     private final AppSearchHelper mAppSearchHelper;
-    private final ContactsBatcher mBatcher;
 
     public ContactsIndexerImpl(@NonNull Context context, @NonNull AppSearchHelper appSearchHelper) {
         mContext = Objects.requireNonNull(context);
@@ -95,8 +94,6 @@ public final class ContactsIndexerImpl {
         Set<String> neededColumns = new ArraySet<>(Arrays.asList(COMMON_NEEDED_COLUMNS));
         neededColumns.addAll(mContactDataHandler.getNeededColumns());
         mProjection = neededColumns.toArray(new String[0]);
-        mBatcher = new ContactsBatcher(mAppSearchHelper,
-                NUM_UPDATED_CONTACTS_PER_BATCH_FOR_APPSEARCH);
     }
 
     /**
@@ -168,6 +165,12 @@ public final class ContactsIndexerImpl {
         //
         // Batch reading the contacts from CP2, and index the created documents to AppSearch
         //
+        // Moved contactsBatcher from a member variable to a local variable. Previously, two
+        // simultaneous updates would use the same ContactsBatcher, leading to updates sometimes
+        // indexing each other's contacts and messing up the metrics/counts for the number of
+        // succeeded/skipped contacts.
+        ContactsBatcher contactsBatcher = new ContactsBatcher(mAppSearchHelper,
+                NUM_UPDATED_CONTACTS_PER_BATCH_FOR_APPSEARCH);
         while (startIndex < wantedIdListSize) {
             int endIndex = Math.min(startIndex + NUM_CONTACTS_PER_BATCH_FOR_CP2,
                     wantedIdListSize);
@@ -184,6 +187,7 @@ public final class ContactsIndexerImpl {
                         selection, /*selectionArgs=*/null,
                         ORDER_BY);
                 if (cursor == null) {
+                    contactsBatcher.clearBatchedContacts();
                     updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_INTERNAL_ERROR);
                     return CompletableFuture.failedFuture(
                             new IllegalStateException(
@@ -192,7 +196,8 @@ public final class ContactsIndexerImpl {
                     future = future
                             .thenCompose(x -> {
                                 CompletableFuture<Void> indexContactsFuture =
-                                        indexContactsFromCursorAsync(cursor, updateStats);
+                                        indexContactsFromCursorAsync(cursor, updateStats,
+                                                contactsBatcher);
                                 cursor.close();
                                 return indexContactsFuture;
                             });
@@ -202,6 +207,7 @@ public final class ContactsIndexerImpl {
                 // for when their database fails to open. Behave as if there was no
                 // ContactsProvider, and flag that we were not successful.
                 Log.e(TAG, "ContentResolver.query threw an exception.", e);
+                contactsBatcher.clearBatchedContacts();
                 updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_INTERNAL_ERROR);
                 return CompletableFuture.failedFuture(e);
             }
@@ -211,25 +217,16 @@ public final class ContactsIndexerImpl {
     }
 
     /**
-     * Cancels the {@link #updatePersonCorpusAsync(List, List, ContactsUpdateStats)} in case of
-     * error. This will clean up the states in the batcher so it can get ready for the following
-     * updates.
-     */
-    void cancelUpdatePersonCorpus() {
-        mBatcher.clearBatchedContacts();
-    }
-
-    /**
      * Reads through cursor, converts the contacts to AppSearch documents, and indexes the
      * documents into AppSearch.
      *
      * @param cursor      pointing to the contacts read from CP2.
      * @param updateStats to hold the counters for the update.
+     * @param contactsBatcher the batcher that indexes the contacts for this update.
      */
     private CompletableFuture<Void> indexContactsFromCursorAsync(@NonNull Cursor cursor,
-            @NonNull ContactsUpdateStats updateStats) {
+            @NonNull ContactsUpdateStats updateStats, @NonNull ContactsBatcher contactsBatcher) {
         Objects.requireNonNull(cursor);
-
         try {
             int contactIdIndex = cursor.getColumnIndex(ContactsContract.Data.CONTACT_ID);
             int lookupKeyIndex = cursor.getColumnIndex(ContactsContract.Data.LOOKUP_KEY);
@@ -250,7 +247,7 @@ public final class ContactsIndexerImpl {
                     if (currentContactId != -1) {
                         // It is the first row for a new contact_id. We can wrap up the
                         // ContactData for the previous contact_id.
-                        mBatcher.add(personBuilderHelper, updateStats);
+                        contactsBatcher.add(personBuilderHelper, updateStats);
                     }
                     // New set of builder and builderHelper for the new contact.
                     currentContactId = contactId;
@@ -297,18 +294,19 @@ public final class ContactsIndexerImpl {
                 // The ContactData for the last contact has not been handled yet. So we need to
                 // build and index it.
                 if (personBuilderHelper != null) {
-                    mBatcher.add(personBuilderHelper, updateStats);
+                    contactsBatcher.add(personBuilderHelper, updateStats);
                 }
             }
         } catch (Throwable t) {
             updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_UNKNOWN_ERROR);
             // TODO(b/203605504) see if we could catch more specific exceptions/errors.
             Log.e(TAG, "Error while indexing documents from the cursor", t);
+            contactsBatcher.clearBatchedContacts();
             return CompletableFuture.failedFuture(t);
         }
 
         // finally force flush all the remaining batched contacts.
-        return mBatcher.flushAsync(updateStats);
+        return contactsBatcher.flushAsync(updateStats);
     }
 
     /**
