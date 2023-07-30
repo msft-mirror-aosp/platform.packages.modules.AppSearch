@@ -625,6 +625,7 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                 synchronized (mLock) {
                     mDenylistLocked = denylist;
                 }
+                break;
             case KEY_RATE_LIMIT_ENABLED:
                 synchronized (mLock) {
                     mBundleLocked.putBoolean(key, properties.getBoolean(key,
