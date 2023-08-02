@@ -180,8 +180,8 @@ public class SearchResults implements Closeable {
                 mNextPageToken = searchResultPage.getNextPageToken();
                 callback.accept(AppSearchResult.newSuccessfulResult(
                         searchResultPage.getResults()));
-            } catch (Throwable t) {
-                callback.accept(AppSearchResult.throwableToFailedResult(t));
+            } catch (RuntimeException e) {
+                callback.accept(AppSearchResult.throwableToFailedResult(e));
             }
         } else {
             callback.accept(AppSearchResult.newFailedResult(searchResultPageResult));
