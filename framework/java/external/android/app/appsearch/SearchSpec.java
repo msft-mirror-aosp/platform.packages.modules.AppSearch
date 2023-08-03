@@ -87,6 +87,7 @@ public final class SearchSpec {
      */
     // NOTE: The integer values of these constants must match the proto enum constants in
     // {@link com.google.android.icing.proto.SearchSpecProto.termMatchType}
+
     @IntDef(value = {TERM_MATCH_EXACT_ONLY, TERM_MATCH_PREFIX})
     @Retention(RetentionPolicy.SOURCE)
     public @interface TermMatch {}
@@ -113,6 +114,7 @@ public final class SearchSpec {
      */
     // NOTE: The integer values of these constants must match the proto enum constants in
     // {@link ScoringSpecProto.RankingStrategy.Code}
+
     @IntDef(
             value = {
                 RANKING_STRATEGY_NONE,
@@ -165,6 +167,7 @@ public final class SearchSpec {
      */
     // NOTE: The integer values of these constants must match the proto enum constants in
     // {@link ScoringSpecProto.Order.Code}
+
     @IntDef(value = {ORDER_DESCENDING, ORDER_ASCENDING})
     @Retention(RetentionPolicy.SOURCE)
     public @interface Order {}
@@ -202,7 +205,7 @@ public final class SearchSpec {
      * Results should be grouped together by schema type for the purpose of enforcing a limit on the
      * number of results returned per schema type.
      *
-     * @hide
+     * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are possible.
      */
     public static final int GROUPING_TYPE_PER_SCHEMA = 1 << 2;
 
