@@ -325,8 +325,6 @@ public final class ContactsIndexerUserInstance {
                 }).handle((x, t) -> {
                     if (t != null) {
                         Log.w(TAG, "Failed to perform full update", t);
-                        // Just clear all the remaining contacts in case of error.
-                        mContactsIndexerImpl.cancelUpdatePersonCorpus();
                         if (updateStats.mUpdateStatuses.isEmpty()
                                 && updateStats.mDeleteStatuses.isEmpty()) {
                             // Somehow this error is not reflected in the stats, and
@@ -453,8 +451,6 @@ public final class ContactsIndexerUserInstance {
                     try {
                         if (t != null) {
                             Log.w(TAG, "Failed to perform delta update", t);
-                            // Just clear all the remaining contacts in case of error.
-                            mContactsIndexerImpl.cancelUpdatePersonCorpus();
                             if (updateStats.mUpdateStatuses.isEmpty()
                                     && updateStats.mDeleteStatuses.isEmpty()) {
                                 // Somehow this error is not reflected in the stats, and
