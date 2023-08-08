@@ -26,6 +26,7 @@ import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.SchemaMigrationUtil;
 import android.content.AttributionSource;
@@ -40,12 +41,14 @@ import android.util.Log;
 import com.android.internal.util.Preconditions;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -877,10 +880,10 @@ public final class AppSearchSession implements Closeable {
                                         }
                                         callback.accept(AppSearchResult.newSuccessfulResult(
                                                 internalSetSchemaResponse.getSetSchemaResponse()));
-                                    } catch (Throwable t) {
+                                    } catch (RuntimeException e) {
                                         // TODO(b/261897334) save SDK errors/crashes and send to
                                         //  server for logging.
-                                        callback.accept(AppSearchResult.throwableToFailedResult(t));
+                                        callback.accept(AppSearchResult.throwableToFailedResult(e));
                                     }
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
@@ -1104,12 +1107,17 @@ public final class AppSearchSession implements Closeable {
                                     responseBuilder, statsBuilder, totalLatencyStartTimeMillis);
                     safeExecute(callbackExecutor, callback, () -> callback.accept(putResult));
                 }
-            } catch (Throwable t) {
+            } catch (RemoteException
+                     | AppSearchException
+                     | InterruptedException
+                     | IOException
+                     | ExecutionException
+                     | RuntimeException e) {
                 // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                 safeExecute(
                         callbackExecutor,
                         callback,
-                        () -> callback.accept(AppSearchResult.throwableToFailedResult(t)));
+                        () -> callback.accept(AppSearchResult.throwableToFailedResult(e)));
             }
         });
     }
