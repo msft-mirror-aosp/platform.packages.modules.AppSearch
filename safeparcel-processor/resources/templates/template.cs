@@ -4,12 +4,9 @@
 package <?cs var:creator_package ?>;
 <?cs /if ?>
 
-import com.google.android.gms.common.internal.Hide;
-
 /**
  * @hide
  */
-@Hide
 @SuppressWarnings({"unchecked", "rawtypes", "Var", "WrongConstant"})
 <?cs each:annotation=annotations ?>
 <?cs var:annotation ?>
@@ -22,25 +19,25 @@ public class <?cs var:creator_name ?> implements android.os.Parcelable.Creator< 
 
     @Override
     public <?cs var:class ?> createFromParcel(final android.os.Parcel parcel) {
-        final int end = com.google.android.gms.common.internal.safeparcel.SafeParcelReader.validateObjectHeader(parcel);
+        final int end = android.app.appsearch.safeparcel.SafeParcelReader.validateObjectHeader(parcel);
 
         <?cs each:declaration=declarations ?>
         <?cs var:declaration.type ?> <?cs var:declaration.var_name ?> = <?cs var:declaration.initial_value ?>;
         <?cs /each ?>
 
         while (parcel.dataPosition() < end) {
-            final int header = com.google.android.gms.common.internal.safeparcel.SafeParcelReader.readHeader(parcel);
-            switch (com.google.android.gms.common.internal.safeparcel.SafeParcelReader.getFieldId(header)) {
+            final int header = android.app.appsearch.safeparcel.SafeParcelReader.readHeader(parcel);
+            switch (android.app.appsearch.safeparcel.SafeParcelReader.getFieldId(header)) {
                 <?cs each:field=fields ?>
                     case <?cs var:field.id ?>:
                         <?cs if:field.is_assignment ?>
                             <?cs var:field.read_name ?>
-                                    = com.google.android.gms.common.internal.safeparcel.SafeParcelReader.<?cs var:field.create ?>(
+                                    = android.app.appsearch.safeparcel.SafeParcelReader.<?cs var:field.create ?>(
                                             parcel, header
                                             <?cs if:field.creator ?>, <?cs var:field.creator ?><?cs /if ?>
                                             );
                         <?cs else ?>
-                            com.google.android.gms.common.internal.safeparcel.SafeParcelReader.<?cs var:field.create ?>(
+                            android.app.appsearch.safeparcel.SafeParcelReader.<?cs var:field.create ?>(
                                     parcel, header, <?cs var:field.read_name ?>
                                     <?cs if:field.creator ?>, <?cs var:field.creator ?><?cs /if ?>
                                     );
@@ -48,12 +45,12 @@ public class <?cs var:creator_name ?> implements android.os.Parcelable.Creator< 
                         break;
                 <?cs /each ?>
                 default:
-                    com.google.android.gms.common.internal.safeparcel.SafeParcelReader.skipUnknownField(parcel, header);
+                    android.app.appsearch.safeparcel.SafeParcelReader.skipUnknownField(parcel, header);
                     break;
             }
         }
 
-        com.google.android.gms.common.internal.safeparcel.SafeParcelReader.ensureAtEnd(parcel, end);
+        android.app.appsearch.safeparcel.SafeParcelReader.ensureAtEnd(parcel, end);
 
         final <?cs var:class ?> obj = new <?cs var:class ?>(<?cs var:params ?>);
 
@@ -70,14 +67,14 @@ public class <?cs var:creator_name ?> implements android.os.Parcelable.Creator< 
     }
 
     static void writeToParcel(<?cs var:class ?> obj, android.os.Parcel parcel, int flags) {
-        int myStart = com.google.android.gms.common.internal.safeparcel.SafeParcelWriter.beginObjectHeader(parcel);
+        int myStart = android.app.appsearch.safeparcel.SafeParcelWriter.beginObjectHeader(parcel);
 
         <?cs each:field=fields ?>
         <?cs if:field.write ?>
         <?cs if:doNotParcelTypeDefaultValues ?>
         if (!isDefault(obj.<?cs var:field.write_name ?>)) {
         <?cs /if ?>
-          com.google.android.gms.common.internal.safeparcel.SafeParcelWriter.<?cs var:field.write ?>(parcel
+          android.app.appsearch.safeparcel.SafeParcelWriter.<?cs var:field.write ?>(parcel
                 , <?cs var:field.id ?>
                 , obj.<?cs var:field.write_name ?>
                 <?cs if:field.writeWithFlags ?>, flags<?cs /if ?>
@@ -89,7 +86,7 @@ public class <?cs var:creator_name ?> implements android.os.Parcelable.Creator< 
         <?cs /if ?>
         <?cs /each ?>
 
-        com.google.android.gms.common.internal.safeparcel.SafeParcelWriter.finishObjectHeader(parcel, myStart);
+        android.app.appsearch.safeparcel.SafeParcelWriter.finishObjectHeader(parcel, myStart);
     }
     <?cs if:doNotParcelTypeDefaultValues ?>
     public static boolean isDefault(boolean value) {
@@ -129,5 +126,3 @@ public class <?cs var:creator_name ?> implements android.os.Parcelable.Creator< 
     }
     <?cs /if ?>
 }
-
-

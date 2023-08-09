@@ -262,11 +262,10 @@ public final class AppSearchImpl implements Closeable {
      * <p>Instead, logger instance needs to be passed to each individual method, like create, query
      * and putDocument.
      *
-     * @param initStatsBuilder  collects stats for initialization if provided.
+     * @param initStatsBuilder collects stats for initialization if provided.
      * @param visibilityChecker The {@link VisibilityChecker} that check whether the caller has
-     *                          access to aa specific schema. Pass null will lost that ability and
-     *                          global querier could
-     *                          only get their own data.
+     *     access to aa specific schema. Pass null will lost that ability and global querier could
+     *     only get their own data.
      */
     @NonNull
     public static AppSearchImpl create(
@@ -274,8 +273,8 @@ public final class AppSearchImpl implements Closeable {
             @NonNull LimitConfig limitConfig,
             @NonNull IcingOptionsConfig icingOptionsConfig,
             @Nullable InitializeStats.Builder initStatsBuilder,
-            @Nullable VisibilityChecker visibilityChecker,
-            @NonNull OptimizeStrategy optimizeStrategy)
+            @NonNull OptimizeStrategy optimizeStrategy,
+            @Nullable VisibilityChecker visibilityChecker)
             throws AppSearchException {
         return new AppSearchImpl(
                 icingDir,
@@ -322,6 +321,8 @@ public final class AppSearchImpl implements Closeable {
                             .setPreMappingFbv(
                                     icingOptionsConfig.getUsePreMappingWithFileBackedVector())
                             .setUsePersistentHashMap(icingOptionsConfig.getUsePersistentHashMap())
+                            .setIntegerIndexBucketSplitThreshold(
+                                    icingOptionsConfig.getIntegerIndexBucketSplitThreshold())
                             .build();
             LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
             mIcingSearchEngineLocked = new IcingSearchEngine(options);
@@ -1381,6 +1382,27 @@ public final class AppSearchImpl implements Closeable {
                 return new SearchResultPage(Bundle.EMPTY);
             }
 
+            if (searchSpec.getJoinSpec() != null) {
+                List<String> joinFilterPackages =
+                        searchSpec.getJoinSpec().getNestedSearchSpec().getFilterPackageNames();
+
+                // Ensure the nested SearchSpec only filters on the package performing the query.
+                if (joinFilterPackages.isEmpty()
+                        || (joinFilterPackages.size() > 1
+                                && joinFilterPackages.contains(packageName))) {
+                    searchSpec
+                            .getJoinSpec()
+                            .getNestedSearchSpec()
+                            .getBundle()
+                            .putStringArrayList(
+                                    "packageName",
+                                    new ArrayList<>(Collections.singleton(packageName)));
+                } else if (!joinFilterPackages.contains(packageName)) {
+                    // Filter packages only contains other packages, remove the JoinSpec
+                    searchSpec.getBundle().remove("joinSpec");
+                }
+            }
+
             String prefix = createPrefix(packageName, databaseName);
             SearchSpecToProtoConverter searchSpecToProtoConverter =
                     new SearchSpecToProtoConverter(
@@ -1452,8 +1474,29 @@ public final class AppSearchImpl implements Closeable {
             throwIfClosedLocked();
 
             long aclLatencyStartMillis = SystemClock.elapsedRealtime();
+
+            // The two scenarios where we want to limit package filters are if the outer
+            // SearchSpec has package filters and there is no JoinSpec, or if both outer and
+            // nested SearchSpecs have package filters. If outer SearchSpec has no package
+            // filters or the nested SearchSpec has no package filters, then we pass the key set of
+            // mNamespaceMapLocked to the SearchSpecToProtoConverter, signifying that there is a
+            // SearchSpec that wants to query every visible package.
+            Set<String> packageFilters = new ArraySet<>();
+            if (!searchSpec.getFilterPackageNames().isEmpty()) {
+                if (searchSpec.getJoinSpec() == null) {
+                    packageFilters.addAll(searchSpec.getFilterPackageNames());
+                } else if (!searchSpec
+                        .getJoinSpec()
+                        .getNestedSearchSpec()
+                        .getFilterPackageNames()
+                        .isEmpty()) {
+                    packageFilters.addAll(searchSpec.getFilterPackageNames());
+                    packageFilters.addAll(
+                            searchSpec.getJoinSpec().getNestedSearchSpec().getFilterPackageNames());
+                }
+            }
+
             // Convert package filters to prefix filters
-            Set<String> packageFilters = new ArraySet<>(searchSpec.getFilterPackageNames());
             Set<String> prefixFilters = new ArraySet<>();
             if (packageFilters.isEmpty()) {
                 // Client didn't restrict their search over packages. Try to query over all
@@ -2504,6 +2547,14 @@ public final class AppSearchImpl implements Closeable {
                     propertyConfigBuilder.setSchemaType(newPropertySchemaType);
                     typeConfigBuilder.setProperties(propertyIdx, propertyConfigBuilder);
                 }
+            }
+
+            // Rewrite SchemaProto.types.parent_types
+            for (int parentTypeIdx = 0;
+                    parentTypeIdx < typeConfigBuilder.getParentTypesCount();
+                    parentTypeIdx++) {
+                String newParentType = prefix + typeConfigBuilder.getParentTypes(parentTypeIdx);
+                typeConfigBuilder.setParentTypes(parentTypeIdx, newParentType);
             }
 
             newTypesToProto.put(newSchemaType, typeConfigBuilder.build());

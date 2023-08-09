@@ -65,8 +65,8 @@ public class VisibilityStoreTest {
                         new UnlimitedLimitConfig(),
                         new DefaultIcingOptionsConfig(),
                         /*initStatsBuilder=*/ null,
-                        /*visibilityChecker=*/ null,
-                        ALWAYS_OPTIMIZE);
+                        ALWAYS_OPTIMIZE,
+                        /*visibilityChecker=*/ null);
         mVisibilityStore = new VisibilityStore(mAppSearchImpl);
     }
 
