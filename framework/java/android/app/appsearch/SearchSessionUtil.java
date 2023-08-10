@@ -84,9 +84,9 @@ public class SearchSessionUtil {
             @NonNull Runnable runnable) {
         try {
             executor.execute(runnable);
-        } catch (Throwable t) {
-            Log.e(TAG, "Failed to schedule runnable", t);
-            errorCallback.accept(AppSearchResult.throwableToFailedResult(t));
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Failed to schedule runnable", e);
+            errorCallback.accept(AppSearchResult.throwableToFailedResult(e));
         }
     }
 
@@ -111,9 +111,9 @@ public class SearchSessionUtil {
             @NonNull Runnable runnable) {
         try {
             executor.execute(runnable);
-        } catch (Throwable t) {
-            Log.e(TAG, "Failed to schedule runnable", t);
-            errorCallback.onSystemError(t);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Failed to schedule runnable", e);
+            errorCallback.onSystemError(e);
         }
     }
 
@@ -142,11 +142,11 @@ public class SearchSessionUtil {
                         GenericDocument document;
                         try {
                             document = new GenericDocument(bundleEntry.getValue());
-                        } catch (Throwable t) {
+                        } catch (RuntimeException e) {
                             documentResultBuilder.setFailure(
                                     bundleEntry.getKey(),
                                     AppSearchResult.RESULT_INTERNAL_ERROR,
-                                    t.getMessage());
+                                    e.getMessage());
                             continue;
                         }
                         documentResultBuilder.setSuccess(
