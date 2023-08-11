@@ -29,6 +29,8 @@ import com.android.server.appsearch.icing.proto.TermMatchType;
 
 import org.junit.Test;
 
+import java.util.Arrays;
+
 public class SchemaToProtoConverterTest {
     @Test
     public void testGetProto_Email() {
@@ -200,6 +202,36 @@ public class SchemaToProtoConverterTest {
     }
 
     @Test
+    public void testGetProto_ParentTypes() {
+        AppSearchSchema schema =
+                new AppSearchSchema.Builder("EmailMessage")
+                        .addParentType("Email")
+                        .addParentType("Message")
+                        .build();
+
+        SchemaTypeConfigProto expectedSchemaProto =
+                SchemaTypeConfigProto.newBuilder()
+                        .setSchemaType("EmailMessage")
+                        .setVersion(12345)
+                        .addParentTypes("Email")
+                        .addParentTypes("Message")
+                        .build();
+        SchemaTypeConfigProto alternativeExpectedSchemaProto =
+                SchemaTypeConfigProto.newBuilder()
+                        .setSchemaType("EmailMessage")
+                        .setVersion(12345)
+                        .addParentTypes("Message")
+                        .addParentTypes("Email")
+                        .build();
+
+        assertThat(SchemaToProtoConverter.toSchemaTypeConfigProto(schema, /*version=*/ 12345))
+                .isAnyOf(expectedSchemaProto, alternativeExpectedSchemaProto);
+        assertThat(SchemaToProtoConverter.toAppSearchSchema(expectedSchemaProto)).isEqualTo(schema);
+        assertThat(SchemaToProtoConverter.toAppSearchSchema(alternativeExpectedSchemaProto))
+                .isEqualTo(schema);
+    }
+
+    @Test
     public void testGetProto_DocumentIndexingConfig() {
         AppSearchSchema personSchema =
                 new AppSearchSchema.Builder("Person")
@@ -220,12 +252,16 @@ public class SchemaToProtoConverterTest {
                                         .setCardinality(
                                                 AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
                                         .setShouldIndexNestedProperties(false)
+                                        .addIndexableNestedProperties(
+                                                Arrays.asList("orgName", "notes"))
                                         .build())
                         .build();
 
         DocumentIndexingConfig documentIndexingConfig =
                 DocumentIndexingConfig.newBuilder()
                         .setIndexNestedProperties(false)
+                        .addIndexableNestedPropertiesList("orgName")
+                        .addIndexableNestedPropertiesList("notes")
                         .build();
 
         SchemaTypeConfigProto expectedPersonProto =
