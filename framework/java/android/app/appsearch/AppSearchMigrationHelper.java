@@ -190,8 +190,8 @@ public class AppSearchMigrationHelper implements Closeable {
             }
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
-        } catch (Throwable t) {
-            return AppSearchResult.throwableToFailedResult(t);
+        } catch (InterruptedException | IOException | RuntimeException e) {
+            return AppSearchResult.throwableToFailedResult(e);
         } finally {
             mMigratedFile.delete();
         }
