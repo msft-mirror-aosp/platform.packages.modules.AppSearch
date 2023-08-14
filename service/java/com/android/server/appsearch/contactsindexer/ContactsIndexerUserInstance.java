@@ -325,8 +325,6 @@ public final class ContactsIndexerUserInstance {
                 }).handle((x, t) -> {
                     if (t != null) {
                         Log.w(TAG, "Failed to perform full update", t);
-                        // Just clear all the remaining contacts in case of error.
-                        mContactsIndexerImpl.cancelUpdatePersonCorpus();
                         if (updateStats.mUpdateStatuses.isEmpty()
                                 && updateStats.mDeleteStatuses.isEmpty()) {
                             // Somehow this error is not reflected in the stats, and
@@ -453,8 +451,6 @@ public final class ContactsIndexerUserInstance {
                     try {
                         if (t != null) {
                             Log.w(TAG, "Failed to perform delta update", t);
-                            // Just clear all the remaining contacts in case of error.
-                            mContactsIndexerImpl.cancelUpdatePersonCorpus();
                             if (updateStats.mUpdateStatuses.isEmpty()
                                     && updateStats.mDeleteStatuses.isEmpty()) {
                                 // Somehow this error is not reflected in the stats, and
@@ -509,7 +505,8 @@ public final class ContactsIndexerUserInstance {
     }
 
     // Logs the stats to statsd.
-    private void logStats(@NonNull ContactsUpdateStats updateStats) {
+    @VisibleForTesting
+    void logStats(@NonNull ContactsUpdateStats updateStats) {
         int totalUpdateLatency =
                 (int) (System.currentTimeMillis()
                         - updateStats.mUpdateAndDeleteStartTimeMillis);
@@ -541,7 +538,7 @@ public final class ContactsIndexerUserInstance {
             updateStatusArr[updateIdx] = updateStatus;
             ++updateIdx;
         }
-        for (int deleteStatus : updateStats.mUpdateStatuses) {
+        for (int deleteStatus : updateStats.mDeleteStatuses) {
             deleteStatusArr[deleteIdx] = deleteStatus;
             ++deleteIdx;
         }
