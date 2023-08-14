@@ -142,8 +142,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone
         List<SearchSuggestionResult> suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterSchemas("Type1")
                                         .addFilterProperties(
                                                 "Type1", ImmutableList.of("propertyone"))
@@ -154,8 +154,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone and type1/propertytwo
         suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterSchemas("Type1")
                                         .addFilterProperties(
                                                 "Type1",
@@ -167,8 +167,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone and type2/propertythree
         suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterSchemas("Type1", "Type2")
                                         .addFilterProperties(
                                                 "Type1", ImmutableList.of("propertyone"))
@@ -181,8 +181,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone and type2/propertyfour, in addFilterPropertyPaths
         suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterSchemas("Type1", "Type2")
                                         .addFilterProperties(
                                                 "Type1", ImmutableList.of("propertyone"))
@@ -196,8 +196,8 @@ public abstract class AppSearchSessionInternalTestBase {
         // Only search for type1/propertyone and everything in type2
         suggestions =
                 mDb1.searchSuggestionAsync(
-                                /*suggestionQueryExpression=*/ "t",
-                                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 10)
+                                /* suggestionQueryExpression= */ "t",
+                                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 10)
                                         .addFilterProperties(
                                                 "Type1", ImmutableList.of("propertyone"))
                                         .build())
@@ -205,7 +205,72 @@ public abstract class AppSearchSessionInternalTestBase {
         assertThat(suggestions).containsExactly(resultOne, resultThree, resultFour);
     }
 
-    // TODO(b/258715421): move this test to cts test once we un-hide schema type grouping API.
+    // TODO(b/268521214): Move test to cts once deletion propagation is available in framework.
+    @Test
+    public void testGetSchema_joinableValueType() throws Exception {
+        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.JOIN_SPEC_AND_QUALIFIED_ID));
+        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.SCHEMA_SET_DELETION_PROPAGATION));
+        AppSearchSchema inSchema =
+                new AppSearchSchema.Builder("Test")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("normalStr")
+                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("optionalQualifiedIdStr")
+                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setJoinableValueType(
+                                                StringPropertyConfig
+                                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("requiredQualifiedIdStr")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setJoinableValueType(
+                                                StringPropertyConfig
+                                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                                        .setDeletionPropagation(true)
+                                        .build())
+                        .build();
+
+        SetSchemaRequest request = new SetSchemaRequest.Builder().addSchemas(inSchema).build();
+
+        mDb1.setSchemaAsync(request).get();
+
+        Set<AppSearchSchema> actual = mDb1.getSchemaAsync().get().getSchemas();
+        assertThat(actual).hasSize(1);
+        assertThat(actual).containsExactlyElementsIn(request.getSchemas());
+    }
+
+    // TODO(b/268521214): Move test to cts once deletion propagation is available in framework.
+    @Test
+    public void testGetSchema_deletionPropagation_unsupported() {
+        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.JOIN_SPEC_AND_QUALIFIED_ID));
+        assumeFalse(
+                mDb1.getFeatures().isFeatureSupported(Features.SCHEMA_SET_DELETION_PROPAGATION));
+        AppSearchSchema schema =
+                new AppSearchSchema.Builder("Test")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("qualifiedIdDeletionPropagation")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setJoinableValueType(
+                                                StringPropertyConfig
+                                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                                        .setDeletionPropagation(true)
+                                        .build())
+                        .build();
+        SetSchemaRequest request = new SetSchemaRequest.Builder().addSchemas(schema).build();
+        Exception e =
+                assertThrows(
+                        UnsupportedOperationException.class,
+                        () -> mDb1.setSchemaAsync(request).get());
+        assertThat(e.getMessage())
+                .isEqualTo(
+                        "Setting deletion propagation is not supported "
+                                + "on this AppSearch implementation.");
+    }
+
+    // TODO(b/291122592): move to CTS once the APIs it uses are public
     @Test
     public void testQuery_ResultGroupingLimits_SchemaGroupingSupported() throws Exception {
         assumeTrue(
@@ -310,7 +375,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_PACKAGE, /*resultLimit=*/ 1)
+                                        SearchSpec.GROUPING_TYPE_PER_PACKAGE, /* resultLimit= */ 1)
                                 .build());
         List<GenericDocument> documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3);
@@ -323,7 +388,8 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_NAMESPACE, /*resultLimit=*/ 1)
+                                        SearchSpec.GROUPING_TYPE_PER_NAMESPACE,
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail2);
@@ -336,7 +402,8 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_NAMESPACE, /*resultLimit=*/ 2)
+                                        SearchSpec.GROUPING_TYPE_PER_NAMESPACE,
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents)
@@ -350,7 +417,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_SCHEMA, /*resultLimit=*/ 1)
+                                        SearchSpec.GROUPING_TYPE_PER_SCHEMA, /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inEmail5);
@@ -363,7 +430,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         new SearchSpec.Builder()
                                 .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
                                 .setResultGrouping(
-                                        SearchSpec.GROUPING_TYPE_PER_SCHEMA, /*resultLimit=*/ 2)
+                                        SearchSpec.GROUPING_TYPE_PER_SCHEMA, /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail4);
@@ -378,7 +445,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 1)
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail2);
@@ -394,7 +461,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 2)
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents)
@@ -410,7 +477,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 1)
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inEmail5);
@@ -425,7 +492,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 2)
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail4);
@@ -440,7 +507,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
-                                        /*resultLimit=*/ 1)
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail2);
@@ -456,7 +523,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .setResultGrouping(
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
-                                        /*resultLimit=*/ 2)
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents)
@@ -473,7 +540,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 1)
+                                        /* resultLimit= */ 1)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).containsExactly(inDoc3, inDoc2, inEmail5, inEmail2);
@@ -490,14 +557,14 @@ public abstract class AppSearchSessionInternalTestBase {
                                         SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                                 | SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                                 | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                        /*resultLimit=*/ 2)
+                                        /* resultLimit= */ 2)
                                 .build());
         documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents)
                 .containsExactly(inDoc3, inDoc2, inDoc1, inEmail5, inEmail4, inEmail2, inEmail1);
     }
 
-    // TODO(b/258715421): move this test to cts test once we un-hide schema type grouping API.
+    // TODO(b/291122592): move to CTS once the APIs it uses are public
     @Test
     public void testQuery_ResultGroupingLimits_SchemaGroupingNotSupported() throws Exception {
         assumeFalse(
@@ -555,7 +622,8 @@ public abstract class AppSearchSessionInternalTestBase {
         SearchSpec searchSpec1 =
                 new SearchSpec.Builder()
                         .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
-                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_SCHEMA, /*resultLimit=*/ 1)
+                        .setResultGrouping(
+                                SearchSpec.GROUPING_TYPE_PER_SCHEMA, /* resultLimit= */ 1)
                         .build();
         UnsupportedOperationException exception =
                 assertThrows(
@@ -576,7 +644,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         .setResultGrouping(
                                 SearchSpec.GROUPING_TYPE_PER_PACKAGE
                                         | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
-                                /*resultLimit=*/ 1)
+                                /* resultLimit= */ 1)
                         .build();
         exception =
                 assertThrows(
@@ -597,7 +665,7 @@ public abstract class AppSearchSessionInternalTestBase {
                         .setResultGrouping(
                                 SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                         | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
-                                /*resultLimit=*/ 1)
+                                /* resultLimit= */ 1)
                         .build();
         exception =
                 assertThrows(
@@ -619,7 +687,7 @@ public abstract class AppSearchSessionInternalTestBase {
                                 SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                                         | SearchSpec.GROUPING_TYPE_PER_SCHEMA
                                         | SearchSpec.GROUPING_TYPE_PER_PACKAGE,
-                                /*resultLimit=*/ 1)
+                                /* resultLimit= */ 1)
                         .build();
         exception =
                 assertThrows(
@@ -631,70 +699,5 @@ public abstract class AppSearchSessionInternalTestBase {
                         Features.SEARCH_SPEC_GROUPING_TYPE_PER_SCHEMA
                                 + " is not available on this"
                                 + " AppSearch implementation.");
-    }
-
-    // TODO(b/268521214): Move test to cts once deletion propagation is available in framework.
-    @Test
-    public void testGetSchema_joinableValueType() throws Exception {
-        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.JOIN_SPEC_AND_QUALIFIED_ID));
-        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.SCHEMA_SET_DELETION_PROPAGATION));
-        AppSearchSchema inSchema =
-                new AppSearchSchema.Builder("Test")
-                        .addProperty(
-                                new StringPropertyConfig.Builder("normalStr")
-                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
-                                        .build())
-                        .addProperty(
-                                new StringPropertyConfig.Builder("optionalQualifiedIdStr")
-                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
-                                        .setJoinableValueType(
-                                                StringPropertyConfig
-                                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
-                                        .build())
-                        .addProperty(
-                                new StringPropertyConfig.Builder("requiredQualifiedIdStr")
-                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
-                                        .setJoinableValueType(
-                                                StringPropertyConfig
-                                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
-                                        .setDeletionPropagation(true)
-                                        .build())
-                        .build();
-
-        SetSchemaRequest request = new SetSchemaRequest.Builder().addSchemas(inSchema).build();
-
-        mDb1.setSchemaAsync(request).get();
-
-        Set<AppSearchSchema> actual = mDb1.getSchemaAsync().get().getSchemas();
-        assertThat(actual).hasSize(1);
-        assertThat(actual).containsExactlyElementsIn(request.getSchemas());
-    }
-
-    // TODO(b/268521214): Move test to cts once deletion propagation is available in framework.
-    @Test
-    public void testGetSchema_deletionPropagation_unsupported() {
-        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.JOIN_SPEC_AND_QUALIFIED_ID));
-        assumeFalse(
-                mDb1.getFeatures().isFeatureSupported(Features.SCHEMA_SET_DELETION_PROPAGATION));
-        AppSearchSchema schema =
-                new AppSearchSchema.Builder("Test")
-                        .addProperty(
-                                new StringPropertyConfig.Builder("qualifiedIdDeletionPropagation")
-                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
-                                        .setJoinableValueType(
-                                                StringPropertyConfig
-                                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
-                                        .setDeletionPropagation(true)
-                                        .build())
-                        .build();
-        SetSchemaRequest request = new SetSchemaRequest.Builder().addSchemas(schema).build();
-        Exception e =
-                assertThrows(
-                        UnsupportedOperationException.class,
-                        () -> mDb1.setSchemaAsync(request).get());
-        assertThat(e.getMessage())
-                .isEqualTo(
-                        "Setting deletion propagation is not supported "
-                                + "on this AppSearch implementation.");
     }
 }
