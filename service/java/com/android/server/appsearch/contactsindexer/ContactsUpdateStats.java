@@ -94,11 +94,13 @@ public class ContactsUpdateStats {
     //
     // Deletion for old documents.
     //
-    // # of old contacts failed to be deleted.
+    // # of old contacts that failed to be deleted. This includes contacts that were not found.
     int mContactsDeleteFailedCount;
-    // # of old contacts succeeds to be deleted.
+    // # of old contacts that were deleted successfully.
     int mContactsDeleteSucceededCount;
-    // Total # of old contacts to be deleted. It should equal to
+    // # of old contacts to be deleted that were not found.
+    int mContactsDeleteNotFoundCount;
+    // Total # of old contacts to be deleted. It should equal
     // mContactsDeleteFailedCount + mContactsDeleteSucceededCount
     int mTotalContactsToBeDeleted;
 
@@ -116,6 +118,7 @@ public class ContactsUpdateStats {
         // delete for old contacts
         mContactsDeleteFailedCount = 0;
         mContactsDeleteSucceededCount = 0;
+        mContactsDeleteNotFoundCount = 0;
         mTotalContactsToBeDeleted = 0;
     }
 
@@ -132,6 +135,7 @@ public class ContactsUpdateStats {
                 + ", TotalContactsToBeUpdated: " + mTotalContactsToBeUpdated
                 + ", ContactsDeleteFailedCount: " + mContactsDeleteFailedCount
                 + ", ContactsDeleteSucceededCount: " + mContactsDeleteSucceededCount
+                + ", ContactsDeleteNotFoundCount: " + mContactsDeleteNotFoundCount
                 + ", TotalContactsToBeDeleted: " + mTotalContactsToBeDeleted;
     }
 }

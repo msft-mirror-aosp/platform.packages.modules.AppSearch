@@ -488,8 +488,8 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mDeleteStatuses).hasSize(1);
         assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_OK);
         assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
-        // NOT_FOUND does not count as error.
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(0);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(250);
         assertThat(mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(250);
@@ -562,6 +562,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_OK);
         assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(0);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(10);
         assertThat(mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(10);
@@ -616,6 +617,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         // 4 contacts deleted in CP2, but we don't have those in AppSearch. So we will get
         // NOT_FOUND. We don't treat the NOT_FOUND as failures, so the status code is still OK.
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(4);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(4);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(6);
         assertThat(mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(6);
@@ -676,6 +678,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
         // NOT_FOUND does not count as error.
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(0);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(5);
         assertThat(mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(5);
@@ -949,8 +952,8 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mDeleteStatuses).hasSize(1);
         assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_OK);
         assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
-        // NOT_FOUND does not count as error.
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(250);
         assertThat(mUpdateStats.mContactsUpdateSucceededCount
                 + mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(250);
