@@ -28,6 +28,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
 
+import android.annotation.NonNull;
 import android.app.UiAutomation;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
@@ -52,13 +53,19 @@ import android.os.PersistableBundle;
 import android.provider.ContactsContract;
 import android.provider.DeviceConfig;
 import android.test.ProviderTestCase2;
+import android.util.Log;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
+import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
+import com.android.modules.utils.testing.ExtendedMockitoRule;
+import com.android.modules.utils.testing.StaticMockFixture;
 import com.android.server.appsearch.FrameworkAppSearchConfig;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
+import com.android.server.appsearch.stats.AppSearchStatsLog;
 
 import org.junit.After;
 import org.junit.Before;
@@ -68,6 +75,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.util.Arrays;
@@ -92,6 +100,11 @@ import javax.annotation.Nullable;
 public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeContactsProvider> {
     @Rule
     public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
+
+    @Rule
+    public ExtendedMockitoRule mExtendedMockitoRule = new ExtendedMockitoRule.Builder()
+            .addStaticMockFixtures(MockAppSearchStatsLog::new)
+            .build();
 
     private final ExecutorService mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
     private ContextWrapper mContextWrapper;
@@ -118,8 +131,8 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         mContextWrapper.setContentResolver(getMockContentResolver());
         mContext = mContextWrapper;
         mSpecForQueryAllContacts = new SearchSpec.Builder().addFilterSchemas(
-                Person.SCHEMA_TYPE).addProjection(Person.SCHEMA_TYPE,
-                Arrays.asList(Person.PERSON_PROPERTY_NAME))
+                        Person.SCHEMA_TYPE).addProjection(Person.SCHEMA_TYPE,
+                        Arrays.asList(Person.PERSON_PROPERTY_NAME))
                 .setResultCountPerPage(100)
                 .build();
 
@@ -289,18 +302,22 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
         }
 
-        instance.startAsync();
+        try {
+            instance.startAsync();
 
-        // Wait for all async tasks to complete
-        latch.await(30L, TimeUnit.SECONDS);
+            // Wait for all async tasks to complete
+            latch.await(30L, TimeUnit.SECONDS);
 
-        ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
-        verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
-        JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
-        assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
-        assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
-        assertThat(fullUpdateJob.isPersisted()).isTrue();
-        assertThat(fullUpdateJob.isPeriodic()).isFalse();
+            ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
+            verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
+            JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
+            assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
+            assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
+            assertThat(fullUpdateJob.isPersisted()).isTrue();
+            assertThat(fullUpdateJob.isPeriodic()).isFalse();
+        } finally {
+            instance.shutdown();
+        }
     }
 
     @Test
@@ -347,18 +364,22 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
         }
 
-        instance.startAsync();
+        try {
+            instance.startAsync();
 
-        // Wait for all async tasks to complete
-        latch.await(30L, TimeUnit.SECONDS);
+            // Wait for all async tasks to complete
+            latch.await(30L, TimeUnit.SECONDS);
 
-        ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
-        verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
-        JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
-        assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
-        assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
-        assertThat(fullUpdateJob.isPersisted()).isTrue();
-        assertThat(fullUpdateJob.isPeriodic()).isFalse();
+            ArgumentCaptor<JobInfo> jobInfoArgumentCaptor = ArgumentCaptor.forClass(JobInfo.class);
+            verify(mockJobScheduler).schedule(jobInfoArgumentCaptor.capture());
+            JobInfo fullUpdateJob = jobInfoArgumentCaptor.getValue();
+            assertThat(fullUpdateJob.isRequireBatteryNotLow()).isTrue();
+            assertThat(fullUpdateJob.isRequireDeviceIdle()).isTrue();
+            assertThat(fullUpdateJob.isPersisted()).isTrue();
+            assertThat(fullUpdateJob.isPeriodic()).isFalse();
+        } finally {
+            instance.shutdown();
+        }
     }
 
     @Test
@@ -408,12 +429,16 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
         }
 
-        instance.startAsync();
+        try {
+            instance.startAsync();
 
-        // Wait for all async tasks to complete
-        latch.await(30L, TimeUnit.SECONDS);
+            // Wait for all async tasks to complete
+            latch.await(30L, TimeUnit.SECONDS);
 
-        verify(mockJobScheduler, never()).schedule(any());
+            verify(mockJobScheduler, never()).schedule(any());
+        } finally {
+            instance.shutdown();
+        }
     }
 
     @Test
@@ -445,7 +470,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         }
 
         executeAndWaitForCompletion(mInstance.doDeltaUpdateAsync(/*indexingLimit=*/ -1,
-                mUpdateStats),
+                        mUpdateStats),
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
@@ -463,8 +488,8 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mDeleteStatuses).hasSize(1);
         assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_OK);
         assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
-        // NOT_FOUND does not count as error.
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(0);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(250);
         assertThat(mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(250);
@@ -483,7 +508,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         }
 
         executeAndWaitForCompletion(mInstance.doDeltaUpdateAsync(/*indexingLimit=*/ 100,
-                mUpdateStats),
+                        mUpdateStats),
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
@@ -503,7 +528,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         }
 
         executeAndWaitForCompletion(mInstance.doDeltaUpdateAsync(/*indexingLimit=*/ -1,
-                mUpdateStats),
+                        mUpdateStats),
                 mSingleThreadedExecutor);
 
         // Delete a few contacts to trigger delta update.
@@ -517,7 +542,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 /*extras=*/ null);
 
         executeAndWaitForCompletion(mInstance.doDeltaUpdateAsync(/*indexingLimit=*/ -1,
-                mUpdateStats),
+                        mUpdateStats),
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
@@ -537,6 +562,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_OK);
         assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(0);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(10);
         assertThat(mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(10);
@@ -567,7 +593,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
 
         mUpdateStats.clear();
         executeAndWaitForCompletion(mInstance.doDeltaUpdateAsync(/*indexingLimit=*/ -1,
-                mUpdateStats),
+                        mUpdateStats),
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
@@ -591,6 +617,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         // 4 contacts deleted in CP2, but we don't have those in AppSearch. So we will get
         // NOT_FOUND. We don't treat the NOT_FOUND as failures, so the status code is still OK.
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(4);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(4);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(6);
         assertThat(mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(6);
@@ -628,7 +655,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
 
         mUpdateStats.clear();
         executeAndWaitForCompletion(mInstance.doDeltaUpdateAsync(/*indexingLimit=*/ -1,
-                mUpdateStats),
+                        mUpdateStats),
                 mSingleThreadedExecutor);
 
         AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
@@ -651,6 +678,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
         // NOT_FOUND does not count as error.
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(0);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(5);
         assertThat(mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(0);
         assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(5);
@@ -772,9 +800,12 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         mContextWrapper.setJobScheduler(mockJobScheduler);
         mInstance = ContactsIndexerUserInstance.createInstance(mContext, mContactsDir,
                 mConfigForTest, mSingleThreadedExecutor);
-        mInstance.startAsync();
-
-        verifyZeroInteractions(mockJobScheduler);
+        try {
+            mInstance.startAsync();
+            verifyZeroInteractions(mockJobScheduler);
+        } finally {
+            mInstance.shutdown();
+        }
     }
 
     @Test
@@ -837,10 +868,112 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         mContextWrapper.setJobScheduler(mockJobScheduler);
         mInstance = ContactsIndexerUserInstance.createInstance(mContext, mContactsDir,
                 mConfigForTest, mSingleThreadedExecutor);
-        mInstance.startAsync();
-        latch.await(30L, TimeUnit.SECONDS);
+        try {
+            mInstance.startAsync();
+            latch.await(30L, TimeUnit.SECONDS);
+            verify(mockJobScheduler).schedule(any());
+        } finally {
+            mInstance.shutdown();
+        }
+    }
 
-        verify(mockJobScheduler).schedule(any());
+    @Test
+    public void testLogStats_succeedsWhenMoreUpdateStatusCodesThanDeleteStatusCodes() {
+        // This test exists since there was a typo/bug where we logged the update status codes
+        // a second time instead of the delete status codes. This could also throw
+        // ArrayIndexOutOfBoundsException if there were more update status codes than delete status
+        // codes since the allocated array for delete status codes would be too small to store the
+        // update status codes.
+        ContactsUpdateStats updateStats = new ContactsUpdateStats();
+        updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_UNKNOWN_ERROR);
+        updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_OUT_OF_SPACE);
+        updateStats.mDeleteStatuses.add(AppSearchResult.RESULT_INTERNAL_ERROR);
+        mInstance.logStats(updateStats);
+
+        ArgumentCaptor<int[]> updateStatusArr = ArgumentCaptor.forClass(int[].class);
+        ArgumentCaptor<int[]> deleteStatusArr = ArgumentCaptor.forClass(int[].class);
+
+        ExtendedMockito.verify(() -> AppSearchStatsLog.write(
+                Mockito.eq(AppSearchStatsLog.CONTACTS_INDEXER_UPDATE_STATS_REPORTED),
+                Mockito.anyInt(),
+                Mockito.anyInt(),
+                updateStatusArr.capture(),
+                deleteStatusArr.capture(),
+                Mockito.anyInt(),
+                Mockito.anyInt(),
+                Mockito.anyInt(),
+                Mockito.anyInt(),
+                Mockito.anyInt(),
+                Mockito.anyInt()));
+
+        assertThat(updateStatusArr.getValue()).asList().containsExactly(
+                AppSearchResult.RESULT_UNKNOWN_ERROR, AppSearchResult.RESULT_OUT_OF_SPACE);
+        assertThat(deleteStatusArr.getValue()).asList().containsExactly(
+                AppSearchResult.RESULT_INTERNAL_ERROR);
+    }
+
+    @Test
+    public void testConcurrentUpdates_updatesDoNotInterfereWithEachOther() throws Exception {
+        // Generally, two delta updates cannot occur simultaneously, but it is possible for a full
+        // update and delta update to run at the same time. Both updates use the same
+        // ContactsIndexerImpl to index contacts, and previously, ContactsIndexerImpl would keep
+        // a single ContactsBatcher for all updates. This could lead to updates taking contacts away
+        // from each other to index and would mess up the metrics/counts for succeeded/skipped
+        // contacts. This has been fixed by using local ContactsBatchers instead.
+        long timeBeforeDeltaChangeNotification = System.currentTimeMillis();
+        // Insert contacts to trigger delta update.
+        ContentResolver resolver = mContext.getContentResolver();
+        ContentValues dummyValues = new ContentValues();
+        for (int i = 0; i < 250; i++) {
+            resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
+        }
+
+        mSingleThreadedExecutor.submit(
+                () -> mInstance.doDeltaUpdateAsync(/*indexingLimit=*/ -1, mUpdateStats));
+
+        ContactsUpdateStats updateStats = new ContactsUpdateStats();
+        executeAndWaitForCompletion(
+                mInstance.doFullUpdateInternalAsync(new CancellationSignal(), updateStats),
+                mSingleThreadedExecutor);
+
+        AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext,
+                mSingleThreadedExecutor, mConfigForTest);
+        List<String> contactIds = searchHelper.getAllContactIdsAsync().get();
+        assertThat(contactIds.size()).isEqualTo(250);
+
+        PersistableBundle settingsBundle = ContactsIndexerSettings.readBundle(mSettingsFile);
+        assertThat(settingsBundle.getLong(ContactsIndexerSettings.LAST_DELTA_UPDATE_TIMESTAMP_KEY))
+                .isAtLeast(timeBeforeDeltaChangeNotification);
+
+        // check stats
+        assertThat(mUpdateStats.mUpdateType).isEqualTo(ContactsUpdateStats.DELTA_UPDATE);
+        assertThat(mUpdateStats.mUpdateStatuses).hasSize(1);
+        assertThat(mUpdateStats.mUpdateStatuses).containsExactly(AppSearchResult.RESULT_OK);
+        assertThat(mUpdateStats.mDeleteStatuses).hasSize(1);
+        assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_OK);
+        assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(0);
+        assertThat(mUpdateStats.mTotalContactsToBeUpdated).isEqualTo(250);
+        assertThat(mUpdateStats.mContactsUpdateSucceededCount
+                + mUpdateStats.mContactsUpdateSkippedCount).isEqualTo(250);
+        assertThat(mUpdateStats.mTotalContactsToBeDeleted).isEqualTo(0);
+        assertThat(mUpdateStats.mContactsDeleteSucceededCount).isEqualTo(0);
+
+        // check stats
+        assertThat(updateStats.mUpdateType).isEqualTo(ContactsUpdateStats.FULL_UPDATE);
+        assertThat(updateStats.mUpdateStatuses).hasSize(1);
+        assertThat(updateStats.mUpdateStatuses).containsExactly(AppSearchResult.RESULT_OK);
+        assertThat(updateStats.mDeleteStatuses).hasSize(1);
+        assertThat(updateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_OK);
+        assertThat(updateStats.mContactsUpdateFailedCount).isEqualTo(0);
+        // NOT_FOUND does not count as error.
+        assertThat(updateStats.mContactsDeleteFailedCount).isEqualTo(0);
+        assertThat(updateStats.mTotalContactsToBeUpdated).isEqualTo(250);
+        assertThat(updateStats.mContactsUpdateSucceededCount
+                + updateStats.mContactsUpdateSkippedCount).isEqualTo(250);
+        assertThat(updateStats.mTotalContactsToBeDeleted).isEqualTo(0);
+        assertThat(updateStats.mContactsDeleteSucceededCount).isEqualTo(0);
     }
 
     /**
@@ -865,8 +998,10 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
 
     static final class ContextWrapper extends android.content.ContextWrapper {
 
-        @Nullable ContentResolver mResolver;
-        @Nullable JobScheduler mScheduler;
+        @Nullable
+        ContentResolver mResolver;
+        @Nullable
+        JobScheduler mScheduler;
 
         public ContextWrapper(Context base) {
             super(base);
@@ -900,6 +1035,23 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
 
         public void setJobScheduler(JobScheduler scheduler) {
             mScheduler = scheduler;
+        }
+    }
+
+    private static class MockAppSearchStatsLog implements StaticMockFixture {
+        @Override
+        public StaticMockitoSessionBuilder setUpMockedClasses(
+                @NonNull StaticMockitoSessionBuilder sessionBuilder) {
+            sessionBuilder.spyStatic(AppSearchStatsLog.class);
+            return sessionBuilder;
+        }
+
+        @Override
+        public void setUpMockBehaviors() {
+        }
+
+        @Override
+        public void tearDown() {
         }
     }
 }
