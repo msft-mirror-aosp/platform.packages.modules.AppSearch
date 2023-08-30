@@ -23,6 +23,7 @@ import static android.os.ParcelFileDescriptor.MODE_WRITE_ONLY;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.WorkerThread;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
@@ -60,7 +61,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class AppSearchMigrationHelper implements Closeable {
     private final IAppSearchManager mService;
-    private final AttributionSource mCallerAttributionSource;
+    private final AppSearchAttributionSource mCallerAttributionSource;
     private final String mDatabaseName;
     private final UserHandle mUserHandle;
     private final File mMigratedFile;
@@ -69,7 +70,7 @@ public class AppSearchMigrationHelper implements Closeable {
 
     AppSearchMigrationHelper(@NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource,
+            @NonNull AppSearchAttributionSource callerAttributionSource,
             @NonNull String databaseName,
             @NonNull Set<AppSearchSchema> newSchemas) throws IOException {
         mService = Objects.requireNonNull(service);
