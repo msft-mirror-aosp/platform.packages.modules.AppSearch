@@ -22,8 +22,10 @@ import android.Manifest;
 import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.TargetApi;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
@@ -111,7 +113,7 @@ public class ServiceImplHelper {
     @BinderThread
     @Nullable
     public UserHandle verifyIncomingCallWithCallback(
-            @NonNull AttributionSource callerAttributionSource,
+            @NonNull AppSearchAttributionSource callerAttributionSource,
             @NonNull UserHandle userHandle,
             @NonNull IAppSearchResultCallback errorCallback) {
         try {
@@ -136,7 +138,7 @@ public class ServiceImplHelper {
     @BinderThread
     @Nullable
     public UserHandle verifyIncomingCallWithCallback(
-            @NonNull AttributionSource callerAttributionSource,
+            @NonNull AppSearchAttributionSource callerAttributionSource,
             @NonNull UserHandle userHandle,
             @NonNull IAppSearchBatchResultCallback errorCallback) {
         try {
@@ -159,7 +161,8 @@ public class ServiceImplHelper {
     @BinderThread
     @NonNull
     public UserHandle verifyIncomingCall(
-            @NonNull AttributionSource callerAttributionSource, @NonNull UserHandle userHandle) {
+            @NonNull AppSearchAttributionSource callerAttributionSource,
+            @NonNull UserHandle userHandle) {
         Objects.requireNonNull(callerAttributionSource);
         Objects.requireNonNull(userHandle);
 
@@ -184,9 +187,9 @@ public class ServiceImplHelper {
      * @param callingUid Uid of the caller, usually retrieved from Binder for authenticity.
      * @param callerAttributionSource The permission identity of the caller
      */
-    private void verifyCaller(int callingUid, @NonNull AttributionSource callerAttributionSource) {
-        // Check does the attribution source is one for the calling app.
-        callerAttributionSource.enforceCallingUid();
+    // enforceCallingUidAndPid is called on AttributionSource during deserialization.
+    private void verifyCaller(int callingUid,
+            @NonNull AppSearchAttributionSource callerAttributionSource) {
         // Obtain the user where the client is running in. Note that this could be different from
         // the userHandle where the client wants to run the AppSearch operation in.
         UserHandle callingUserHandle = UserHandle.getUserHandleForUid(callingUid);
