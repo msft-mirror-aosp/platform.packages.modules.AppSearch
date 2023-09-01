@@ -20,6 +20,7 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
@@ -62,7 +63,7 @@ public class GlobalSearchSession implements Closeable {
 
     private final UserHandle mUserHandle;
     private final IAppSearchManager mService;
-    private final AttributionSource mCallerAttributionSource;
+    private final AppSearchAttributionSource mCallerAttributionSource;
 
     // Management of observer callbacks. Key is observed package.
     @GuardedBy("mObserverCallbacksLocked")
@@ -79,7 +80,7 @@ public class GlobalSearchSession implements Closeable {
     static void createGlobalSearchSession(
             @NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
-            @NonNull AttributionSource attributionSource,
+            @NonNull AppSearchAttributionSource attributionSource,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<GlobalSearchSession>> callback) {
         GlobalSearchSession globalSearchSession = new GlobalSearchSession(service, userHandle,
@@ -118,7 +119,7 @@ public class GlobalSearchSession implements Closeable {
     }
 
     private GlobalSearchSession(@NonNull IAppSearchManager service, @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource) {
+            @NonNull AppSearchAttributionSource callerAttributionSource) {
         mService = service;
         mUserHandle = userHandle;
         mCallerAttributionSource = callerAttributionSource;
