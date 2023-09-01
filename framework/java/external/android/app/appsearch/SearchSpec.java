@@ -1195,6 +1195,28 @@ public final class SearchSpec {
                         "Attempting to rank based on joined documents, but "
                                 + "no JoinSpec provided");
             }
+            if (!mTypePropertyWeights.isEmpty()
+                    && RANKING_STRATEGY_RELEVANCE_SCORE != mRankingStrategy
+                    && RANKING_STRATEGY_ADVANCED_RANKING_EXPRESSION != mRankingStrategy) {
+                throw new IllegalArgumentException(
+                        "Property weights are only compatible with the"
+                            + " RANKING_STRATEGY_RELEVANCE_SCORE and"
+                            + " RANKING_STRATEGY_ADVANCED_RANKING_EXPRESSION ranking strategies.");
+            }
+
+            // If the schema filter isn't empty, and there is a schema with a projection but not
+            // in the filter, that is a SearchSpec user error.
+            if (!mSchemas.isEmpty()) {
+                for (String schema : mProjectionTypePropertyMasks.keySet()) {
+                    if (!mSchemas.contains(schema)) {
+                        throw new IllegalArgumentException(
+                                "Projection requested for schema not "
+                                        + "in schemas filters: "
+                                        + schema);
+                    }
+                }
+            }
+
             bundle.putStringArrayList(SCHEMA_FIELD, mSchemas);
             bundle.putStringArrayList(NAMESPACE_FIELD, mNamespaces);
             bundle.putStringArrayList(PACKAGE_NAME_FIELD, mPackageNames);
@@ -1209,14 +1231,6 @@ public final class SearchSpec {
             bundle.putInt(ORDER_FIELD, mOrder);
             bundle.putInt(RESULT_GROUPING_TYPE_FLAGS, mGroupingTypeFlags);
             bundle.putInt(RESULT_GROUPING_LIMIT, mGroupingLimit);
-            if (!mTypePropertyWeights.isEmpty()
-                    && RANKING_STRATEGY_RELEVANCE_SCORE != mRankingStrategy
-                    && RANKING_STRATEGY_ADVANCED_RANKING_EXPRESSION != mRankingStrategy) {
-                throw new IllegalArgumentException(
-                        "Property weights are only compatible with the"
-                            + " RANKING_STRATEGY_RELEVANCE_SCORE and"
-                            + " RANKING_STRATEGY_ADVANCED_RANKING_EXPRESSION ranking strategies.");
-            }
             bundle.putBundle(TYPE_PROPERTY_WEIGHTS_FIELD, mTypePropertyWeights);
             bundle.putString(ADVANCED_RANKING_EXPRESSION, mAdvancedRankingExpression);
             mBuilt = true;
