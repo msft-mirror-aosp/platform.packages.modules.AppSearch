@@ -37,6 +37,7 @@ import android.app.UiAutomation;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.content.ContextWrapper;
@@ -76,13 +77,13 @@ public class VisibilityCheckerImplTest {
     private Context mContext;
     private VisibilityCheckerImpl mVisibilityChecker;
     private VisibilityStore mVisibilityStore;
-    private AttributionSource mAttributionSource;
+    private AppSearchAttributionSource mAttributionSource;
     private UiAutomation mUiAutomation;
 
     @Before
     public void setUp() throws Exception {
         Context context = ApplicationProvider.getApplicationContext();
-        mAttributionSource = context.getAttributionSource();
+        mAttributionSource = AppSearchAttributionSource.createAttributionSource(context);
         mContext = new ContextWrapper(context) {
             @Override
             public Context createContextAsUser(UserHandle user, int flags) {
@@ -209,8 +210,7 @@ public class VisibilityCheckerImplTest {
                 packageNameFoo, sha256CertFoo, PackageManager.CERT_INPUT_SHA256))
                 .thenReturn(false);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidFoo)
-                        .setPackageName(packageNameFoo).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaFoo",
@@ -224,8 +224,7 @@ public class VisibilityCheckerImplTest {
                 packageNameFoo, sha256CertFoo, PackageManager.CERT_INPUT_SHA256))
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidFoo)
-                        .setPackageName(packageNameFoo).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaFoo",
@@ -239,8 +238,7 @@ public class VisibilityCheckerImplTest {
                 packageNameFoo, sha256CertFoo, PackageManager.CERT_INPUT_SHA256))
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidFoo)
-                        .setPackageName(packageNameFoo).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaFoo",
@@ -253,8 +251,7 @@ public class VisibilityCheckerImplTest {
                 packageNameBar, sha256CertBar, PackageManager.CERT_INPUT_SHA256))
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidBar)
-                        .setPackageName(packageNameBar).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameBar, uidBar),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaBar",
@@ -266,16 +263,14 @@ public class VisibilityCheckerImplTest {
         visibilityDocument2 = new VisibilityDocument.Builder(/*id=*/"prefix/SchemaBar").build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityDocument1, visibilityDocument2));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidFoo)
-                        .setPackageName(packageNameFoo).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaFoo",
                 mVisibilityStore))
                 .isFalse();
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidBar)
-                        .setPackageName(packageNameBar).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameBar, uidBar),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaBar",

@@ -1378,12 +1378,9 @@ public final class AppSearchSchema {
                     .append(shouldIndexNestedProperties())
                     .append(",\n");
 
-            List<String> indexableNestedProperties = getIndexableNestedProperties();
-            if (!indexableNestedProperties.isEmpty()) {
-                builder.append("indexableNestedProperties: ")
-                        .append(indexableNestedProperties)
-                        .append(",\n");
-            }
+            builder.append("indexableNestedProperties: ")
+                    .append(getIndexableNestedProperties())
+                    .append(",\n");
 
             builder.append("schemaType: \"").append(getSchemaType()).append("\",\n");
         }
