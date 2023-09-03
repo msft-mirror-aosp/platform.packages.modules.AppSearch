@@ -32,9 +32,7 @@ import android.util.Slog;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.AppSearchEnvironmentFactory;
-import com.android.server.appsearch.AppSearchUserInstance;
 import com.android.server.appsearch.stats.AppSearchStatsLog;
-import com.android.server.appsearch.util.AdbDumpUtil;
 
 import com.google.android.icing.proto.DebugInfoProto;
 import com.google.android.icing.proto.DebugInfoVerbosity;
@@ -279,14 +277,17 @@ public final class ContactsIndexerUserInstance {
         // race condition if there is an update running while those numbers are being printed.
         // This is acceptable though for debug purpose, so still no lock here.
         pw.println(
-                "last_delta_delete_timestamp: " +
-                        mSettings.getLastDeltaDeleteTimestampMillis() + " ms");
+                "last_full_update_timestamp_millis: " +
+                        mSettings.getLastFullUpdateTimestampMillis());
         pw.println(
-                "last_delta_update_timestamp: " +
-                        mSettings.getLastDeltaUpdateTimestampMillis() + " ms");
+                "last_delta_update_timestamp_millis: " +
+                        mSettings.getLastDeltaUpdateTimestampMillis());
         pw.println(
-                "last_full_update_timestamp: " +
-                        mSettings.getLastFullUpdateTimestampMillis() + " ms");
+                "last_contact_update_timestamp_millis: " +
+                        mSettings.getLastContactUpdateTimestampMillis());
+        pw.println(
+                "last_contact_delete_timestamp_millis: " +
+                        mSettings.getLastContactDeleteTimestampMillis());
     }
 
     @VisibleForTesting
@@ -296,15 +297,16 @@ public final class ContactsIndexerUserInstance {
         long currentTimeMillis = System.currentTimeMillis();
         updateStats.mUpdateType = ContactsUpdateStats.FULL_UPDATE;
         updateStats.mUpdateAndDeleteStartTimeMillis = currentTimeMillis;
+        updateStats.mLastFullUpdateStartTimeMillis = mSettings.getLastFullUpdateTimestampMillis();
+        updateStats.mLastDeltaUpdateStartTimeMillis = mSettings.getLastDeltaUpdateTimestampMillis();
 
         List<String> cp2ContactIds = new ArrayList<>();
-        // Get a list of all contact IDs from CP2. Ignore the return value which denotes the
-        // most recent updated timestamp.
-        // TODO(b/203605504): reconsider whether the most recent
-        //  updated and deleted timestamps are useful.
-        ContactsProviderUtil.getUpdatedContactIds(mContext, /*sinceFilter=*/ 0,
-                mContactsIndexerConfig.getContactsFullUpdateLimit(), cp2ContactIds,
-                updateStats);
+        // Get a list of all contact IDs from CP2
+        updateStats.mLastContactUpdatedTimeMillis = ContactsProviderUtil.getUpdatedContactIds(
+                mContext, /*sinceFilter=*/ 0, mContactsIndexerConfig.getContactsFullUpdateLimit(),
+                cp2ContactIds, updateStats);
+        updateStats.mPreviousLastContactUpdatedTimeMillis =
+                mSettings.getLastContactUpdateTimestampMillis();
         return mAppSearchHelper.getAllContactIdsAsync()
                 .thenCompose(appsearchContactIds -> {
                     // all_contacts_from_AppSearch - all_contacts_from_cp2 =
@@ -330,8 +332,7 @@ public final class ContactsIndexerUserInstance {
                             // Somehow this error is not reflected in the stats, and
                             // unfortunately we don't know what part is wrong. Just add an error
                             // code for the update.
-                            updateStats.mUpdateStatuses.add(
-                                    AppSearchResult.RESULT_UNKNOWN_ERROR);
+                            updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_UNKNOWN_ERROR);
                         }
                     }
 
@@ -343,8 +344,8 @@ public final class ContactsIndexerUserInstance {
                     // TODO(b/226078966) Also finding the update timestamps for last success is
                     //  not trivial, and we should think more about how to do that correctly.
                     mSettings.setLastFullUpdateTimestampMillis(currentTimeMillis);
-                    mSettings.setLastDeltaUpdateTimestampMillis(currentTimeMillis);
-                    mSettings.setLastDeltaDeleteTimestampMillis(currentTimeMillis);
+                    mSettings.setLastContactUpdateTimestampMillis(currentTimeMillis);
+                    mSettings.setLastContactDeleteTimestampMillis(currentTimeMillis);
                     persistSettings();
                     logStats(updateStats);
                     return null;
@@ -420,24 +421,29 @@ public final class ContactsIndexerUserInstance {
             mCp2ChangePending = false;
         }
 
+        long currentTimeMillis = System.currentTimeMillis();
         updateStats.mUpdateType = ContactsUpdateStats.DELTA_UPDATE;
-        updateStats.mUpdateAndDeleteStartTimeMillis = System.currentTimeMillis();
-        long lastDeltaUpdateTimestampMillis = mSettings.getLastDeltaUpdateTimestampMillis();
-        long lastDeltaDeleteTimestampMillis = mSettings.getLastDeltaDeleteTimestampMillis();
+        updateStats.mUpdateAndDeleteStartTimeMillis = currentTimeMillis;
+        updateStats.mLastFullUpdateStartTimeMillis = mSettings.getLastFullUpdateTimestampMillis();
+        updateStats.mLastDeltaUpdateStartTimeMillis = mSettings.getLastDeltaUpdateTimestampMillis();
+        long lastContactUpdateTimestampMillis = mSettings.getLastContactUpdateTimestampMillis();
+        long lastContactDeleteTimestampMillis = mSettings.getLastContactDeleteTimestampMillis();
         if (LogUtil.DEBUG) {
             Log.d(TAG, "previous timestamps --"
-                    + " lastDeltaUpdateTimestampMillis: " + lastDeltaUpdateTimestampMillis
-                    + " lastDeltaDeleteTimestampMillis: " + lastDeltaDeleteTimestampMillis);
+                    + " lastContactUpdateTimestampMillis: " + lastContactUpdateTimestampMillis
+                    + " lastContactDeleteTimestampMillis: " + lastContactDeleteTimestampMillis);
         }
 
         List<String> wantedIds = new ArrayList<>();
         List<String> unWantedIds = new ArrayList<>();
-        long mostRecentContactLastUpdateTimestampMillis =
-                ContactsProviderUtil.getUpdatedContactIds(mContext, lastDeltaUpdateTimestampMillis,
-                        indexingLimit, wantedIds, updateStats);
+        long mostRecentContactUpdatedTimestampMillis =
+                ContactsProviderUtil.getUpdatedContactIds(mContext,
+                        lastContactUpdateTimestampMillis, indexingLimit, wantedIds, updateStats);
         long mostRecentContactDeletedTimestampMillis =
-                ContactsProviderUtil.getDeletedContactIds(mContext, lastDeltaDeleteTimestampMillis,
-                        unWantedIds, updateStats);
+                ContactsProviderUtil.getDeletedContactIds(mContext,
+                        lastContactDeleteTimestampMillis, unWantedIds, updateStats);
+        updateStats.mLastContactUpdatedTimeMillis = mostRecentContactUpdatedTimestampMillis;
+        updateStats.mLastContactDeletedTimeMillis = mostRecentContactDeletedTimestampMillis;
 
         // Update the person corpus in AppSearch based on the changed contact
         // information we get from CP2. At this point mUpdateScheduled has been
@@ -463,15 +469,16 @@ public final class ContactsIndexerUserInstance {
                         // Persisting timestamping and logging, no matter if update succeeds or not.
                         if (LogUtil.DEBUG) {
                             Log.d(TAG, "updated timestamps --"
-                                    + " lastDeltaUpdateTimestampMillis: "
-                                    + mostRecentContactLastUpdateTimestampMillis
-                                    + " lastDeltaDeleteTimestampMillis: "
+                                    + " lastContactUpdateTimestampMillis: "
+                                    + mostRecentContactUpdatedTimestampMillis
+                                    + " lastContactDeleteTimestampMillis: "
                                     + mostRecentContactDeletedTimestampMillis);
                         }
-                        mSettings.setLastDeltaUpdateTimestampMillis(
-                                mostRecentContactLastUpdateTimestampMillis);
-                        mSettings.setLastDeltaDeleteTimestampMillis(
+                        mSettings.setLastContactUpdateTimestampMillis(
+                                mostRecentContactUpdatedTimestampMillis);
+                        mSettings.setLastContactDeleteTimestampMillis(
                                 mostRecentContactDeletedTimestampMillis);
+                        mSettings.setLastDeltaUpdateTimestampMillis(currentTimeMillis);
                         persistSettings();
                         logStats(updateStats);
                         if (updateStats.mUpdateStatuses.contains(
@@ -553,7 +560,14 @@ public final class ContactsIndexerUserInstance {
                 updateStats.mContactsDeleteSucceededCount,
                 updateStats.mContactsUpdateSkippedCount,
                 updateStats.mContactsUpdateFailedCount,
-                updateStats.mContactsDeleteFailedCount);
+                updateStats.mContactsDeleteFailedCount,
+                updateStats.mContactsDeleteNotFoundCount,
+                updateStats.mUpdateAndDeleteStartTimeMillis,
+                updateStats.mLastFullUpdateStartTimeMillis,
+                updateStats.mLastDeltaUpdateStartTimeMillis,
+                updateStats.mLastContactUpdatedTimeMillis,
+                updateStats.mLastContactDeletedTimeMillis,
+                updateStats.mPreviousLastContactUpdatedTimeMillis);
     }
 
     /**
