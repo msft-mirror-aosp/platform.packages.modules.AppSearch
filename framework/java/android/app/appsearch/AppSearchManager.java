@@ -19,6 +19,7 @@ import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
 import android.annotation.SystemService;
 import android.annotation.UserHandleAware;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.content.Context;
 
@@ -208,7 +209,7 @@ public class AppSearchManager {
                 searchContext,
                 mService,
                 mContext.getUser(),
-                mContext.getAttributionSource(),
+                AppSearchAttributionSource.createAttributionSource(mContext),
                 executor,
                 callback);
     }
@@ -233,7 +234,7 @@ public class AppSearchManager {
         GlobalSearchSession.createGlobalSearchSession(
                 mService,
                 mContext.getUser(),
-                mContext.getAttributionSource(),
+                AppSearchAttributionSource.createAttributionSource(mContext),
                 executor, callback);
     }
 }
