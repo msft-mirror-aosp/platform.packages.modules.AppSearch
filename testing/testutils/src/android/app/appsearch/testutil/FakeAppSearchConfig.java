@@ -225,6 +225,18 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
         return DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD;
     }
 
+    @Override
+    public boolean getLiteIndexSortAtIndexing() {
+        throwIfClosed();
+        return DEFAULT_LITE_INDEX_SORT_AT_INDEXING;
+    }
+
+    @Override
+    public int getLiteIndexSortSize() {
+        throwIfClosed();
+        return DEFAULT_LITE_INDEX_SORT_SIZE;
+    }
+
     private void throwIfClosed() {
         if (mIsClosed.get()) {
             throw new IllegalStateException("Trying to use a closed AppSearchConfig instance.");
