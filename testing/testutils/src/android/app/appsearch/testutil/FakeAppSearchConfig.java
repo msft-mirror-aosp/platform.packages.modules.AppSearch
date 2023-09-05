@@ -18,7 +18,7 @@ package android.app.appsearch.testutil;
 
 import android.os.Build;
 
-import com.android.server.appsearch.AppSearchConfig;
+import com.android.server.appsearch.FrameworkAppSearchConfig;
 import com.android.server.appsearch.AppSearchRateLimitConfig;
 import com.android.server.appsearch.Denylist;
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
@@ -26,14 +26,14 @@ import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * An instance of {@link AppSearchConfig} which does not read from any flag system, but simply
- * returns the defaults for each key.
+ * An instance of {@link FrameworkAppSearchConfig} which does not read from any flag system, but
+ * simply returns the defaults for each key.
  *
  * <p>This class is thread safe.
  *
  * @hide
  */
-public final class FakeAppSearchConfig implements AppSearchConfig {
+public final class FakeAppSearchConfig implements FrameworkAppSearchConfig {
     private final AtomicBoolean mIsClosed = new AtomicBoolean();
     private static final AppSearchRateLimitConfig DEFAULT_APPSEARCH_RATE_LIMIT_CONFIG =
             AppSearchRateLimitConfig.create(
@@ -237,9 +237,22 @@ public final class FakeAppSearchConfig implements AppSearchConfig {
         return DEFAULT_LITE_INDEX_SORT_SIZE;
     }
 
+    @Override
+    public boolean shouldStoreParentInfoAsSyntheticProperty() {
+        throwIfClosed();
+        return true;
+    }
+
+    @Override
+    public boolean shouldRetrieveParentInfo() {
+        throwIfClosed();
+        return DEFAULT_SHOULD_RETRIEVE_PARENT_INFO;
+    }
+
     private void throwIfClosed() {
         if (mIsClosed.get()) {
-            throw new IllegalStateException("Trying to use a closed AppSearchConfig instance.");
+            throw new IllegalStateException(
+                "Trying to use a closed FrameworkAppSearchConfig instance.");
         }
     }
 }

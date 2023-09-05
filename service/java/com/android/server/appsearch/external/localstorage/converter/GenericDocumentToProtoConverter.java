@@ -23,6 +23,7 @@ import android.app.appsearch.exceptions.AppSearchException;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 
 import com.google.android.icing.proto.DocumentProto;
@@ -138,7 +139,8 @@ public final class GenericDocumentToProtoConverter {
     public static GenericDocument toGenericDocument(
             @NonNull DocumentProtoOrBuilder proto,
             @NonNull String prefix,
-            @NonNull Map<String, SchemaTypeConfigProto> schemaTypeMap)
+            @NonNull Map<String, SchemaTypeConfigProto> schemaTypeMap,
+            @NonNull AppSearchConfig config)
             throws AppSearchException {
         Objects.requireNonNull(proto);
         GenericDocument.Builder<?> documentBuilder =
@@ -148,10 +150,18 @@ public final class GenericDocumentToProtoConverter {
                         .setTtlMillis(proto.getTtlMs())
                         .setCreationTimestampMillis(proto.getCreationTimestampMs());
         String prefixedSchemaType = prefix + proto.getSchema();
-        List<String> parentSchemaTypes =
-                getUnprefixedParentSchemaTypes(prefixedSchemaType, schemaTypeMap);
-        if (!parentSchemaTypes.isEmpty()) {
-            documentBuilder.setParentTypes(parentSchemaTypes);
+        if (config.shouldRetrieveParentInfo()) {
+            List<String> parentSchemaTypes =
+                    getUnprefixedParentSchemaTypes(prefixedSchemaType, schemaTypeMap);
+            if (!parentSchemaTypes.isEmpty()) {
+                if (config.shouldStoreParentInfoAsSyntheticProperty()) {
+                    documentBuilder.setPropertyString(
+                            GenericDocument.PARENT_TYPES_SYNTHETIC_PROPERTY,
+                            parentSchemaTypes.toArray(new String[0]));
+                } else {
+                    documentBuilder.setParentTypes(parentSchemaTypes);
+                }
+            }
         }
 
         for (int i = 0; i < proto.getPropertiesCount(); i++) {
@@ -191,7 +201,8 @@ public final class GenericDocumentToProtoConverter {
                 GenericDocument[] values = new GenericDocument[property.getDocumentValuesCount()];
                 for (int j = 0; j < values.length; j++) {
                     values[j] =
-                            toGenericDocument(property.getDocumentValues(j), prefix, schemaTypeMap);
+                            toGenericDocument(
+                                    property.getDocumentValues(j), prefix, schemaTypeMap, config);
                 }
                 documentBuilder.setPropertyDocument(name, values);
             } else {

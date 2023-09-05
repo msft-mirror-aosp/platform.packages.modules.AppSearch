@@ -38,24 +38,26 @@ public class MockingFrameworkOptimizeStrategyTest {
 
     @Test
     public void testShouldNotOptimize_overOtherThresholds_underMinTimeThreshold() {
-        // Create AppSearchConfig with min_time_optimize_threshold < time_optimize_threshold
+        // Create FrameworkAppSearchConfig with min_time_optimize_threshold <
+        // time_optimize_threshold
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_BYTES_OPTIMIZE_THRESHOLD,
+                FrameworkAppSearchConfigImpl.KEY_BYTES_OPTIMIZE_THRESHOLD,
                 Integer.toString(147147),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                FrameworkAppSearchConfigImpl.KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS,
                 Integer.toString(900),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
+                FrameworkAppSearchConfigImpl.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
                 Integer.toString(369369),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                FrameworkAppSearchConfigImpl.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
                 Integer.toString(0),
                 false);
-        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        FrameworkAppSearchConfig appSearchConfig =
+            FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
         FrameworkOptimizeStrategy mFrameworkOptimizeStrategy =
                 new FrameworkOptimizeStrategy(appSearchConfig);
         // Create optimizeInfo with all values above respective thresholds.
@@ -77,7 +79,7 @@ public class MockingFrameworkOptimizeStrategyTest {
 
         // Set min_time_optimize_threshold to a value greater than time_optimize_threshold
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+                FrameworkAppSearchConfigImpl.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
                 Integer.toString(1000),
                 false);
 
