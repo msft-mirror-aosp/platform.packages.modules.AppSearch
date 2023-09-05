@@ -20,12 +20,14 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.SchemaMigrationUtil;
 import android.content.AttributionSource;
@@ -40,12 +42,14 @@ import android.util.Log;
 import com.android.internal.util.Preconditions;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -63,7 +67,7 @@ import java.util.function.Consumer;
 public final class AppSearchSession implements Closeable {
     private static final String TAG = "AppSearchSession";
 
-    private final AttributionSource mCallerAttributionSource;
+    private final AppSearchAttributionSource mCallerAttributionSource;
     private final String mDatabaseName;
     private final UserHandle mUserHandle;
     private final IAppSearchManager mService;
@@ -79,7 +83,7 @@ public final class AppSearchSession implements Closeable {
             @NonNull AppSearchManager.SearchContext searchContext,
             @NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource,
+            @NonNull AppSearchAttributionSource callerAttributionSource,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<AppSearchSession>> callback) {
         AppSearchSession searchSession =
@@ -119,7 +123,8 @@ public final class AppSearchSession implements Closeable {
     }
 
     private AppSearchSession(@NonNull IAppSearchManager service, @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource, @NonNull String databaseName) {
+            @NonNull AppSearchAttributionSource callerAttributionSource,
+            @NonNull String databaseName) {
         mService = service;
         mUserHandle = userHandle;
         mCallerAttributionSource = callerAttributionSource;
@@ -877,10 +882,10 @@ public final class AppSearchSession implements Closeable {
                                         }
                                         callback.accept(AppSearchResult.newSuccessfulResult(
                                                 internalSetSchemaResponse.getSetSchemaResponse()));
-                                    } catch (Throwable t) {
+                                    } catch (RuntimeException e) {
                                         // TODO(b/261897334) save SDK errors/crashes and send to
                                         //  server for logging.
-                                        callback.accept(AppSearchResult.throwableToFailedResult(t));
+                                        callback.accept(AppSearchResult.throwableToFailedResult(e));
                                     }
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
@@ -1104,12 +1109,17 @@ public final class AppSearchSession implements Closeable {
                                     responseBuilder, statsBuilder, totalLatencyStartTimeMillis);
                     safeExecute(callbackExecutor, callback, () -> callback.accept(putResult));
                 }
-            } catch (Throwable t) {
+            } catch (RemoteException
+                     | AppSearchException
+                     | InterruptedException
+                     | IOException
+                     | ExecutionException
+                     | RuntimeException e) {
                 // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                 safeExecute(
                         callbackExecutor,
                         callback,
-                        () -> callback.accept(AppSearchResult.throwableToFailedResult(t)));
+                        () -> callback.accept(AppSearchResult.throwableToFailedResult(e)));
             }
         });
     }

@@ -323,6 +323,9 @@ public final class AppSearchImpl implements Closeable {
                             .setUsePersistentHashMap(icingOptionsConfig.getUsePersistentHashMap())
                             .setIntegerIndexBucketSplitThreshold(
                                     icingOptionsConfig.getIntegerIndexBucketSplitThreshold())
+                            .setLiteIndexSortAtIndexing(
+                                    icingOptionsConfig.getLiteIndexSortAtIndexing())
+                            .setLiteIndexSortSize(icingOptionsConfig.getLiteIndexSortSize())
                             .build();
             LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
             mIcingSearchEngineLocked = new IcingSearchEngine(options);
@@ -1380,27 +1383,6 @@ public final class AppSearchImpl implements Closeable {
                     sStatsBuilder.setStatusCode(AppSearchResult.RESULT_SECURITY_ERROR);
                 }
                 return new SearchResultPage(Bundle.EMPTY);
-            }
-
-            if (searchSpec.getJoinSpec() != null) {
-                List<String> joinFilterPackages =
-                        searchSpec.getJoinSpec().getNestedSearchSpec().getFilterPackageNames();
-
-                // Ensure the nested SearchSpec only filters on the package performing the query.
-                if (joinFilterPackages.isEmpty()
-                        || (joinFilterPackages.size() > 1
-                                && joinFilterPackages.contains(packageName))) {
-                    searchSpec
-                            .getJoinSpec()
-                            .getNestedSearchSpec()
-                            .getBundle()
-                            .putStringArrayList(
-                                    "packageName",
-                                    new ArrayList<>(Collections.singleton(packageName)));
-                } else if (!joinFilterPackages.contains(packageName)) {
-                    // Filter packages only contains other packages, remove the JoinSpec
-                    searchSpec.getBundle().remove("joinSpec");
-                }
             }
 
             String prefix = createPrefix(packageName, databaseName);

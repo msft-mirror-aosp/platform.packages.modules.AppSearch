@@ -98,6 +98,10 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
     public static final String KEY_ICING_MAX_PAGE_BYTES_LIMIT = "icing_max_page_bytes_limit";
     public static final String KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD =
             "icing_integer_index_bucket_split_threshold";
+    public static final String KEY_ICING_LITE_INDEX_SORT_AT_INDEXING =
+        "icing_lite_index_sort_at_indexing";
+    public static final String KEY_ICING_LITE_INDEX_SORT_SIZE =
+        "icing_lite_index_sort_size";
 
     /**
      * This config does not need to be cached in FrameworkAppSearchConfig as it is only accessed
@@ -138,6 +142,8 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
             KEY_ICING_USE_PERSISTENT_HASHMAP,
             KEY_ICING_MAX_PAGE_BYTES_LIMIT,
             KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
+            KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
+            KEY_ICING_LITE_INDEX_SORT_SIZE,
     };
 
     // Lock needed for all the operations in this class.
@@ -519,6 +525,26 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
         }
     }
 
+    @Override
+    public boolean getLiteIndexSortAtIndexing() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getBoolean(
+                KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
+                DEFAULT_LITE_INDEX_SORT_AT_INDEXING);
+        }
+    }
+
+    @Override
+    public int getLiteIndexSortSize() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getInt(
+                KEY_ICING_LITE_INDEX_SORT_SIZE,
+                DEFAULT_LITE_INDEX_SORT_SIZE);
+        }
+    }
+
     @GuardedBy("mLock")
     private void throwIfClosedLocked() {
         if (mIsClosedLocked) {
@@ -625,6 +651,7 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                 synchronized (mLock) {
                     mDenylistLocked = denylist;
                 }
+                break;
             case KEY_RATE_LIMIT_ENABLED:
                 synchronized (mLock) {
                     mBundleLocked.putBoolean(key, properties.getBoolean(key,
@@ -707,6 +734,18 @@ public final class FrameworkAppSearchConfig implements AppSearchConfig {
                 synchronized (mLock) {
                     mBundleLocked.putInt(key, properties.getInt(key,
                             IcingOptionsConfig.DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD));
+                }
+                break;
+            case KEY_ICING_LITE_INDEX_SORT_AT_INDEXING:
+                synchronized (mLock) {
+                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
+                        IcingOptionsConfig.DEFAULT_LITE_INDEX_SORT_AT_INDEXING));
+                }
+                break;
+            case KEY_ICING_LITE_INDEX_SORT_SIZE:
+                synchronized (mLock) {
+                    mBundleLocked.putInt(key, properties.getInt(key,
+                        IcingOptionsConfig.DEFAULT_LITE_INDEX_SORT_SIZE));
                 }
             default:
                 break;
