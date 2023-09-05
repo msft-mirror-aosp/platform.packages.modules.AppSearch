@@ -323,7 +323,7 @@ public final class ContactsIndexerUserInstance {
                             + ") of CP2 contacts in AppSearch");
                     return mContactsIndexerImpl.updatePersonCorpusAsync(/*wantedContactIds=*/
                             cp2ContactIds, /*unwantedContactIds=*/ appsearchContactIds,
-                            updateStats);
+                            updateStats, mContactsIndexerConfig.shouldKeepUpdatingOnError());
                 }).handle((x, t) -> {
                     if (t != null) {
                         Log.w(TAG, "Failed to perform full update", t);
@@ -332,7 +332,8 @@ public final class ContactsIndexerUserInstance {
                             // Somehow this error is not reflected in the stats, and
                             // unfortunately we don't know what part is wrong. Just add an error
                             // code for the update.
-                            updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_UNKNOWN_ERROR);
+                            updateStats.mUpdateStatuses.add(
+                                    ContactsUpdateStats.ERROR_CODE_CONTACTS_INDEXER_UNKNOWN_ERROR);
                         }
                     }
 
@@ -452,7 +453,8 @@ public final class ContactsIndexerUserInstance {
         //  timestamps for last successful deletion and update. This requires the ids from CP2
         //  are sorted in last_update_timestamp ascending order, and the code would become a
         //  little complicated.
-        return mContactsIndexerImpl.updatePersonCorpusAsync(wantedIds, unWantedIds, updateStats)
+        return mContactsIndexerImpl.updatePersonCorpusAsync(wantedIds, unWantedIds,
+                        updateStats, mContactsIndexerConfig.shouldKeepUpdatingOnError())
                 .handle((x, t) -> {
                     try {
                         if (t != null) {
@@ -463,7 +465,8 @@ public final class ContactsIndexerUserInstance {
                                 // unfortunately we don't know which part is wrong. Just add an
                                 // error code for the update.
                                 updateStats.mUpdateStatuses.add(
-                                        AppSearchResult.RESULT_UNKNOWN_ERROR);
+                                        ContactsUpdateStats
+                                                .ERROR_CODE_CONTACTS_INDEXER_UNKNOWN_ERROR);
                             }
                         }
                         // Persisting timestamping and logging, no matter if update succeeds or not.
