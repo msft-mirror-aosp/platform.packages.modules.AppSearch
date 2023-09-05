@@ -107,6 +107,10 @@ public class FrameworkAppSearchConfigTest {
                 AppSearchRateLimitConfig.DEFAULT_API_COST);
         assertThat(appSearchConfig.getIntegerIndexBucketSplitThreshold()).isEqualTo(
                 AppSearchConfig.DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD);
+        assertThat(appSearchConfig.getLiteIndexSortAtIndexing()).isEqualTo(
+            AppSearchConfig.DEFAULT_LITE_INDEX_SORT_AT_INDEXING);
+        assertThat(appSearchConfig.getLiteIndexSortSize()).isEqualTo(
+            AppSearchConfig.DEFAULT_LITE_INDEX_SORT_SIZE);
     }
 
     @Test
@@ -619,6 +623,12 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
                 Integer.toString(1002), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_LITE_INDEX_SORT_SIZE,
+                Integer.toString(1003), false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
         assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(15);
@@ -631,6 +641,8 @@ public class FrameworkAppSearchConfigTest {
         assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(true);
         assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(1001);
         assertThat(appSearchConfig.getIntegerIndexBucketSplitThreshold()).isEqualTo(1002);
+        assertThat(appSearchConfig.getLiteIndexSortAtIndexing()).isEqualTo(true);
+        assertThat(appSearchConfig.getLiteIndexSortSize()).isEqualTo(1003);
     }
 
     @Test
@@ -662,6 +674,12 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
                 Integer.toString(1002), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
+                Boolean.toString(true), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_LITE_INDEX_SORT_SIZE,
+                Integer.toString(1003), false);
 
         AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
 
@@ -693,6 +711,12 @@ public class FrameworkAppSearchConfigTest {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 FrameworkAppSearchConfig.KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
                 Integer.toString(1003), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
+                Boolean.toString(false), false);
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+                FrameworkAppSearchConfig.KEY_ICING_LITE_INDEX_SORT_SIZE,
+                Integer.toString(1004), false);
 
         assertThat(appSearchConfig.getMaxTokenLength()).isEqualTo(25);
         assertThat(appSearchConfig.getIndexMergeSize()).isEqualTo(2000);
@@ -704,6 +728,8 @@ public class FrameworkAppSearchConfigTest {
         assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(false);
         assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(1002);
         assertThat(appSearchConfig.getIntegerIndexBucketSplitThreshold()).isEqualTo(1003);
+        assertThat(appSearchConfig.getLiteIndexSortAtIndexing()).isEqualTo(false);
+        assertThat(appSearchConfig.getLiteIndexSortSize()).isEqualTo(1004);
     }
 
     @Test
@@ -856,5 +882,11 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getIntegerIndexBucketSplitThreshold());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getLiteIndexSortAtIndexing());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getLiteIndexSortSize());
     }
 }
