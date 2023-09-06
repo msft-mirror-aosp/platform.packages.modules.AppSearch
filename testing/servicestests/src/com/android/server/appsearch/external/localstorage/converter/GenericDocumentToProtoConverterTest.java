@@ -62,7 +62,7 @@ public class GenericDocumentToProtoConverterTest {
                     PREFIX + SCHEMA_TYPE_1, SCHEMA_PROTO_1, PREFIX + SCHEMA_TYPE_2, SCHEMA_PROTO_2);
 
     @Test
-    public void testDocumentProtoConvert() {
+    public void testDocumentProtoConvert() throws Exception {
         GenericDocument document =
                 new GenericDocument.Builder<GenericDocument.Builder<?>>(
                                 "namespace", "id1", SCHEMA_TYPE_1)
@@ -137,7 +137,7 @@ public class GenericDocumentToProtoConverterTest {
     }
 
     @Test
-    public void testConvertDocument_whenPropertyHasEmptyList() {
+    public void testConvertDocument_whenPropertyHasEmptyList() throws Exception {
         // Build original GenericDocument
         GenericDocument document =
                 new GenericDocument.Builder<GenericDocument.Builder<?>>(
@@ -238,7 +238,7 @@ public class GenericDocumentToProtoConverterTest {
     }
 
     @Test
-    public void testConvertDocument_whenNestedDocumentPropertyHasEmptyList() {
+    public void testConvertDocument_whenNestedDocumentPropertyHasEmptyList() throws Exception {
         // Build original nested document in type 1 and outer document in type2
         GenericDocument nestedDocument =
                 new GenericDocument.Builder<GenericDocument.Builder<?>>(
