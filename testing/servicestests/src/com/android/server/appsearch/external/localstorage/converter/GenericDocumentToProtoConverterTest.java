@@ -20,6 +20,9 @@ import static com.google.common.truth.Truth.assertThat;
 
 import android.app.appsearch.GenericDocument;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
+import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.icing.proto.DocumentProto;
 import com.android.server.appsearch.icing.proto.PropertyConfigProto;
 import com.android.server.appsearch.icing.proto.PropertyProto;
@@ -128,7 +131,11 @@ public class GenericDocumentToProtoConverterTest {
 
         GenericDocument convertedGenericDocument =
                 GenericDocumentToProtoConverter.toGenericDocument(
-                        documentProto, PREFIX, SCHEMA_MAP);
+                        documentProto,
+                        PREFIX,
+                        SCHEMA_MAP,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(document);
 
@@ -230,7 +237,12 @@ public class GenericDocumentToProtoConverterTest {
 
         // Convert to the other type and check if they are matched.
         GenericDocument convertedGenericDocument =
-                GenericDocumentToProtoConverter.toGenericDocument(documentProto, PREFIX, schemaMap);
+                GenericDocumentToProtoConverter.toGenericDocument(
+                        documentProto,
+                        PREFIX,
+                        schemaMap,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(document);
         assertThat(convertedDocumentProto).isEqualTo(documentProto);
@@ -370,7 +382,11 @@ public class GenericDocumentToProtoConverterTest {
         // Convert to the other type and check if they are matched.
         GenericDocument convertedGenericDocument =
                 GenericDocumentToProtoConverter.toGenericDocument(
-                        outerDocumentProto, PREFIX, schemaMap);
+                        outerDocumentProto,
+                        PREFIX,
+                        schemaMap,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(outerDocument);
         assertThat(convertedDocumentProto).isEqualTo(outerDocumentProto);

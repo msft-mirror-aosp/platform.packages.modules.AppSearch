@@ -28,6 +28,7 @@ import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.testutil.AppSearchTestUtils;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
@@ -73,8 +74,8 @@ public class SearchSpecToProtoConverterTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        mDefaultIcingOptionsConfig,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), mDefaultIcingOptionsConfig),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);

@@ -134,7 +134,7 @@ public class AppSearchManagerService extends SystemService {
     private final Context mContext;
     private final ExecutorManager mExecutorManager;
     private final AppSearchEnvironment mAppSearchEnvironment;
-    private final AppSearchConfig mAppSearchConfig;
+    private final FrameworkAppSearchConfig mAppSearchConfig;
 
     private PackageManager mPackageManager;
     private ServiceImplHelper mServiceImplHelper;
