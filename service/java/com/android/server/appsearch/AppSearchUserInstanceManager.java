@@ -88,7 +88,7 @@ public final class AppSearchUserInstanceManager {
     public AppSearchUserInstance getOrCreateUserInstance(
             @NonNull Context userContext,
             @NonNull UserHandle userHandle,
-            @NonNull AppSearchConfig config)
+            @NonNull FrameworkAppSearchConfig config)
             throws AppSearchException {
         Objects.requireNonNull(userContext);
         Objects.requireNonNull(userHandle);
@@ -206,7 +206,7 @@ public final class AppSearchUserInstanceManager {
     private AppSearchUserInstance createUserInstance(
             @NonNull Context userContext,
             @NonNull UserHandle userHandle,
-            @NonNull AppSearchConfig config)
+            @NonNull FrameworkAppSearchConfig config)
             throws AppSearchException {
         long totalLatencyStartMillis = SystemClock.elapsedRealtime();
         InitializeStats.Builder initStatsBuilder = new InitializeStats.Builder();
@@ -222,8 +222,7 @@ public final class AppSearchUserInstanceManager {
         VisibilityCheckerImpl visibilityCheckerImpl = new VisibilityCheckerImpl(userContext);
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
                 icingDir,
-                /* limitConfig= */ config,
-                /* icingOptionsConfig= */ config,
+                config,
                 initStatsBuilder,
                 new FrameworkOptimizeStrategy(config),
                 visibilityCheckerImpl);
