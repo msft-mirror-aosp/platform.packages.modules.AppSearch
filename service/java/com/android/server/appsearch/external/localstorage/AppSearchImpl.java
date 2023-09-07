@@ -184,8 +184,7 @@ public final class AppSearchImpl implements Closeable {
 
     private final ReadWriteLock mReadWriteLock = new ReentrantReadWriteLock();
     private final OptimizeStrategy mOptimizeStrategy;
-    private final LimitConfig mLimitConfig;
-    private final IcingOptionsConfig mIcingOptionsConfig;
+    private final AppSearchConfig mConfig;
 
     @GuardedBy("mReadWriteLock")
     @VisibleForTesting
@@ -270,19 +269,13 @@ public final class AppSearchImpl implements Closeable {
     @NonNull
     public static AppSearchImpl create(
             @NonNull File icingDir,
-            @NonNull LimitConfig limitConfig,
-            @NonNull IcingOptionsConfig icingOptionsConfig,
+            @NonNull AppSearchConfig config,
             @Nullable InitializeStats.Builder initStatsBuilder,
             @NonNull OptimizeStrategy optimizeStrategy,
             @Nullable VisibilityChecker visibilityChecker)
             throws AppSearchException {
         return new AppSearchImpl(
-                icingDir,
-                limitConfig,
-                icingOptionsConfig,
-                initStatsBuilder,
-                optimizeStrategy,
-                visibilityChecker);
+                icingDir, config, initStatsBuilder, optimizeStrategy, visibilityChecker);
     }
 
     /**
@@ -290,15 +283,13 @@ public final class AppSearchImpl implements Closeable {
      */
     private AppSearchImpl(
             @NonNull File icingDir,
-            @NonNull LimitConfig limitConfig,
-            @NonNull IcingOptionsConfig icingOptionsConfig,
+            @NonNull AppSearchConfig config,
             @Nullable InitializeStats.Builder initStatsBuilder,
             @NonNull OptimizeStrategy optimizeStrategy,
             @Nullable VisibilityChecker visibilityChecker)
             throws AppSearchException {
         Objects.requireNonNull(icingDir);
-        mLimitConfig = Objects.requireNonNull(limitConfig);
-        mIcingOptionsConfig = Objects.requireNonNull(icingOptionsConfig);
+        mConfig = Objects.requireNonNull(config);
         mOptimizeStrategy = Objects.requireNonNull(optimizeStrategy);
         mVisibilityCheckerLocked = visibilityChecker;
 
@@ -309,23 +300,21 @@ public final class AppSearchImpl implements Closeable {
             IcingSearchEngineOptions options =
                     IcingSearchEngineOptions.newBuilder()
                             .setBaseDir(icingDir.getAbsolutePath())
-                            .setMaxTokenLength(icingOptionsConfig.getMaxTokenLength())
-                            .setIndexMergeSize(icingOptionsConfig.getIndexMergeSize())
+                            .setMaxTokenLength(mConfig.getMaxTokenLength())
+                            .setIndexMergeSize(mConfig.getIndexMergeSize())
                             .setDocumentStoreNamespaceIdFingerprint(
-                                    icingOptionsConfig.getDocumentStoreNamespaceIdFingerprint())
+                                    mConfig.getDocumentStoreNamespaceIdFingerprint())
                             .setOptimizeRebuildIndexThreshold(
-                                    icingOptionsConfig.getOptimizeRebuildIndexThreshold())
-                            .setCompressionLevel(icingOptionsConfig.getCompressionLevel())
+                                    mConfig.getOptimizeRebuildIndexThreshold())
+                            .setCompressionLevel(mConfig.getCompressionLevel())
                             .setAllowCircularSchemaDefinitions(
-                                    icingOptionsConfig.getAllowCircularSchemaDefinitions())
-                            .setPreMappingFbv(
-                                    icingOptionsConfig.getUsePreMappingWithFileBackedVector())
-                            .setUsePersistentHashMap(icingOptionsConfig.getUsePersistentHashMap())
+                                    mConfig.getAllowCircularSchemaDefinitions())
+                            .setPreMappingFbv(mConfig.getUsePreMappingWithFileBackedVector())
+                            .setUsePersistentHashMap(mConfig.getUsePersistentHashMap())
                             .setIntegerIndexBucketSplitThreshold(
-                                    icingOptionsConfig.getIntegerIndexBucketSplitThreshold())
-                            .setLiteIndexSortAtIndexing(
-                                    icingOptionsConfig.getLiteIndexSortAtIndexing())
-                            .setLiteIndexSortSize(icingOptionsConfig.getLiteIndexSortSize())
+                                    mConfig.getIntegerIndexBucketSplitThreshold())
+                            .setLiteIndexSortAtIndexing(mConfig.getLiteIndexSortAtIndexing())
+                            .setLiteIndexSortSize(mConfig.getLiteIndexSortSize())
                             .build();
             LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
             mIcingSearchEngineLocked = new IcingSearchEngine(options);
@@ -1117,7 +1106,7 @@ public final class AppSearchImpl implements Closeable {
     private int enforceLimitConfigLocked(String packageName, String newDocUri, int newDocSize)
             throws AppSearchException {
         // Limits check: size of document
-        if (newDocSize > mLimitConfig.getMaxDocumentSizeBytes()) {
+        if (newDocSize > mConfig.getMaxDocumentSizeBytes()) {
             throw new AppSearchException(
                     AppSearchResult.RESULT_OUT_OF_SPACE,
                     "Document \""
@@ -1128,7 +1117,7 @@ public final class AppSearchImpl implements Closeable {
                             + newDocSize
                             + " bytes, which exceeds "
                             + "limit of "
-                            + mLimitConfig.getMaxDocumentSizeBytes()
+                            + mConfig.getMaxDocumentSizeBytes()
                             + " bytes");
         }
 
@@ -1140,7 +1129,7 @@ public final class AppSearchImpl implements Closeable {
         } else {
             newDocumentCount = oldDocumentCount + 1;
         }
-        if (newDocumentCount > mLimitConfig.getMaxDocumentCount()) {
+        if (newDocumentCount > mConfig.getMaxDocumentCount()) {
             // Our management of mDocumentCountMapLocked doesn't account for document
             // replacements, so our counter might have overcounted if the app has replaced docs.
             // Rebuild the counter from StorageInfo in case this is so.
@@ -1155,14 +1144,14 @@ public final class AppSearchImpl implements Closeable {
                 newDocumentCount = oldDocumentCount + 1;
             }
         }
-        if (newDocumentCount > mLimitConfig.getMaxDocumentCount()) {
+        if (newDocumentCount > mConfig.getMaxDocumentCount()) {
             // Now we really can't fit it in, even accounting for replacements.
             throw new AppSearchException(
                     AppSearchResult.RESULT_OUT_OF_SPACE,
                     "Package \""
                             + packageName
                             + "\" exceeded limit of "
-                            + mLimitConfig.getMaxDocumentCount()
+                            + mConfig.getMaxDocumentCount()
                             + " documents. Some documents "
                             + "must be removed to index additional ones.");
         }
@@ -1231,7 +1220,7 @@ public final class AppSearchImpl implements Closeable {
             Map<String, SchemaTypeConfigProto> schemaTypeMap =
                     Objects.requireNonNull(mSchemaMapLocked.get(prefix));
             return GenericDocumentToProtoConverter.toGenericDocument(
-                    documentBuilder.build(), prefix, schemaTypeMap);
+                    documentBuilder.build(), prefix, schemaTypeMap, mConfig);
         } finally {
             mReadWriteLock.readLock().unlock();
         }
@@ -1275,7 +1264,7 @@ public final class AppSearchImpl implements Closeable {
             Map<String, SchemaTypeConfigProto> schemaTypeMap =
                     Objects.requireNonNull(mSchemaMapLocked.get(prefix));
             return GenericDocumentToProtoConverter.toGenericDocument(
-                    documentBuilder.build(), prefix, schemaTypeMap);
+                    documentBuilder.build(), prefix, schemaTypeMap, mConfig);
         } finally {
             mReadWriteLock.readLock().unlock();
         }
@@ -1393,7 +1382,7 @@ public final class AppSearchImpl implements Closeable {
                             Collections.singleton(prefix),
                             mNamespaceMapLocked,
                             mSchemaMapLocked,
-                            mIcingOptionsConfig);
+                            mConfig);
             if (searchSpecToProtoConverter.hasNothingToSearch()) {
                 // there is nothing to search over given their search filters, so we can return an
                 // empty SearchResult and skip sending request to Icing.
@@ -1501,7 +1490,7 @@ public final class AppSearchImpl implements Closeable {
                             prefixFilters,
                             mNamespaceMapLocked,
                             mSchemaMapLocked,
-                            mIcingOptionsConfig);
+                            mConfig);
             // Remove those inaccessible schemas.
             searchSpecToProtoConverter.removeInaccessibleSchemaFilter(
                     callerAccess, mVisibilityStoreLocked, mVisibilityCheckerLocked);
@@ -1555,7 +1544,7 @@ public final class AppSearchImpl implements Closeable {
         // Rewrite search result before we return.
         SearchResultPage searchResultPage =
                 SearchResultToProtoConverter.toSearchResultPage(
-                        searchResultProto, mSchemaMapLocked);
+                        searchResultProto, mSchemaMapLocked, mConfig);
         if (sStatsBuilder != null) {
             sStatsBuilder.setRewriteSearchResultLatencyMillis(
                     (int) (SystemClock.elapsedRealtime() - rewriteSearchResultLatencyStartMillis));
@@ -1622,14 +1611,13 @@ public final class AppSearchImpl implements Closeable {
                         AppSearchResult.RESULT_INVALID_ARGUMENT,
                         "suggestionQueryExpression cannot be empty.");
             }
-            if (searchSuggestionSpec.getMaximumResultCount()
-                    > mLimitConfig.getMaxSuggestionCount()) {
+            if (searchSuggestionSpec.getMaximumResultCount() > mConfig.getMaxSuggestionCount()) {
                 throw new AppSearchException(
                         AppSearchResult.RESULT_INVALID_ARGUMENT,
                         "Trying to get "
                                 + searchSuggestionSpec.getMaximumResultCount()
                                 + " suggestion results, which exceeds limit of "
-                                + mLimitConfig.getMaxSuggestionCount());
+                                + mConfig.getMaxSuggestionCount());
             }
 
             String prefix = createPrefix(packageName, databaseName);
@@ -1760,7 +1748,7 @@ public final class AppSearchImpl implements Closeable {
             // Rewrite search result before we return.
             SearchResultPage searchResultPage =
                     SearchResultToProtoConverter.toSearchResultPage(
-                            searchResultProto, mSchemaMapLocked);
+                            searchResultProto, mSchemaMapLocked, mConfig);
             if (sStatsBuilder != null) {
                 sStatsBuilder.setRewriteSearchResultLatencyMillis(
                         (int)
@@ -1992,7 +1980,7 @@ public final class AppSearchImpl implements Closeable {
                             Collections.singleton(prefix),
                             mNamespaceMapLocked,
                             mSchemaMapLocked,
-                            mIcingOptionsConfig);
+                            mConfig);
             if (searchSpecToProtoConverter.hasNothingToSearch()) {
                 // there is nothing to search over given their search filters, so we can return
                 // early and skip sending request to Icing.
