@@ -28,6 +28,8 @@ import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.os.Bundle;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfig;
+
 import com.google.android.icing.proto.DocumentProto;
 import com.google.android.icing.proto.SchemaTypeConfigProto;
 import com.google.android.icing.proto.SearchResultProto;
@@ -57,13 +59,14 @@ public class SearchResultToProtoConverter {
     @NonNull
     public static SearchResultPage toSearchResultPage(
             @NonNull SearchResultProto proto,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap)
+            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
+            @NonNull AppSearchConfig config)
             throws AppSearchException {
         Bundle bundle = new Bundle();
         bundle.putLong(SearchResultPage.NEXT_PAGE_TOKEN_FIELD, proto.getNextPageToken());
         ArrayList<Bundle> resultBundles = new ArrayList<>(proto.getResultsCount());
         for (int i = 0; i < proto.getResultsCount(); i++) {
-            SearchResult result = toUnprefixedSearchResult(proto.getResults(i), schemaMap);
+            SearchResult result = toUnprefixedSearchResult(proto.getResults(i), schemaMap, config);
             resultBundles.add(result.getBundle());
         }
         bundle.putParcelableArrayList(SearchResultPage.RESULTS_FIELD, resultBundles);
@@ -82,7 +85,8 @@ public class SearchResultToProtoConverter {
     @NonNull
     private static SearchResult toUnprefixedSearchResult(
             @NonNull SearchResultProto.ResultProto proto,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap)
+            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
+            @NonNull AppSearchConfig config)
             throws AppSearchException {
 
         DocumentProto.Builder documentBuilder = proto.getDocument().toBuilder();
@@ -91,7 +95,7 @@ public class SearchResultToProtoConverter {
                 Objects.requireNonNull(schemaMap.get(prefix));
         GenericDocument document =
                 GenericDocumentToProtoConverter.toGenericDocument(
-                        documentBuilder, prefix, schemaTypeMap);
+                        documentBuilder, prefix, schemaTypeMap, config);
         SearchResult.Builder builder =
                 new SearchResult.Builder(getPackageName(prefix), getDatabaseName(prefix))
                         .setGenericDocument(document)
@@ -115,7 +119,7 @@ public class SearchResultToProtoConverter {
                         "Nesting joined results within joined results not allowed.");
             }
 
-            builder.addJoinedResult(toUnprefixedSearchResult(joinedResultProto, schemaMap));
+            builder.addJoinedResult(toUnprefixedSearchResult(joinedResultProto, schemaMap, config));
         }
         return builder.build();
     }
