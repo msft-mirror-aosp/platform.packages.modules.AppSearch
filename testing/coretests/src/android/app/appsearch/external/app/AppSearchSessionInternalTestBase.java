@@ -48,7 +48,7 @@ public abstract class AppSearchSessionInternalTestBase {
 
     static final String DB_NAME_1 = "";
 
-    private AppSearchSessionShim mDb1;
+    protected AppSearchSessionShim mDb1;
 
     protected abstract ListenableFuture<AppSearchSessionShim> createSearchSessionAsync(
             @NonNull String dbName);

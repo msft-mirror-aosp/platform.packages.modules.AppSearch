@@ -16,6 +16,10 @@
 
 package com.android.server.appsearch;
 
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING;
+
 import static com.google.common.truth.Truth.assertThat;
 
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
@@ -26,15 +30,15 @@ public class AppSearchRateLimitConfigTest {
     @Test
     public void testDefaultRateLimitConfig() {
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
 
         assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
         assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
-                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
-                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+                (int) (DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
         // Verify that API costs are set to default of 1
         assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_NAMESPACES)).isEqualTo(1);
         assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SEARCH)).isEqualTo(1);
@@ -65,29 +69,29 @@ public class AppSearchRateLimitConfigTest {
     @Test
     public void testRateLimitConfigRebuild_noChanges() {
         AppSearchRateLimitConfig rateLimitConfig1 = AppSearchRateLimitConfig.create(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
         AppSearchRateLimitConfig rateLimitConfig2 = rateLimitConfig1.rebuildIfNecessary(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
         assertThat(rateLimitConfig2).isEqualTo(rateLimitConfig1);
     }
 
     @Test
     public void testRateLimitConfigRebuild_changeTotalCapacity() {
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
         rateLimitConfig = rateLimitConfig.rebuildIfNecessary(1000,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
 
         assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(1000);
         assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
-                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                (int) (DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
                         * 1000));
         // API costs = 1 by default
         assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(1);
@@ -103,10 +107,10 @@ public class AppSearchRateLimitConfigTest {
     @Test
     public void testRateLimitConfigRebuild_changePerPackagePercentage() {
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(10000,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
         rateLimitConfig = rateLimitConfig.rebuildIfNecessary(10000, 0.5f,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
 
         assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(10000);
         assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
@@ -125,19 +129,19 @@ public class AppSearchRateLimitConfigTest {
     @Test
     public void testRateLimitConfigRebuild_changeApiCosts() {
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
         rateLimitConfig = rateLimitConfig.rebuildIfNecessary(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 "localPutDocuments:5;localGetDocuments:11;localSetSchema:99");
 
         assertThat(rateLimitConfig.getTaskQueueTotalCapacity()).isEqualTo(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
         assertThat(rateLimitConfig.getTaskQueuePerPackageCapacity()).isEqualTo(
-                (int) (AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
-                        * AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+                (int) (DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE
+                        * DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
         assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_PUT_DOCUMENTS)).isEqualTo(5);
         assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_GET_DOCUMENTS)).isEqualTo(11);
         assertThat(rateLimitConfig.getApiCost(CallStats.CALL_TYPE_SET_SCHEMA)).isEqualTo(99);
@@ -152,9 +156,9 @@ public class AppSearchRateLimitConfigTest {
     @Test
     public void testRateLimitConfigRebuild_allConfigsChanged() {
         AppSearchRateLimitConfig rateLimitConfig = AppSearchRateLimitConfig.create(
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                AppSearchConfig.DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                DEFAULT_RATE_LIMIT_API_COSTS_STRING);
         rateLimitConfig = rateLimitConfig.rebuildIfNecessary(1000, 0.8f,
                 "localPutDocuments:5;localGetDocuments:11;localSetSchema:99");
 
