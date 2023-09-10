@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvider> {
     // TODO(b/203605504) we could just use AppSearchHelper.
@@ -500,7 +501,7 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
             ids.add(String.valueOf(i));
         }
         List<String> indexedIds = mAppSearchHelper.mIndexedContacts.stream().map(
-                Person::getId).toList();
+                Person::getId).collect(Collectors.toList());
         assertThat(indexedIds).isEqualTo(ids);
         verify(contentResolver, times(3)).query(any(), any(), any(), any(), any());
     }
@@ -587,7 +588,7 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
             ids.add(String.valueOf(i));
         }
         List<String> indexedIds = mAppSearchHelper.mIndexedContacts.stream().map(
-                Person::getId).toList();
+                Person::getId).collect(Collectors.toList());
         assertThat(indexedIds).isEqualTo(ids);
         verify(contentResolver, times(3)).query(any(), any(), any(), any(), any());
     }

@@ -20,6 +20,11 @@ import static android.system.OsConstants.O_RDONLY;
 import static android.system.OsConstants.O_WRONLY;
 
 import static com.android.internal.util.ConcurrentUtils.DIRECT_EXECUTOR;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_DENYLIST;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_ENABLED;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_API_COSTS;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -180,7 +185,8 @@ public class AppSearchManagerServiceTest {
         // In AppSearchManagerService, FrameworkAppSearchConfig is a singleton. During tearDown for
         // TestableDeviceConfig, the propertyChangedListeners are removed. Therefore we have to set
         // a fresh config with listeners in setUp in order to set new properties.
-        AppSearchConfig appSearchConfig = FrameworkAppSearchConfig.create(DIRECT_EXECUTOR);
+        FrameworkAppSearchConfig appSearchConfig =
+            FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
         AppSearchEnvironmentFactory.setConfigInstanceForTest(appSearchConfig);
 
         // Create the user instance and add a spy to its logger to verify logging
@@ -617,7 +623,7 @@ public class AppSearchManagerServiceTest {
                         + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
                         + "initialize";
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+                KEY_DENYLIST, denylistString, false);
         // We expect all local calls (pkg+db) and global calls (pkg only) to be denied since the
         // denylist denies all api's for our calling package
         verifyLocalCallsResults(RESULT_DENIED);
@@ -636,7 +642,7 @@ public class AppSearchManagerServiceTest {
                         + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
                         + "initialize";
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+                KEY_DENYLIST, denylistString, false);
         // We expect none of the local calls (pkg+db) and global calls (pkg only) to be denied since
         // the denylist denies all api's for a different calling package
         verifyLocalCallsResults(AppSearchResult.RESULT_OK);
@@ -656,7 +662,7 @@ public class AppSearchManagerServiceTest {
                         + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
                         + "initialize";
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+                KEY_DENYLIST, denylistString, false);
         // We expect only the local calls (pkg+db) to be denied since the denylist specifies a
         // package-database name pair
         verifyLocalCallsResults(RESULT_DENIED);
@@ -686,7 +692,7 @@ public class AppSearchManagerServiceTest {
                         + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
                         + "initialize";
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+                KEY_DENYLIST, denylistString, false);
         verifyLocalCallsResults(AppSearchResult.RESULT_OK);
         verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
     }
@@ -703,7 +709,7 @@ public class AppSearchManagerServiceTest {
                         + "localGetStorageInfo,flush,globalRegisterObserverCallback,"
                         + "globalUnregisterObserverCallback,initialize";
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+                KEY_DENYLIST, denylistString, false);
 
         verifyLocalCallsResults(RESULT_DENIED);
         verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
@@ -753,7 +759,7 @@ public class AppSearchManagerServiceTest {
                         + "globalRegisterObserverCallback,globalUnregisterObserverCallback,"
                         + "initialize";
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+                KEY_DENYLIST, denylistString, false);
         verifyLocalCallsResults(AppSearchResult.RESULT_OK);
         verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
     }
@@ -764,7 +770,7 @@ public class AppSearchManagerServiceTest {
                 "pkg=com.android.appsearch.mockingservicestests&apis=localSetSchema,localGetSchema,"
                         + "localGetNamespaces";
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_DENYLIST, denylistString, false);
+                KEY_DENYLIST, denylistString, false);
         // Specified APIs
         verifySetSchemaResult(RESULT_DENIED);
         verifyLocalGetSchemaResult(RESULT_DENIED);
@@ -797,19 +803,15 @@ public class AppSearchManagerServiceTest {
     public void testAppSearchRateLimit_rateLimitOff_acceptTasksAndIgnoreCapacities()
             throws Exception {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(false),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(false), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                Integer.toString(10),
-                false);
+                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY, Integer.toString(10), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.8f),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                KEY_RATE_LIMIT_API_COSTS,
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
 
@@ -822,19 +824,15 @@ public class AppSearchManagerServiceTest {
     public void testAppSearchRateLimit_rateLimitOn_dropTaskDueToCapacitiesExceeded()
             throws Exception {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(true),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(true), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                Integer.toString(10),
-                false);
+                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY, Integer.toString(10), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.8f),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                KEY_RATE_LIMIT_API_COSTS,
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
 
@@ -861,19 +859,15 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testAppSearchRateLimit_rateLimitOn_noTasksDropped() throws Exception {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(true),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(true), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                Integer.toString(1000),
-                false);
+                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY, Integer.toString(1000), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.8f),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                KEY_RATE_LIMIT_API_COSTS,
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
 
@@ -884,19 +878,15 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testAppSearchRateLimit_rateLimitOnToOff() throws Exception {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(true),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(true), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                Integer.toString(10),
-                false);
+                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY, Integer.toString(10), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.8f),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                KEY_RATE_LIMIT_API_COSTS,
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
@@ -917,9 +907,7 @@ public class AppSearchManagerServiceTest {
 
         // All calls should be fine after switching rate limiting to off
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(false),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(false), false);
         verifyLocalCallsResults(AppSearchResult.RESULT_OK);
         verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
     }
@@ -927,26 +915,20 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testAppSearchRateLimit_rateLimitOffToOn() throws Exception {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(false),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(false), false);
         verifyLocalCallsResults(AppSearchResult.RESULT_OK);
         verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
 
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(true),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(true), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                Integer.toString(5),
-                false);
+                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY, Integer.toString(5), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.8f),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                KEY_RATE_LIMIT_API_COSTS,
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
         // Some calls are rejected once rate limiting gets enabled
@@ -970,19 +952,15 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testAppSearchRateLimit_rateLimitChangeToHigherLimit() throws Exception {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(true),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(true), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                Integer.toString(10),
-                false);
+                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY, Integer.toString(10), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.8f),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                KEY_RATE_LIMIT_API_COSTS,
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
@@ -1005,9 +983,7 @@ public class AppSearchManagerServiceTest {
 
         // Only getSchema call should be rejected after setting to higher limit
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                Integer.toString(15),
-                false);
+                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY, Integer.toString(15), false);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
         verifySetSchemaResult(AppSearchResult.RESULT_OK);
@@ -1030,19 +1006,15 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testAppSearchRateLimit_rateLimitChangeToLowerLimit() throws Exception {
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_ENABLED,
-                Boolean.toString(true),
-                false);
+                KEY_RATE_LIMIT_ENABLED, Boolean.toString(true), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                Integer.toString(10),
-                false);
+                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY, Integer.toString(10), false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.8f),
                 false);
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_API_COSTS,
+                KEY_RATE_LIMIT_API_COSTS,
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
@@ -1065,7 +1037,7 @@ public class AppSearchManagerServiceTest {
 
         // Query call should also get rejected after setting a lower limit
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                FrameworkAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.5f),
                 false);
         verifyQueryResult(RESULT_RATE_LIMITED);
