@@ -13,3 +13,10 @@
 #  limitations under the License.
 
 -keep class * extends android.app.Service
+
+# This prevents the obfuscation or removal of fields referenced in native.
+-keep class com.google.android.icing.IcingSearchEngineImpl
+-keepclassmembers public class com.google.android.icing.IcingSearchEngineImpl {
+  private long nativePointer;
+  native <methods>;
+}
