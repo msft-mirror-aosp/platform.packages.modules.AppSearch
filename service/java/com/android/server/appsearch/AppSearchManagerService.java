@@ -347,7 +347,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull List<Bundle> schemaBundles,
-                @NonNull List<Bundle> visibilityBundles,
+                @NonNull List<VisibilityDocument> visibilityDocuments,
                 boolean forceOverride,
                 int schemaVersion,
                 @NonNull UserHandle userHandle,
@@ -357,7 +357,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(schemaBundles);
-            Objects.requireNonNull(visibilityBundles);
+            Objects.requireNonNull(visibilityDocuments);
             Objects.requireNonNull(userHandle);
             Objects.requireNonNull(callback);
 
@@ -394,12 +394,6 @@ public class AppSearchManagerService extends SystemService {
                     List<AppSearchSchema> schemas = new ArrayList<>(schemaBundles.size());
                     for (int i = 0; i < schemaBundles.size(); i++) {
                         schemas.add(new AppSearchSchema(schemaBundles.get(i)));
-                    }
-                    List<VisibilityDocument> visibilityDocuments =
-                            new ArrayList<>(visibilityBundles.size());
-                    for (int i = 0; i < visibilityBundles.size(); i++) {
-                        visibilityDocuments.add(
-                                new VisibilityDocument(visibilityBundles.get(i)));
                     }
                     long rebuildFromBundleLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 

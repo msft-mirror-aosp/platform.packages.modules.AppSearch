@@ -148,32 +148,32 @@ public class VisibilityStoreMigrationHelperFromV0Test {
                         /*visibilityChecker=*/ null);
 
         VisibilityDocument actualDocument1 =
-                new VisibilityDocument(
-                        appSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Schema1",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                appSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Schema1",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         VisibilityDocument actualDocument2 =
-                new VisibilityDocument(
-                        appSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Schema2",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                appSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Schema2",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
 
         VisibilityDocument expectedDocument1 =
                 new VisibilityDocument.Builder(/*id=*/ prefix + "Schema1")
                         .setNotDisplayedBySystem(true)
-                        .setCreationTimestampMillis(actualDocument1.getCreationTimestampMillis())
                         .addVisibleToPackage(new PackageIdentifier(packageNameFoo, sha256CertFoo))
                         .build();
         VisibilityDocument expectedDocument2 =
                 new VisibilityDocument.Builder(/*id=*/ prefix + "Schema2")
                         .setNotDisplayedBySystem(true)
-                        .setCreationTimestampMillis(actualDocument2.getCreationTimestampMillis())
                         .addVisibleToPackage(new PackageIdentifier(packageNameBar, sha256CertBar))
                         .build();
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
