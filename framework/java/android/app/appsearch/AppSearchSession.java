@@ -20,6 +20,7 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
@@ -66,7 +67,7 @@ import java.util.function.Consumer;
 public final class AppSearchSession implements Closeable {
     private static final String TAG = "AppSearchSession";
 
-    private final AttributionSource mCallerAttributionSource;
+    private final AppSearchAttributionSource mCallerAttributionSource;
     private final String mDatabaseName;
     private final UserHandle mUserHandle;
     private final IAppSearchManager mService;
@@ -82,7 +83,7 @@ public final class AppSearchSession implements Closeable {
             @NonNull AppSearchManager.SearchContext searchContext,
             @NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource,
+            @NonNull AppSearchAttributionSource callerAttributionSource,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<AppSearchSession>> callback) {
         AppSearchSession searchSession =
@@ -122,7 +123,8 @@ public final class AppSearchSession implements Closeable {
     }
 
     private AppSearchSession(@NonNull IAppSearchManager service, @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource, @NonNull String databaseName) {
+            @NonNull AppSearchAttributionSource callerAttributionSource,
+            @NonNull String databaseName) {
         mService = service;
         mUserHandle = userHandle;
         mCallerAttributionSource = callerAttributionSource;
@@ -166,28 +168,22 @@ public final class AppSearchSession implements Closeable {
             schemaBundles.add(schema.getBundle());
         }
 
-        // Extract a List<VisibilityDocument> from the request and convert to a
-        // List<VisibilityDocument.Bundle> to send via binder.
+        // Extract a List<VisibilityDocument> from the request
         List<VisibilityDocument> visibilityDocuments = VisibilityDocument
                 .toVisibilityDocuments(request);
-        List<Bundle> visibilityBundles = new ArrayList<>(visibilityDocuments.size());
-        for (int i = 0; i < visibilityDocuments.size(); i++) {
-            visibilityBundles.add(visibilityDocuments.get(i).getBundle());
-        }
-
         // No need to trigger migration if user never set migrator
         if (request.getMigrators().isEmpty()) {
             setSchemaNoMigrations(
                     request,
                     schemaBundles,
-                    visibilityBundles,
+                    visibilityDocuments,
                     callbackExecutor,
                     callback);
         } else {
             setSchemaWithMigrations(
                     request,
                     schemaBundles,
-                    visibilityBundles,
+                    visibilityDocuments,
                     workExecutor,
                     callbackExecutor,
                     callback);
@@ -845,7 +841,7 @@ public final class AppSearchSession implements Closeable {
     private void setSchemaNoMigrations(
             @NonNull SetSchemaRequest request,
             @NonNull List<Bundle> schemaBundles,
-            @NonNull List<Bundle> visibilityBundles,
+            @NonNull List<VisibilityDocument> visibilityDocs,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
         try {
@@ -853,7 +849,7 @@ public final class AppSearchSession implements Closeable {
                     mCallerAttributionSource,
                     mDatabaseName,
                     schemaBundles,
-                    visibilityBundles,
+                    visibilityDocs,
                     request.isForceOverride(),
                     request.getVersion(),
                     mUserHandle,
@@ -906,7 +902,7 @@ public final class AppSearchSession implements Closeable {
     private void setSchemaWithMigrations(
             @NonNull SetSchemaRequest request,
             @NonNull List<Bundle> schemaBundles,
-            @NonNull List<Bundle> visibilityBundles,
+            @NonNull List<VisibilityDocument> visibilityDocs,
             @NonNull Executor workExecutor,
             @NonNull @CallbackExecutor Executor callbackExecutor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
@@ -950,7 +946,7 @@ public final class AppSearchSession implements Closeable {
 
                 // No need to trigger migration if no migrator is active.
                 if (activeMigrators.isEmpty()) {
-                    setSchemaNoMigrations(request, schemaBundles, visibilityBundles,
+                    setSchemaNoMigrations(request, schemaBundles, visibilityDocs,
                             callbackExecutor, callback);
                     return;
                 }
@@ -966,7 +962,7 @@ public final class AppSearchSession implements Closeable {
                         mCallerAttributionSource,
                         mDatabaseName,
                         schemaBundles,
-                        visibilityBundles,
+                        visibilityDocs,
                         /*forceOverride=*/ false,
                         request.getVersion(),
                         mUserHandle,
@@ -1028,7 +1024,7 @@ public final class AppSearchSession implements Closeable {
                                 mCallerAttributionSource,
                                 mDatabaseName,
                                 schemaBundles,
-                                visibilityBundles,
+                                visibilityDocs,
                                 /*forceOverride=*/ true,
                                 request.getVersion(),
                                 mUserHandle,

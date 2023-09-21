@@ -46,6 +46,7 @@ import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.SetSchemaResponse;
 import android.app.appsearch.StorageInfo;
 import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
@@ -133,7 +134,7 @@ public class AppSearchManagerService extends SystemService {
     private final Context mContext;
     private final ExecutorManager mExecutorManager;
     private final AppSearchEnvironment mAppSearchEnvironment;
-    private final AppSearchConfig mAppSearchConfig;
+    private final FrameworkAppSearchConfig mAppSearchConfig;
 
     private PackageManager mPackageManager;
     private ServiceImplHelper mServiceImplHelper;
@@ -343,10 +344,10 @@ public class AppSearchManagerService extends SystemService {
     private class Stub extends IAppSearchManager.Stub {
         @Override
         public void setSchema(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull List<Bundle> schemaBundles,
-                @NonNull List<Bundle> visibilityBundles,
+                @NonNull List<VisibilityDocument> visibilityDocuments,
                 boolean forceOverride,
                 int schemaVersion,
                 @NonNull UserHandle userHandle,
@@ -356,7 +357,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(schemaBundles);
-            Objects.requireNonNull(visibilityBundles);
+            Objects.requireNonNull(visibilityDocuments);
             Objects.requireNonNull(userHandle);
             Objects.requireNonNull(callback);
 
@@ -393,12 +394,6 @@ public class AppSearchManagerService extends SystemService {
                     List<AppSearchSchema> schemas = new ArrayList<>(schemaBundles.size());
                     for (int i = 0; i < schemaBundles.size(); i++) {
                         schemas.add(new AppSearchSchema(schemaBundles.get(i)));
-                    }
-                    List<VisibilityDocument> visibilityDocuments =
-                            new ArrayList<>(visibilityBundles.size());
-                    for (int i = 0; i < visibilityBundles.size(); i++) {
-                        visibilityDocuments.add(
-                                new VisibilityDocument(visibilityBundles.get(i)));
                     }
                     long rebuildFromBundleLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
@@ -488,7 +483,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getSchema(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
                 @NonNull String databaseName,
                 @NonNull UserHandle userHandle,
@@ -577,7 +572,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getNamespaces(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
@@ -651,7 +646,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void putDocuments(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull DocumentsParcel documentsParcel,
                 @NonNull UserHandle userHandle,
@@ -759,7 +754,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getDocuments(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
                 @NonNull String databaseName,
                 @NonNull String namespace,
@@ -884,7 +879,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void query(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String queryExpression,
                 @NonNull Bundle searchSpecBundle,
@@ -966,7 +961,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void globalQuery(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String queryExpression,
                 @NonNull Bundle searchSpecBundle,
                 @NonNull UserHandle userHandle,
@@ -1050,7 +1045,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getNextPage(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @Nullable String databaseName,
                 long nextPageToken,
                 @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinType,
@@ -1141,7 +1136,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void invalidateNextPageToken(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 long nextPageToken,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis) {
@@ -1216,7 +1211,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void writeQueryResultsToFile(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull ParcelFileDescriptor fileDescriptor,
                 @NonNull String queryExpression,
@@ -1316,7 +1311,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void putDocumentsFromFile(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull ParcelFileDescriptor fileDescriptor,
                 @NonNull UserHandle userHandle,
@@ -1457,7 +1452,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void searchSuggestion(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String searchQueryExpression,
                 @NonNull Bundle searchSuggestionSpecBundle,
@@ -1548,7 +1543,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void reportUsage(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
                 @NonNull String databaseName,
                 @NonNull String namespace,
@@ -1652,7 +1647,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void removeByDocumentId(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String namespace,
                 @NonNull List<String> ids,
@@ -1760,7 +1755,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void removeByQuery(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String queryExpression,
                 @NonNull Bundle searchSpecBundle,
@@ -1851,7 +1846,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getStorageInfo(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
@@ -1925,7 +1920,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void persistToDisk(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis) {
             Objects.requireNonNull(callerAttributionSource);
@@ -1998,7 +1993,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public AppSearchResultParcel<Void> registerObserverCallback(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
                 @NonNull Bundle observerSpecBundle,
                 @NonNull UserHandle userHandle,
@@ -2089,7 +2084,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public AppSearchResultParcel<Void> unregisterObserverCallback(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String observedPackage,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
@@ -2159,7 +2154,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void initialize(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {

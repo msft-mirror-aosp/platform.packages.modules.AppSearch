@@ -18,7 +18,6 @@ package com.android.server.appsearch.contactsindexer;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.app.appsearch.AppSearchResult;
 import android.util.ArraySet;
 
 import com.android.server.appsearch.stats.AppSearchStatsLog;
@@ -57,22 +56,56 @@ public class ContactsUpdateStats {
     public static final int FULL_UPDATE =
             AppSearchStatsLog.CONTACTS_INDEXER_UPDATE_STATS_REPORTED__UPDATE_TYPE__FULL;
 
+    @IntDef(
+            value = {
+                    ERROR_CODE_CP2_RUNTIME_EXCEPTION,
+                    ERROR_CODE_CP2_NULL_CURSOR,
+                    ERROR_CODE_APP_SEARCH_SYSTEM_ERROR,
+                    ERROR_CODE_CONTACTS_INDEXER_UNKNOWN_ERROR,
+            })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface ErrorCode {
+    }
+
+    // Error code logged from CP2 runtime exceptions
+    public static final int ERROR_CODE_CP2_RUNTIME_EXCEPTION = 10000;
+    // Error code logged from CP2 null query cursors
+    public static final int ERROR_CODE_CP2_NULL_CURSOR = 10001;
+    // Error code logged from AppSearch system errors. This code may be combined with an
+    // AppSearchResult code from toFailedResult on the throwable from onSystemError().
+    public static final int ERROR_CODE_APP_SEARCH_SYSTEM_ERROR = 10100;
+    // Error code logged from ContactsIndexer for otherwise uncaught exceptions
+    public static final int ERROR_CODE_CONTACTS_INDEXER_UNKNOWN_ERROR = 10200;
+
     @UpdateType
     int mUpdateType = UNKNOWN_UPDATE_TYPE;
     // Status for updates.
     // In case of success, we will just have one success status stored.
     // In case of Error,  we store the unique error codes during the update.
-    @AppSearchResult.ResultCode
     Set<Integer> mUpdateStatuses = new ArraySet<>();
     // Status for deletions.
     // In case of success, we will just have one success status stored.
     // In case of Error,  we store the unique error codes during the deletion.
-    @AppSearchResult.ResultCode
     Set<Integer> mDeleteStatuses = new ArraySet<>();
 
     // Start time in millis for update and delete.
     long mUpdateAndDeleteStartTimeMillis;
-
+    // Start time in millis for last full update
+    long mLastFullUpdateStartTimeMillis;
+    // Start time in millis for last delta update
+    long mLastDeltaUpdateStartTimeMillis;
+    // Time in millis of last contact updated from CP2
+    long mLastContactUpdatedTimeMillis;
+    // Time in millis of last contact deleted from CP2
+    long mLastContactDeletedTimeMillis;
+    // The mLastContactUpdatedTimeMillis from the previous update. This field is logged only for
+    // full updates and should match the current mLastContactUpdatedTimeMillis.
+    // Delta updates are run in response to CP2 notifications, so we expect the last contact updated
+    // to have changed. Full updates are scheduled as a fix/maintenance job, so it's not expected
+    // for the last contact updated to have changed. It's possible that a full update lands right as
+    // a contact is updated, but we expect this to happen very rarely or not at all. There is an
+    // issue if we find that these timestamps frequently do not match.
+    long mPreviousLastContactUpdatedTimeMillis;
 
     //
     // Update for both old and new contacts(a.k.a insertion).
@@ -94,11 +127,13 @@ public class ContactsUpdateStats {
     //
     // Deletion for old documents.
     //
-    // # of old contacts failed to be deleted.
+    // # of old contacts that failed to be deleted. This includes contacts that were not found.
     int mContactsDeleteFailedCount;
-    // # of old contacts succeeds to be deleted.
+    // # of old contacts that were deleted successfully.
     int mContactsDeleteSucceededCount;
-    // Total # of old contacts to be deleted. It should equal to
+    // # of old contacts to be deleted that were not found.
+    int mContactsDeleteNotFoundCount;
+    // Total # of old contacts to be deleted. It should equal
     // mContactsDeleteFailedCount + mContactsDeleteSucceededCount
     int mTotalContactsToBeDeleted;
 
@@ -107,6 +142,11 @@ public class ContactsUpdateStats {
         mUpdateStatuses.clear();
         mDeleteStatuses.clear();
         mUpdateAndDeleteStartTimeMillis = 0;
+        mLastFullUpdateStartTimeMillis = 0;
+        mLastDeltaUpdateStartTimeMillis = 0;
+        mLastContactUpdatedTimeMillis = 0;
+        mLastContactDeletedTimeMillis = 0;
+        mPreviousLastContactUpdatedTimeMillis = 0;
         // Update for old and new contacts
         mContactsUpdateFailedCount = 0;
         mContactsUpdateSucceededCount = 0;
@@ -116,6 +156,7 @@ public class ContactsUpdateStats {
         // delete for old contacts
         mContactsDeleteFailedCount = 0;
         mContactsDeleteSucceededCount = 0;
+        mContactsDeleteNotFoundCount = 0;
         mTotalContactsToBeDeleted = 0;
     }
 
@@ -125,6 +166,11 @@ public class ContactsUpdateStats {
                 + ", UpdateStatus: " + mUpdateStatuses.toString()
                 + ", DeleteStatus: " + mDeleteStatuses.toString()
                 + ", UpdateAndDeleteStartTimeMillis: " + mUpdateAndDeleteStartTimeMillis
+                + ", LastFullUpdateStartTimeMillis: " + mLastFullUpdateStartTimeMillis
+                + ", LastDeltaUpdateStartTimeMillis: " + mLastDeltaUpdateStartTimeMillis
+                + ", LastContactUpdatedTimeMillis: " + mLastContactUpdatedTimeMillis
+                + ", LastContactDeletedTimeMillis: " + mLastContactDeletedTimeMillis
+                + ", PreviousLastContactUpdatedTimeMillis: " + mPreviousLastContactUpdatedTimeMillis
                 + ", ContactsUpdateFailedCount: " + mContactsUpdateFailedCount
                 + ", ContactsUpdateSucceededCount: " + mContactsUpdateSucceededCount
                 + ", NewContactsToBeUpdated: " + mNewContactsToBeUpdated
@@ -132,6 +178,7 @@ public class ContactsUpdateStats {
                 + ", TotalContactsToBeUpdated: " + mTotalContactsToBeUpdated
                 + ", ContactsDeleteFailedCount: " + mContactsDeleteFailedCount
                 + ", ContactsDeleteSucceededCount: " + mContactsDeleteSucceededCount
+                + ", ContactsDeleteNotFoundCount: " + mContactsDeleteNotFoundCount
                 + ", TotalContactsToBeDeleted: " + mTotalContactsToBeDeleted;
     }
 }

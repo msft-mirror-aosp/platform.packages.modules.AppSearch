@@ -23,6 +23,7 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
@@ -61,7 +62,7 @@ public class SearchResults implements Closeable {
     private final IAppSearchManager mService;
 
     // The permission identity of the caller
-    private final AttributionSource mAttributionSource;
+    private final AppSearchAttributionSource mAttributionSource;
 
     // The database name to search over. If null, this will search over all database names.
     @Nullable
@@ -81,7 +82,7 @@ public class SearchResults implements Closeable {
 
     SearchResults(
             @NonNull IAppSearchManager service,
-            @NonNull AttributionSource attributionSource,
+            @NonNull AppSearchAttributionSource attributionSource,
             @Nullable String databaseName,
             @NonNull String queryExpression,
             @NonNull SearchSpec searchSpec,
