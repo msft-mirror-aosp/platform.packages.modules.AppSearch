@@ -111,13 +111,14 @@ public class VisibilityStoreTest {
         assertThat(mVisibilityStore.getVisibility(prefix + "Email")).isEqualTo(visibilityDocument);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Email",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Email",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument).isEqualTo(visibilityDocument);
     }
 
@@ -133,13 +134,14 @@ public class VisibilityStoreTest {
         assertThat(mVisibilityStore.getVisibility("Email")).isEqualTo(visibilityDocument);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ "Email",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ "Email",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument).isEqualTo(visibilityDocument);
 
         mVisibilityStore.removeVisibility(ImmutableSet.of(visibilityDocument.getId()));
