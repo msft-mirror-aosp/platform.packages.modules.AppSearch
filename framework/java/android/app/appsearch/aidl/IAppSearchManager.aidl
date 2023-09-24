@@ -24,6 +24,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.VisibilityDocument;
 import android.content.AttributionSource;
 import android.os.ParcelFileDescriptor;
 
@@ -50,7 +51,7 @@ interface IAppSearchManager {
      * @param callerAttributionSource The permission identity of the package that owns this schema.
      * @param databaseName  The name of the database where this schema lives.
      * @param schemaBundles List of {@link AppSearchSchema} bundles.
-     * @param visibilityBundles List of {@link VisibilityDocument} bundles.
+     * @param visibilityDocs List of {@link VisibilityDocument} docs.
      * @param forceOverride Whether to apply the new schema even if it is incompatible. All
      *     incompatible documents will be deleted.
      * @param schemaVersion  The overall schema version number of the request.
@@ -66,7 +67,7 @@ interface IAppSearchManager {
         in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in List<Bundle> schemaBundles,
-        in List<Bundle> visibilityBundles,
+        in List<VisibilityDocument> visibilityDocs,
         boolean forceOverride,
         in int schemaVersion,
         in UserHandle userHandle,
