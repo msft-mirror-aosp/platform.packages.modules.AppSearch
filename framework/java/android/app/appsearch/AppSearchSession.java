@@ -168,28 +168,22 @@ public final class AppSearchSession implements Closeable {
             schemaBundles.add(schema.getBundle());
         }
 
-        // Extract a List<VisibilityDocument> from the request and convert to a
-        // List<VisibilityDocument.Bundle> to send via binder.
+        // Extract a List<VisibilityDocument> from the request
         List<VisibilityDocument> visibilityDocuments = VisibilityDocument
                 .toVisibilityDocuments(request);
-        List<Bundle> visibilityBundles = new ArrayList<>(visibilityDocuments.size());
-        for (int i = 0; i < visibilityDocuments.size(); i++) {
-            visibilityBundles.add(visibilityDocuments.get(i).getBundle());
-        }
-
         // No need to trigger migration if user never set migrator
         if (request.getMigrators().isEmpty()) {
             setSchemaNoMigrations(
                     request,
                     schemaBundles,
-                    visibilityBundles,
+                    visibilityDocuments,
                     callbackExecutor,
                     callback);
         } else {
             setSchemaWithMigrations(
                     request,
                     schemaBundles,
-                    visibilityBundles,
+                    visibilityDocuments,
                     workExecutor,
                     callbackExecutor,
                     callback);
@@ -847,7 +841,7 @@ public final class AppSearchSession implements Closeable {
     private void setSchemaNoMigrations(
             @NonNull SetSchemaRequest request,
             @NonNull List<Bundle> schemaBundles,
-            @NonNull List<Bundle> visibilityBundles,
+            @NonNull List<VisibilityDocument> visibilityDocs,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
         try {
@@ -855,7 +849,7 @@ public final class AppSearchSession implements Closeable {
                     mCallerAttributionSource,
                     mDatabaseName,
                     schemaBundles,
-                    visibilityBundles,
+                    visibilityDocs,
                     request.isForceOverride(),
                     request.getVersion(),
                     mUserHandle,
@@ -908,7 +902,7 @@ public final class AppSearchSession implements Closeable {
     private void setSchemaWithMigrations(
             @NonNull SetSchemaRequest request,
             @NonNull List<Bundle> schemaBundles,
-            @NonNull List<Bundle> visibilityBundles,
+            @NonNull List<VisibilityDocument> visibilityDocs,
             @NonNull Executor workExecutor,
             @NonNull @CallbackExecutor Executor callbackExecutor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
@@ -952,7 +946,7 @@ public final class AppSearchSession implements Closeable {
 
                 // No need to trigger migration if no migrator is active.
                 if (activeMigrators.isEmpty()) {
-                    setSchemaNoMigrations(request, schemaBundles, visibilityBundles,
+                    setSchemaNoMigrations(request, schemaBundles, visibilityDocs,
                             callbackExecutor, callback);
                     return;
                 }
@@ -968,7 +962,7 @@ public final class AppSearchSession implements Closeable {
                         mCallerAttributionSource,
                         mDatabaseName,
                         schemaBundles,
-                        visibilityBundles,
+                        visibilityDocs,
                         /*forceOverride=*/ false,
                         request.getVersion(),
                         mUserHandle,
@@ -1030,7 +1024,7 @@ public final class AppSearchSession implements Closeable {
                                 mCallerAttributionSource,
                                 mDatabaseName,
                                 schemaBundles,
-                                visibilityBundles,
+                                visibilityDocs,
                                 /*forceOverride=*/ true,
                                 request.getVersion(),
                                 mUserHandle,
