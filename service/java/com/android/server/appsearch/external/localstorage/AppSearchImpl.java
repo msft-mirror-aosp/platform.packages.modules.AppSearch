@@ -828,8 +828,8 @@ public final class AppSearchImpl implements Closeable {
                 // they can do this via the public API too.
                 String prefixedSchemaType = prefix + unPrefixedDocument.getId();
                 prefixedVisibilityDocuments.add(
-                        new VisibilityDocument(
-                                unPrefixedDocument.toBuilder().setId(prefixedSchemaType).build()));
+                        new VisibilityDocument.Builder(
+                                unPrefixedDocument).setId(prefixedSchemaType).build());
                 // This schema has visibility settings. We should keep it from the removal list.
                 deprecatedVisibilityDocuments.remove(prefixedSchemaType);
             }
