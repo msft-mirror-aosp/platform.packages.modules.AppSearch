@@ -564,21 +564,10 @@ public final class AppSearchSession implements Closeable {
                         public void onResult(AppSearchResultParcel resultParcel) {
                             safeExecute(executor, callback, () -> {
                                 try {
-                                    AppSearchResult<List<Bundle>> result = resultParcel.getResult();
+                                    AppSearchResult<List<SearchSuggestionResult>> result =
+                                            resultParcel.getResult();
                                     if (result.isSuccess()) {
-                                        List<Bundle> suggestionResultBundles =
-                                                result.getResultValue();
-                                        List<SearchSuggestionResult> searchSuggestionResults =
-                                                new ArrayList<>(suggestionResultBundles.size());
-                                        for (int i = 0; i < suggestionResultBundles.size(); i++) {
-                                            SearchSuggestionResult searchSuggestionResult =
-                                                    new SearchSuggestionResult(
-                                                            suggestionResultBundles.get(i));
-                                            searchSuggestionResults.add(searchSuggestionResult);
-                                        }
-                                        callback.accept(
-                                                AppSearchResult.newSuccessfulResult(
-                                                        searchSuggestionResults));
+                                        callback.accept(result);
                                     } else {
                                         // TODO(b/261897334) save SDK errors/crashes and send to
                                         //  server for logging.
