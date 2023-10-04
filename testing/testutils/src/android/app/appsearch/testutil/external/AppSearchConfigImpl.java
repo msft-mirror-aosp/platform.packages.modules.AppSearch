@@ -30,10 +30,11 @@ public class AppSearchConfigImpl implements AppSearchConfig {
 
     public AppSearchConfigImpl(
             @NonNull LimitConfig limitConfig, @NonNull IcingOptionsConfig icingOptionsConfig) {
-        this(limitConfig,
-             icingOptionsConfig,
-             /*storeParentInfoAsSyntheticProperty=*/false,
-             /*shouldRetrieveParentInfo=*/false);
+        this(
+                limitConfig,
+                icingOptionsConfig,
+                /* storeParentInfoAsSyntheticProperty= */ false,
+                /* shouldRetrieveParentInfo= */ false);
     }
 
     public AppSearchConfigImpl(
