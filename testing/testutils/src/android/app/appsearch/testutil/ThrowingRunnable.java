@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Android Open Source Project
+ * Copyright (C) 2023 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,10 @@
  * limitations under the License.
  */
 
-package android.app.appsearch.observer;
+package android.app.appsearch.testutil;
 
-
-/**
- * @deprecated use {@link ObserverCallback} instead.
- * @hide
- */
-// TODO(b/209734214): Remove this after dogfooders and devices have migrated away from this class.
-@Deprecated
-public interface AppSearchObserverCallback extends ObserverCallback {}
+/** Similar to {@link Runnable} but has {@code throws Exception}. */
+public interface ThrowingRunnable {
+    /** Similar to {@link Runnable#run} but has {@code throws Exception}. */
+    void run() throws Exception;
+}
