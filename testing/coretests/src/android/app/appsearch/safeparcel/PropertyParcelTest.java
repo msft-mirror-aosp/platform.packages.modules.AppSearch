@@ -14,17 +14,13 @@
  * limitations under the License.
  */
 
-package android.app.appsearch;
-
-import static com.google.common.truth.Truth.assertThat;
+package android.app.appsearch.safeparcel;
 
 import android.app.appsearch.util.BundleUtil;
 import android.os.Bundle;
 
 import org.junit.Test;
 import org.junit.Assert;
-
-import java.util.Arrays;
 
 // This test suite is not available in Jetpack because PropertyParcel is not a real Parcelable
 // there.
@@ -43,7 +39,8 @@ public class PropertyParcelTest {
         Bundle bundle = new Bundle();
         String propertyName = "propertyName";
         bundle.putParcelable(propertyName,
-                new PropertyParcel.Builder(propertyName).setBytesValues(bytesArray).build());
+                new PropertyParcel.Builder(propertyName).setBytesValues(
+                        bytesArray).build());
 
         Bundle bundleCopy = BundleUtil.deepCopy(bundle);
         byte[][] bytesArrayCopy = bundleCopy.getParcelable(propertyName,

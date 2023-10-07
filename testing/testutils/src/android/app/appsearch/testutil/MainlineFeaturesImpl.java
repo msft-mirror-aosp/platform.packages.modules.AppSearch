@@ -18,6 +18,7 @@ package android.app.appsearch.testutil;
 
 import android.annotation.NonNull;
 import android.app.appsearch.Features;
+import android.content.Context;
 import android.os.Build;
 
 /**
@@ -63,6 +64,8 @@ public class MainlineFeaturesImpl implements Features {
             case Features.SCHEMA_SET_DELETION_PROPAGATION:
                 // fall through
             case Features.SCHEMA_ADD_INDEXABLE_NESTED_PROPERTIES:
+                // fall through
+            case Features.SEARCH_SPEC_ADD_FILTER_PROPERTIES:
                 return true;
 
             // Features which are supported on U+ devices only.
@@ -74,5 +77,10 @@ public class MainlineFeaturesImpl implements Features {
             default:
                 return false;
         }
+    }
+
+    @Override
+    public int getMaxIndexedProperties(@NonNull Context context) {
+        return 64;
     }
 }
