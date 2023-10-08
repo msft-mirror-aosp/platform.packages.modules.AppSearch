@@ -429,7 +429,7 @@ public class AppSearchManagerServiceTest {
         mAppSearchManagerServiceStub.putDocumentsFromFile(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 DATABASE_NAME, new ParcelFileDescriptor(fd), mUserHandle,
-                /* schemaMigrationStatsBundle= */ new Bundle(),
+                new SchemaMigrationStats.Builder(mContext.getPackageName(), DATABASE_NAME).build(),
                 /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME, callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
@@ -1226,7 +1226,7 @@ public class AppSearchManagerServiceTest {
         mAppSearchManagerServiceStub.putDocumentsFromFile(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 DATABASE_NAME, new ParcelFileDescriptor(fd), mUserHandle,
-                /* schemaMigrationStatsBundle= */ new Bundle(),
+                new SchemaMigrationStats.Builder(mContext.getPackageName(), DATABASE_NAME).build(),
                 /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME, callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, callback.get());
     }
