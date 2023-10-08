@@ -24,6 +24,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.VisibilityDocument;
 import android.content.AttributionSource;
 import android.os.ParcelFileDescriptor;
@@ -284,7 +285,7 @@ interface IAppSearchManager {
     * @param databaseName  The name of the database where this document lives.
     * @param fileDescriptor The ParcelFileDescriptor where documents should be read from.
     * @param userHandle Handle of the calling user.
-    * @param schemaMigrationStatsBundle the Bundle contains SchemaMigrationStats information.
+    * @param schemaMigrationStats the Parcelable contains SchemaMigrationStats information.
     * @param totalLatencyStartTimeMillis start timestamp to calculate total migration latency in
     *     Millis
     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
@@ -297,7 +298,7 @@ interface IAppSearchManager {
         in String databaseName,
         in ParcelFileDescriptor fileDescriptor,
         in UserHandle userHandle,
-        in Bundle schemaMigrationStatsBundle,
+        in SchemaMigrationStats schemaMigrationStats,
         in long totalLatencyStartTimeMillis,
         in long binderCallStartTimeMillis,
         in IAppSearchResultCallback callback);
