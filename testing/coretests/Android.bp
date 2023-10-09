@@ -25,7 +25,7 @@ android_test {
         "androidx.test.rules",
         "junit",
         "testng",
-        "truth-prebuilt",
+        "truth",
     ],
     libs: [
         "android.test.runner",
