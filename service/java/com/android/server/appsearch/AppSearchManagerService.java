@@ -134,7 +134,7 @@ public class AppSearchManagerService extends SystemService {
     private final Context mContext;
     private final ExecutorManager mExecutorManager;
     private final AppSearchEnvironment mAppSearchEnvironment;
-    private final AppSearchConfig mAppSearchConfig;
+    private final FrameworkAppSearchConfig mAppSearchConfig;
 
     private PackageManager mPackageManager;
     private ServiceImplHelper mServiceImplHelper;
@@ -347,7 +347,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull List<Bundle> schemaBundles,
-                @NonNull List<Bundle> visibilityBundles,
+                @NonNull List<VisibilityDocument> visibilityDocuments,
                 boolean forceOverride,
                 int schemaVersion,
                 @NonNull UserHandle userHandle,
@@ -357,7 +357,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(schemaBundles);
-            Objects.requireNonNull(visibilityBundles);
+            Objects.requireNonNull(visibilityDocuments);
             Objects.requireNonNull(userHandle);
             Objects.requireNonNull(callback);
 
@@ -394,12 +394,6 @@ public class AppSearchManagerService extends SystemService {
                     List<AppSearchSchema> schemas = new ArrayList<>(schemaBundles.size());
                     for (int i = 0; i < schemaBundles.size(); i++) {
                         schemas.add(new AppSearchSchema(schemaBundles.get(i)));
-                    }
-                    List<VisibilityDocument> visibilityDocuments =
-                            new ArrayList<>(visibilityBundles.size());
-                    for (int i = 0; i < visibilityBundles.size(); i++) {
-                        visibilityDocuments.add(
-                                new VisibilityDocument(visibilityBundles.get(i)));
                     }
                     long rebuildFromBundleLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
@@ -1321,7 +1315,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull String databaseName,
                 @NonNull ParcelFileDescriptor fileDescriptor,
                 @NonNull UserHandle userHandle,
-                @NonNull Bundle schemaMigrationStatsBundle,
+                @NonNull SchemaMigrationStats schemaMigrationStats,
                 @ElapsedRealtimeLong long totalLatencyStartTimeMillis,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
@@ -1329,7 +1323,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(fileDescriptor);
             Objects.requireNonNull(userHandle);
-            Objects.requireNonNull(schemaMigrationStatsBundle);
+            Objects.requireNonNull(schemaMigrationStats);
             Objects.requireNonNull(callback);
 
             long callStatsTotalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1356,7 +1350,7 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 SchemaMigrationStats.Builder schemaMigrationStatsBuilder = new SchemaMigrationStats
-                        .Builder(schemaMigrationStatsBundle);
+                        .Builder(schemaMigrationStats);
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
 
