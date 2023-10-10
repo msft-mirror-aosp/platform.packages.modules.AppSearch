@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import android.app.appsearch.AppSearchSchema;
 
+import com.android.server.appsearch.icing.proto.DocumentIndexingConfig;
 import com.android.server.appsearch.icing.proto.JoinableConfig;
 import com.android.server.appsearch.icing.proto.PropertyConfigProto;
 import com.android.server.appsearch.icing.proto.SchemaTypeConfigProto;
@@ -27,6 +28,8 @@ import com.android.server.appsearch.icing.proto.StringIndexingConfig;
 import com.android.server.appsearch.icing.proto.TermMatchType;
 
 import org.junit.Test;
+
+import java.util.Arrays;
 
 public class SchemaToProtoConverterTest {
     @Test
@@ -161,15 +164,16 @@ public class SchemaToProtoConverterTest {
                                         .setJoinableValueType(
                                                 AppSearchSchema.StringPropertyConfig
                                                         .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                                        // TODO(b/274157614): Export this to framework when we can
+                                        // access hidden
+                                        //  APIs.
+
                                         .build())
                         .build();
 
         JoinableConfig joinableConfig =
                 JoinableConfig.newBuilder()
                         .setValueType(JoinableConfig.ValueType.Code.QUALIFIED_ID)
-                        // TODO(b/274157614) change this to be "true" when we can access hidden API
-                        //  in servicestest or we unhide setPropagateDelete in AppSearchSchema.
-                        .setPropagateDelete(false)
                         .build();
 
         SchemaTypeConfigProto expectedAlbumProto =
@@ -196,5 +200,100 @@ public class SchemaToProtoConverterTest {
                 .isEqualTo(expectedAlbumProto);
         assertThat(SchemaToProtoConverter.toAppSearchSchema(expectedAlbumProto))
                 .isEqualTo(albumSchema);
+    }
+
+    @Test
+    public void testGetProto_ParentTypes() {
+        AppSearchSchema schema =
+                new AppSearchSchema.Builder("EmailMessage")
+                        .addParentType("Email")
+                        .addParentType("Message")
+                        .build();
+
+        SchemaTypeConfigProto expectedSchemaProto =
+                SchemaTypeConfigProto.newBuilder()
+                        .setSchemaType("EmailMessage")
+                        .setVersion(12345)
+                        .addParentTypes("Email")
+                        .addParentTypes("Message")
+                        .build();
+        SchemaTypeConfigProto alternativeExpectedSchemaProto =
+                SchemaTypeConfigProto.newBuilder()
+                        .setSchemaType("EmailMessage")
+                        .setVersion(12345)
+                        .addParentTypes("Message")
+                        .addParentTypes("Email")
+                        .build();
+
+        assertThat(SchemaToProtoConverter.toSchemaTypeConfigProto(schema, /*version=*/ 12345))
+                .isAnyOf(expectedSchemaProto, alternativeExpectedSchemaProto);
+        assertThat(SchemaToProtoConverter.toAppSearchSchema(expectedSchemaProto)).isEqualTo(schema);
+        assertThat(SchemaToProtoConverter.toAppSearchSchema(alternativeExpectedSchemaProto))
+                .isEqualTo(schema);
+    }
+
+    @Test
+    public void testGetProto_DocumentIndexingConfig() {
+        AppSearchSchema personSchema =
+                new AppSearchSchema.Builder("Person")
+                        .addProperty(
+                                new AppSearchSchema.StringPropertyConfig.Builder("name")
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .addProperty(
+                                new AppSearchSchema.DocumentPropertyConfig.Builder(
+                                                "worksFor", "Organization")
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setShouldIndexNestedProperties(false)
+                                        .addIndexableNestedProperties(
+                                                Arrays.asList("orgName", "notes"))
+                                        .build())
+                        .build();
+
+        DocumentIndexingConfig documentIndexingConfig =
+                DocumentIndexingConfig.newBuilder()
+                        .setIndexNestedProperties(false)
+                        .addIndexableNestedPropertiesList("orgName")
+                        .addIndexableNestedPropertiesList("notes")
+                        .build();
+
+        SchemaTypeConfigProto expectedPersonProto =
+                SchemaTypeConfigProto.newBuilder()
+                        .setSchemaType("Person")
+                        .setVersion(0)
+                        .addProperties(
+                                PropertyConfigProto.newBuilder()
+                                        .setPropertyName("name")
+                                        .setDataType(PropertyConfigProto.DataType.Code.STRING)
+                                        .setCardinality(
+                                                PropertyConfigProto.Cardinality.Code.REQUIRED)
+                                        .setStringIndexingConfig(
+                                                StringIndexingConfig.newBuilder()
+                                                        .setTermMatchType(TermMatchType.Code.PREFIX)
+                                                        .setTokenizerType(
+                                                                StringIndexingConfig.TokenizerType
+                                                                        .Code.PLAIN)))
+                        .addProperties(
+                                PropertyConfigProto.newBuilder()
+                                        .setPropertyName("worksFor")
+                                        .setDataType(PropertyConfigProto.DataType.Code.DOCUMENT)
+                                        .setSchemaType("Organization")
+                                        .setCardinality(
+                                                PropertyConfigProto.Cardinality.Code.OPTIONAL)
+                                        .setDocumentIndexingConfig(documentIndexingConfig))
+                        .build();
+
+        assertThat(SchemaToProtoConverter.toSchemaTypeConfigProto(personSchema, /*version=*/ 0))
+                .isEqualTo(expectedPersonProto);
+        assertThat(SchemaToProtoConverter.toAppSearchSchema(expectedPersonProto))
+                .isEqualTo(personSchema);
     }
 }

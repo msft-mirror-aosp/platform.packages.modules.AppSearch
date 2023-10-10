@@ -19,11 +19,13 @@ package com.android.server.appsearch;
 import static com.android.server.appsearch.external.localstorage.util.PrefixUtil.getPackageName;
 
 import android.annotation.NonNull;
+import android.app.appsearch.exceptions.AppSearchException;
 import android.util.ArrayMap;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
+import com.android.server.appsearch.util.ExceptionUtil;
 
 import com.google.android.icing.proto.DocumentStorageInfoProto;
 import com.google.android.icing.proto.NamespaceStorageInfoProto;
@@ -32,6 +34,7 @@ import com.google.android.icing.proto.StorageInfoProto;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
@@ -67,8 +70,9 @@ public final class UserStorageInfo {
         mReadWriteLock.writeLock().lock();
         try (FileOutputStream out = new FileOutputStream(mStorageInfoFile)) {
             appSearchImpl.getRawStorageInfoProto().writeTo(out);
-        } catch (Throwable e) {
+        } catch (IOException | AppSearchException | RuntimeException e) {
             Log.w(TAG, "Failed to dump storage info into file", e);
+            ExceptionUtil.handleException(e);
         } finally {
             mReadWriteLock.writeLock().unlock();
         }
@@ -102,8 +106,9 @@ public final class UserStorageInfo {
                 mTotalStorageSizeBytes = storageInfo.getTotalStorageSize();
                 mPackageStorageSizeMap = calculatePackageStorageInfoMap(storageInfo);
                 return;
-            } catch (Throwable e) {
+            } catch (IOException | RuntimeException e) {
                 Log.w(TAG, "Failed to read storage info from file", e);
+                ExceptionUtil.handleException(e);
             } finally {
                 mReadWriteLock.readLock().unlock();
             }

@@ -18,6 +18,7 @@ package android.app.appsearch.testutil;
 
 import android.annotation.NonNull;
 import android.app.appsearch.Features;
+import android.content.Context;
 import android.os.Build;
 
 /**
@@ -31,6 +32,7 @@ public class MainlineFeaturesImpl implements Features {
     @Override
     public boolean isFeatureSupported(@NonNull String feature) {
         switch (feature) {
+            // Features supported on all devices to which we ship.
             case Features.ADD_PERMISSIONS_AND_GET_VISIBILITY:
                 // fall through
             case Features.GLOBAL_SEARCH_SESSION_GET_SCHEMA:
@@ -39,32 +41,46 @@ public class MainlineFeaturesImpl implements Features {
                 // fall through
             case Features.GLOBAL_SEARCH_SESSION_REGISTER_OBSERVER_CALLBACK:
                 // fall through
+            case Features.SEARCH_RESULT_MATCH_INFO_SUBMATCH:
+                // fall through
             case Features.JOIN_SPEC_AND_QUALIFIED_ID:
-                // fall through
-            case Features.NUMERIC_SEARCH:
-                // fall through
-            case Features.VERBATIM_SEARCH:
                 // fall through
             case Features.LIST_FILTER_QUERY_LANGUAGE:
                 // fall through
-            case Features.SEARCH_SPEC_GROUPING_TYPE_PER_SCHEMA:
-                // fall through
-            case Features.SEARCH_RESULT_MATCH_INFO_SUBMATCH:
-                // fall through
-            case Features.SEARCH_SPEC_PROPERTY_WEIGHTS:
-                // fall through
-            case Features.TOKENIZER_TYPE_RFC822:
+            case Features.NUMERIC_SEARCH:
                 // fall through
             case Features.SEARCH_SPEC_ADVANCED_RANKING_EXPRESSION:
                 // fall through
+            case Features.SEARCH_SPEC_PROPERTY_WEIGHTS:
+                // fall through
             case Features.SEARCH_SUGGESTION:
                 // fall through
+            case Features.TOKENIZER_TYPE_RFC822:
+                // fall through
+            case Features.VERBATIM_SEARCH:
+                // fall through
+            case Features.SEARCH_SPEC_GROUPING_TYPE_PER_SCHEMA:
+                // fall through
             case Features.SCHEMA_SET_DELETION_PROPAGATION:
+                // fall through
+            case Features.SCHEMA_ADD_INDEXABLE_NESTED_PROPERTIES:
+                // fall through
+            case Features.SEARCH_SPEC_ADD_FILTER_PROPERTIES:
                 return true;
+
+            // Features which are supported on U+ devices only.
             case Features.SET_SCHEMA_CIRCULAR_REFERENCES:
+                // fall through
+            case Features.SCHEMA_ADD_PARENT_TYPE:
                 return Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE;
+
             default:
                 return false;
         }
+    }
+
+    @Override
+    public int getMaxIndexedProperties(@NonNull Context context) {
+        return 64;
     }
 }

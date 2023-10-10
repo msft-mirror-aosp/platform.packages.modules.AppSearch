@@ -48,6 +48,27 @@ public interface IcingOptionsConfig {
     int DEFAULT_MAX_PAGE_BYTES_LIMIT = Integer.MAX_VALUE;
 
     /**
+     * The default threshold for integer index bucket split. 65536 is picked based on benchmark
+     * (Icing integer-index-storage_benchmark.cc).
+     *
+     * <ul>
+     *   <li>There will be only 16 buckets when indexing 1M integers, which improves the performance
+     *       of numeric search range query.
+     *   <li>It also increases # of hits to read for numeric search exact query, but the overall
+     *       query latency is still reasonable.
+     * </ul>
+     */
+    int DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD = 65536;
+
+    boolean DEFAULT_LITE_INDEX_SORT_AT_INDEXING = false;
+
+    /**
+     * The default sort threshold for the lite index when sort at indexing is enabled. 8192 is
+     * picked based on Icing microbenchmarks (icing-search-engine_benchmarks.cc).
+     */
+    int DEFAULT_LITE_INDEX_SORT_SIZE = 8192; // 8Kib
+
+    /**
      * The maximum allowable token length. All tokens in excess of this size will be truncated to
      * max_token_length before being indexed.
      *
@@ -144,4 +165,40 @@ public interface IcingOptionsConfig {
      * exceeds this limit.
      */
     int getMaxPageBytesLimit();
+
+    /**
+     * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
+     *
+     * <p>Threshold for integer index bucket split. Integer index stores hits in several buckets,
+     * and splits if # of hits in a single bucket exceed the threshold. Splitting bucket accelerates
+     * numeric search exact query, but potentially downgrades the performance of range query.
+     *
+     * <p>This flag is for rolling out new threshold 65536. If identifying any issues, then change
+     * it back to 341 (the previous bucket split threshold, capacity of full max-sized posting
+     * list).
+     */
+    int getIntegerIndexBucketSplitThreshold();
+
+    /**
+     * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
+     *
+     * <p>Whether Icing should sort and merge its lite index HitBuffer unsorted tail at indexing
+     * time.
+     *
+     * <p>If set to true, the HitBuffer will be sorted at indexing time after exceeding the sort
+     * threshold. If false, the HifBuffer will be sorted at querying time, before the first query
+     * after inserting new elements into the HitBuffer.
+     */
+    boolean getLiteIndexSortAtIndexing();
+
+    /**
+     * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
+     *
+     * <p>Size (in bytes) at which Icing's lite index should sort and merge the HitBuffer's unsorted
+     * tail into the sorted head for sorting at indexing time. Size specified here is unsorted tail
+     * section.
+     *
+     * <p>Setting a lower sort size reduces querying latency at the expense of indexing latency.
+     */
+    int getLiteIndexSortSize();
 }
