@@ -30,7 +30,7 @@ import org.junit.Test;
 // min_time_optimize_threshold (otherwise shouldOptimize() would return false for test cases that
 // check byteThreshold and docCountThreshold).
 public class FrameworkOptimizeStrategyTest {
-    AppSearchConfig mAppSearchConfig = new FakeAppSearchConfig();
+    FrameworkAppSearchConfig mAppSearchConfig = new FakeAppSearchConfig();
     FrameworkOptimizeStrategy mFrameworkOptimizeStrategy =
             new FrameworkOptimizeStrategy(mAppSearchConfig);
 

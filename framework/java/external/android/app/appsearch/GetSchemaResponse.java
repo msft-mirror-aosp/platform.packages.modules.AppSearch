@@ -212,8 +212,8 @@ public final class GetSchemaResponse {
     private void checkGetVisibilitySettingSupported() {
         if (!mBundle.containsKey(SCHEMAS_VISIBLE_TO_PACKAGES_FIELD)) {
             throw new UnsupportedOperationException(
-                    "Get visibility setting is not supported with"
-                            + " this backend/Android API level combination.");
+                    "Get visibility setting is not supported with "
+                            + "this backend/Android API level combination.");
         }
     }
 
@@ -233,24 +233,7 @@ public final class GetSchemaResponse {
 
         /** Create a {@link Builder} object} */
         public Builder() {
-            this(/*getVisibilitySettingSupported=*/ true);
-        }
-
-        /**
-         * Create a {@link Builder} object}.
-         *
-         * <p>This constructor should only be used in Android API below than T.
-         *
-         * @param getVisibilitySettingSupported whether supported {@link
-         *     Features#ADD_PERMISSIONS_AND_GET_VISIBILITY} by this backend/Android API level.
-         * @hide
-         */
-        public Builder(boolean getVisibilitySettingSupported) {
-            if (getVisibilitySettingSupported) {
-                mSchemasNotDisplayedBySystem = new ArrayList<>();
-                mSchemasVisibleToPackages = new Bundle();
-                mSchemasVisibleToPermissions = new Bundle();
-            }
+            setVisibilitySettingSupported(true);
         }
 
         /**
@@ -388,6 +371,33 @@ public final class GetSchemaResponse {
             }
             mSchemasVisibleToPermissions.putParcelableArrayList(
                     schemaType, visibleToPermissionsBundle);
+            return this;
+        }
+
+        /**
+         * Method to set visibility setting. If this is called with false, {@link
+         * #getRequiredPermissionsForSchemaTypeVisibility()}, {@link
+         * #getSchemaTypesNotDisplayedBySystem()}}, and {@link #getSchemaTypesVisibleToPackages()}
+         * calls will throw an {@link UnsupportedOperationException}. If called with true,
+         * visibility information for all schemas will be cleared.
+         *
+         * @param visibilitySettingSupported whether supported {@link
+         *     Features#ADD_PERMISSIONS_AND_GET_VISIBILITY} by this backend/Android API level.
+         * @hide
+         */
+        // Visibility setting is determined by SDK version, so it won't be needed in framework
+        @SuppressLint("MissingGetterMatchingBuilder")
+        @NonNull
+        public Builder setVisibilitySettingSupported(boolean visibilitySettingSupported) {
+            if (visibilitySettingSupported) {
+                mSchemasNotDisplayedBySystem = new ArrayList<>();
+                mSchemasVisibleToPackages = new Bundle();
+                mSchemasVisibleToPermissions = new Bundle();
+            } else {
+                mSchemasNotDisplayedBySystem = null;
+                mSchemasVisibleToPackages = null;
+                mSchemasVisibleToPermissions = null;
+            }
             return this;
         }
 
