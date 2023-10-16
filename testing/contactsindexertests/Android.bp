@@ -19,6 +19,7 @@ package {
 android_test {
     name: "ContactsIndexerTests",
     srcs: ["src/**/*.java"],
+    defaults: ["modules-utils-testable-device-config-defaults"],
     static_libs: [
         "AppSearchTestUtils",
         "androidx.test.ext.junit",
@@ -26,7 +27,7 @@ android_test {
         "compatibility-device-util-axt",
         "service-appsearch-for-tests",
         "services.core",
-        "truth-prebuilt",
+        "truth",
     ],
     libs: [
         "android.test.runner",
