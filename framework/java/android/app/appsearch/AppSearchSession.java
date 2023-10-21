@@ -415,12 +415,11 @@ public final class AppSearchSession implements Closeable {
      *       the "subject" property.
      * </ul>
      *
-     * <p>The above description covers the query operators that are supported on all versions of
-     * AppSearch. Additional operators and their required features are described below.
+     * <p>The above description covers the basic query operators. Additional advanced query
+     * operator features should be explicitly enabled in the SearchSpec and are described below.
      *
-     * <p>{@link Features#LIST_FILTER_QUERY_LANGUAGE}: This feature covers the expansion of the
-     * query language to conform to the definition of the list filters language (https://aip
-     * .dev/160). This includes:
+     * <p>LIST_FILTER_QUERY_LANGUAGE: This feature covers the expansion of the query language to
+     * conform to the definition of the list filters language (https://aip.dev/160). This includes:
      * <ul>
      *     <li>addition of explicit 'AND' and 'NOT' operators</li>
      *     <li>property restricts are allowed with groupings (ex. "prop:(a OR b)")</li>
@@ -449,8 +448,8 @@ public final class AppSearchSession implements Closeable {
      * the document's type defines the specified property. It does NOT require that the document
      * actually hold any values for this property.
      *
-     * <p>{@link Features#NUMERIC_SEARCH}: This feature covers numeric search expressions. In the
-     * query language, the values of properties that have
+     * <p>NUMERIC_SEARCH: This feature covers numeric search expressions. In the query language,
+     * the values of properties that have
      * {@link AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE} set can be matched with a
      * numeric search expression (the property, a supported comparator and an integer value).
      * Supported comparators are <, <=, ==, >= and >.
@@ -458,13 +457,9 @@ public final class AppSearchSession implements Closeable {
      * <p>Ex. `price < 10` will match all documents that has a numeric value in its price
      * property that is less than 10.
      *
-     * <p>{@link Features#VERBATIM_SEARCH}: This feature covers the verbatim string operator
-     * (quotation marks).
+     * <p>VERBATIM_SEARCH: This feature covers the verbatim string operator (quotation marks).
      *
      * <p>Ex. `"foo/bar" OR baz` will ensure that 'foo/bar' is treated as a single 'verbatim' token.
-     *
-     * <p>The availability of each of these features can be checked by calling
-     * {@link Features#isFeatureSupported} with the desired feature.
      *
      * <p>Additional search specifications, such as filtering by {@link AppSearchSchema} type or
      * adding projection, can be set by calling the corresponding {@link SearchSpec.Builder} setter.
