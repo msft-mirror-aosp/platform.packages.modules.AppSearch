@@ -169,7 +169,7 @@ public class VisibilityStore {
             mAppSearchImpl.putDocument(
                     VISIBILITY_PACKAGE_NAME,
                     VISIBILITY_DATABASE_NAME,
-                    prefixedVisibilityDocument,
+                    prefixedVisibilityDocument.toGenericDocument(),
                     /*sendChangeNotifications=*/ false,
                     /*logger=*/ null);
             mVisibilityDocumentMap.put(
@@ -237,13 +237,14 @@ public class VisibilityStore {
             try {
                 // Note: We use the other clients' prefixed schema type as ids
                 visibilityDocument =
-                        new VisibilityDocument(
-                                mAppSearchImpl.getDocument(
-                                        VISIBILITY_PACKAGE_NAME,
-                                        VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefixedSchemaType,
-                                        /*typePropertyPaths=*/ Collections.emptyMap()));
+                        new VisibilityDocument.Builder(
+                                        mAppSearchImpl.getDocument(
+                                                VISIBILITY_PACKAGE_NAME,
+                                                VISIBILITY_DATABASE_NAME,
+                                                VisibilityDocument.NAMESPACE,
+                                                /*id=*/ prefixedSchemaType,
+                                                /*typePropertyPaths=*/ Collections.emptyMap()))
+                                .build();
             } catch (AppSearchException e) {
                 if (e.getResultCode() == RESULT_NOT_FOUND) {
                     // The schema has all default setting and we won't have a VisibilityDocument for
@@ -285,7 +286,7 @@ public class VisibilityStore {
             mAppSearchImpl.putDocument(
                     VISIBILITY_PACKAGE_NAME,
                     VISIBILITY_DATABASE_NAME,
-                    migratedDocument,
+                    migratedDocument.toGenericDocument(),
                     /*sendChangeNotifications=*/ false,
                     /*logger=*/ null);
         }

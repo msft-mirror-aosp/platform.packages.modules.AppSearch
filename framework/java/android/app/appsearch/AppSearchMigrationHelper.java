@@ -169,7 +169,7 @@ public class AppSearchMigrationHelper implements Closeable {
                     new AtomicReference<>();
             mService.putDocumentsFromFile(mCallerAttributionSource, mDatabaseName, fileDescriptor,
                     mUserHandle,
-                    schemaMigrationStatsBuilder.build().getBundle(),
+                    schemaMigrationStatsBuilder.build(),
                     totalLatencyStartTimeMillis,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
