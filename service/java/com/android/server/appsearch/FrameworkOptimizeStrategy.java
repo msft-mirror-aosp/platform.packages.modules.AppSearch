@@ -33,8 +33,8 @@ import java.util.Objects;
  */
 public class FrameworkOptimizeStrategy implements OptimizeStrategy {
     private static final String TAG = "AppSearchOptimize";
-    private final AppSearchConfig mAppSearchConfig;
-    FrameworkOptimizeStrategy(@NonNull AppSearchConfig config) {
+    private final FrameworkAppSearchConfig mAppSearchConfig;
+    FrameworkOptimizeStrategy(@NonNull FrameworkAppSearchConfig config) {
         mAppSearchConfig = Objects.requireNonNull(config);
     }
 
