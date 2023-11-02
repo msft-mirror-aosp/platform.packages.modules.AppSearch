@@ -18,7 +18,6 @@ package com.android.server.appsearch.contactsindexer;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.util.LogUtil;
 import android.content.Context;
 import android.database.Cursor;
@@ -95,6 +94,10 @@ public final class ContactsProviderUtil {
             if (cursor == null) {
                 Log.e(TAG,
                         "Could not fetch deleted contacts - no contacts provider present?");
+                if (updateStats != null) {
+                    updateStats.mDeleteStatuses.add(
+                            ContactsUpdateStats.ERROR_CODE_CP2_NULL_CURSOR);
+                }
                 return newTimestamp;
             }
 
@@ -113,12 +116,13 @@ public final class ContactsProviderUtil {
                 Log.d(TAG, "Got " + rows + " deleted contacts since " + sinceFilter);
             }
         } catch (SecurityException |
-                SQLiteException |
-                NullPointerException |
-                NoClassDefFoundError e) {
+                 SQLiteException |
+                 NullPointerException |
+                 NoClassDefFoundError e) {
             Log.e(TAG, "ContentResolver.query failed to get latest deleted contacts.", e);
             if (updateStats != null) {
-                updateStats.mDeleteStatuses.add(AppSearchResult.RESULT_INTERNAL_ERROR);
+                updateStats.mDeleteStatuses.add(
+                        ContactsUpdateStats.ERROR_CODE_CP2_RUNTIME_EXCEPTION);
             }
         } finally {
             if (cursor != null) {
@@ -163,6 +167,10 @@ public final class ContactsProviderUtil {
                 orderBy)) {
             if (cursor == null) {
                 Log.w(TAG, "Failed to get a list of contacts updated since " + sinceFilter);
+                if (updateStats != null) {
+                    updateStats.mUpdateStatuses.add(
+                            ContactsUpdateStats.ERROR_CODE_CP2_NULL_CURSOR);
+                }
                 return newTimestamp;
             }
 
@@ -186,16 +194,17 @@ public final class ContactsProviderUtil {
                 Log.v(TAG, "Returning " + numContacts + " updated contacts since " + sinceFilter);
             }
         } catch (SecurityException |
-                SQLiteException |
-                NullPointerException |
-                NoClassDefFoundError e) {
+                 SQLiteException |
+                 NullPointerException |
+                 NoClassDefFoundError e) {
             Log.e(TAG, "ContentResolver.query failed to get latest updated contacts.", e);
             // TODO(b/222126568) consider throwing an exception here. And in the caller it can
             //  still catch the exception, and based on the states(e.g. whether we query CP2
             //  successfully before and need to remove some contacts), caller can choose to keep
             //  doing the update or not.
             if (updateStats != null) {
-                updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_INTERNAL_ERROR);
+                updateStats.mUpdateStatuses.add(
+                        ContactsUpdateStats.ERROR_CODE_CP2_RUNTIME_EXCEPTION);
             }
         }
 
