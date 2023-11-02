@@ -19,6 +19,12 @@ package com.android.server.appsearch.external.localstorage.converter;
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
+import android.app.appsearch.exceptions.AppSearchException;
+import android.util.ArrayMap;
+import android.util.ArraySet;
+
+import com.android.server.appsearch.external.localstorage.AppSearchConfig;
+import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 
 import com.google.android.icing.proto.DocumentProto;
 import com.google.android.icing.proto.DocumentProtoOrBuilder;
@@ -26,10 +32,14 @@ import com.google.android.icing.proto.PropertyProto;
 import com.google.android.icing.proto.SchemaTypeConfigProto;
 import com.google.protobuf.ByteString;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
+import java.util.Set;
 
 /**
  * Translates a {@link GenericDocument} into a {@link DocumentProto}.
@@ -129,7 +139,9 @@ public final class GenericDocumentToProtoConverter {
     public static GenericDocument toGenericDocument(
             @NonNull DocumentProtoOrBuilder proto,
             @NonNull String prefix,
-            @NonNull Map<String, SchemaTypeConfigProto> schemaTypeMap) {
+            @NonNull Map<String, SchemaTypeConfigProto> schemaTypeMap,
+            @NonNull AppSearchConfig config)
+            throws AppSearchException {
         Objects.requireNonNull(proto);
         GenericDocument.Builder<?> documentBuilder =
                 new GenericDocument.Builder<>(
@@ -138,6 +150,19 @@ public final class GenericDocumentToProtoConverter {
                         .setTtlMillis(proto.getTtlMs())
                         .setCreationTimestampMillis(proto.getCreationTimestampMs());
         String prefixedSchemaType = prefix + proto.getSchema();
+        if (config.shouldRetrieveParentInfo()) {
+            List<String> parentSchemaTypes =
+                    getUnprefixedParentSchemaTypes(prefixedSchemaType, schemaTypeMap);
+            if (!parentSchemaTypes.isEmpty()) {
+                if (config.shouldStoreParentInfoAsSyntheticProperty()) {
+                    documentBuilder.setPropertyString(
+                            GenericDocument.PARENT_TYPES_SYNTHETIC_PROPERTY,
+                            parentSchemaTypes.toArray(new String[0]));
+                } else {
+                    documentBuilder.setParentTypes(parentSchemaTypes);
+                }
+            }
+        }
 
         for (int i = 0; i < proto.getPropertiesCount(); i++) {
             PropertyProto property = proto.getProperties(i);
@@ -176,7 +201,8 @@ public final class GenericDocumentToProtoConverter {
                 GenericDocument[] values = new GenericDocument[property.getDocumentValuesCount()];
                 for (int j = 0; j < values.length; j++) {
                     values[j] =
-                            toGenericDocument(property.getDocumentValues(j), prefix, schemaTypeMap);
+                            toGenericDocument(
+                                    property.getDocumentValues(j), prefix, schemaTypeMap, config);
                 }
                 documentBuilder.setPropertyDocument(name, values);
             } else {
@@ -187,6 +213,68 @@ public final class GenericDocumentToProtoConverter {
             }
         }
         return documentBuilder.build();
+    }
+
+    /**
+     * Get the list of unprefixed parent type names of {@code prefixedSchemaType}.
+     *
+     * <p>It's guaranteed that child types always appear before parent types in the list.
+     */
+    // TODO(b/290389974): Consider caching the result based prefixedSchemaType, and reset the
+    //  cache whenever a new setSchema is called.
+    @NonNull
+    private static List<String> getUnprefixedParentSchemaTypes(
+            @NonNull String prefixedSchemaType,
+            @NonNull Map<String, SchemaTypeConfigProto> schemaTypeMap)
+            throws AppSearchException {
+        // Please note that neither DFS nor BFS order is guaranteed to always put child types
+        // before parent types (due to the diamond problem), so a topological sorting algorithm
+        // is required.
+        Map<String, Integer> inDegreeMap = new ArrayMap<>();
+        collectParentTypeInDegrees(
+                prefixedSchemaType, schemaTypeMap, /* visited= */ new ArraySet<>(), inDegreeMap);
+
+        List<String> result = new ArrayList<>();
+        Queue<String> queue = new ArrayDeque<>();
+        // prefixedSchemaType is the only type that has zero in-degree at this point.
+        queue.add(prefixedSchemaType);
+        while (!queue.isEmpty()) {
+            SchemaTypeConfigProto currentSchema =
+                    Objects.requireNonNull(schemaTypeMap.get(queue.poll()));
+            for (int i = 0; i < currentSchema.getParentTypesCount(); ++i) {
+                String prefixedParentType = currentSchema.getParentTypes(i);
+                int parentInDegree =
+                        Objects.requireNonNull(inDegreeMap.get(prefixedParentType)) - 1;
+                inDegreeMap.put(prefixedParentType, parentInDegree);
+                if (parentInDegree == 0) {
+                    result.add(PrefixUtil.removePrefix(prefixedParentType));
+                    queue.add(prefixedParentType);
+                }
+            }
+        }
+        return result;
+    }
+
+    private static void collectParentTypeInDegrees(
+            @NonNull String prefixedSchemaType,
+            @NonNull Map<String, SchemaTypeConfigProto> schemaTypeMap,
+            @NonNull Set<String> visited,
+            @NonNull Map<String, Integer> inDegreeMap) {
+        if (visited.contains(prefixedSchemaType)) {
+            return;
+        }
+        visited.add(prefixedSchemaType);
+        SchemaTypeConfigProto schema =
+                Objects.requireNonNull(schemaTypeMap.get(prefixedSchemaType));
+        for (int i = 0; i < schema.getParentTypesCount(); ++i) {
+            String prefixedParentType = schema.getParentTypes(i);
+            Integer parentInDegree = inDegreeMap.get(prefixedParentType);
+            if (parentInDegree == null) {
+                parentInDegree = 0;
+            }
+            inDegreeMap.put(prefixedParentType, parentInDegree + 1);
+            collectParentTypeInDegrees(prefixedParentType, schemaTypeMap, visited, inDegreeMap);
+        }
     }
 
     private static void setEmptyProperty(

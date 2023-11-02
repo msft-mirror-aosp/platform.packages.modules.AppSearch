@@ -20,6 +20,9 @@ import static com.google.common.truth.Truth.assertThat;
 
 import android.app.appsearch.GenericDocument;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
+import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.icing.proto.DocumentProto;
 import com.android.server.appsearch.icing.proto.PropertyConfigProto;
 import com.android.server.appsearch.icing.proto.PropertyProto;
@@ -62,7 +65,7 @@ public class GenericDocumentToProtoConverterTest {
                     PREFIX + SCHEMA_TYPE_1, SCHEMA_PROTO_1, PREFIX + SCHEMA_TYPE_2, SCHEMA_PROTO_2);
 
     @Test
-    public void testDocumentProtoConvert() {
+    public void testDocumentProtoConvert() throws Exception {
         GenericDocument document =
                 new GenericDocument.Builder<GenericDocument.Builder<?>>(
                                 "namespace", "id1", SCHEMA_TYPE_1)
@@ -128,7 +131,11 @@ public class GenericDocumentToProtoConverterTest {
 
         GenericDocument convertedGenericDocument =
                 GenericDocumentToProtoConverter.toGenericDocument(
-                        documentProto, PREFIX, SCHEMA_MAP);
+                        documentProto,
+                        PREFIX,
+                        SCHEMA_MAP,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(document);
 
@@ -137,7 +144,7 @@ public class GenericDocumentToProtoConverterTest {
     }
 
     @Test
-    public void testConvertDocument_whenPropertyHasEmptyList() {
+    public void testConvertDocument_whenPropertyHasEmptyList() throws Exception {
         // Build original GenericDocument
         GenericDocument document =
                 new GenericDocument.Builder<GenericDocument.Builder<?>>(
@@ -230,7 +237,12 @@ public class GenericDocumentToProtoConverterTest {
 
         // Convert to the other type and check if they are matched.
         GenericDocument convertedGenericDocument =
-                GenericDocumentToProtoConverter.toGenericDocument(documentProto, PREFIX, schemaMap);
+                GenericDocumentToProtoConverter.toGenericDocument(
+                        documentProto,
+                        PREFIX,
+                        schemaMap,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(document);
         assertThat(convertedDocumentProto).isEqualTo(documentProto);
@@ -238,7 +250,7 @@ public class GenericDocumentToProtoConverterTest {
     }
 
     @Test
-    public void testConvertDocument_whenNestedDocumentPropertyHasEmptyList() {
+    public void testConvertDocument_whenNestedDocumentPropertyHasEmptyList() throws Exception {
         // Build original nested document in type 1 and outer document in type2
         GenericDocument nestedDocument =
                 new GenericDocument.Builder<GenericDocument.Builder<?>>(
@@ -370,7 +382,11 @@ public class GenericDocumentToProtoConverterTest {
         // Convert to the other type and check if they are matched.
         GenericDocument convertedGenericDocument =
                 GenericDocumentToProtoConverter.toGenericDocument(
-                        outerDocumentProto, PREFIX, schemaMap);
+                        outerDocumentProto,
+                        PREFIX,
+                        schemaMap,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(outerDocument);
         assertThat(convertedDocumentProto).isEqualTo(outerDocumentProto);
