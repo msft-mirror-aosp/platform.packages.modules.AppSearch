@@ -7,7 +7,7 @@ import java.util.concurrent.Executor;
 /** This is a factory provider class that holds all factories needed by AppSearch. */
 public final class AppSearchEnvironmentFactory {
     private static volatile AppSearchEnvironment mEnvironmentInstance;
-    private static volatile AppSearchConfig mConfigInstance;
+    private static volatile FrameworkAppSearchConfig mConfigInstance;
 
     public static AppSearchEnvironment getEnvironmentInstance() {
         AppSearchEnvironment localRef = mEnvironmentInstance;
@@ -23,13 +23,13 @@ public final class AppSearchEnvironmentFactory {
         return localRef;
     }
 
-    public static AppSearchConfig getConfigInstance(Executor executor) {
-        AppSearchConfig localRef = mConfigInstance;
+    public static FrameworkAppSearchConfig getConfigInstance(Executor executor) {
+        FrameworkAppSearchConfig localRef = mConfigInstance;
         if (localRef == null) {
             synchronized (AppSearchEnvironmentFactory.class) {
                 localRef = mConfigInstance;
                 if (localRef == null) {
-                    mConfigInstance = localRef = FrameworkAppSearchConfig
+                    mConfigInstance = localRef = FrameworkAppSearchConfigImpl
                             .getInstance(executor);
                 }
             }
@@ -47,7 +47,7 @@ public final class AppSearchEnvironmentFactory {
 
     @VisibleForTesting
     static void setConfigInstanceForTest(
-            AppSearchConfig appSearchConfig) {
+            FrameworkAppSearchConfig appSearchConfig) {
         synchronized (AppSearchEnvironmentFactory.class) {
             mConfigInstance = appSearchConfig;
         }

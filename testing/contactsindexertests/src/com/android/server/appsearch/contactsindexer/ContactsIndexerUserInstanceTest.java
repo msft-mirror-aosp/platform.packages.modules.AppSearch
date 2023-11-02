@@ -16,9 +16,6 @@
 
 package com.android.server.appsearch.contactsindexer;
 
-import static android.Manifest.permission.READ_DEVICE_CONFIG;
-import static android.Manifest.permission.WRITE_DEVICE_CONFIG;
-
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -29,7 +26,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
 
 import android.annotation.NonNull;
-import android.app.UiAutomation;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSessionShim;
@@ -51,7 +47,6 @@ import android.content.Context;
 import android.os.CancellationSignal;
 import android.os.PersistableBundle;
 import android.provider.ContactsContract;
-import android.provider.DeviceConfig;
 import android.test.ProviderTestCase2;
 import android.util.Log;
 
@@ -63,13 +58,11 @@ import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
 import com.android.modules.utils.testing.ExtendedMockitoRule;
 import com.android.modules.utils.testing.StaticMockFixture;
-import com.android.server.appsearch.FrameworkAppSearchConfig;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
 import com.android.server.appsearch.stats.AppSearchStatsLog;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -103,7 +96,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
 
     @Rule
     public ExtendedMockitoRule mExtendedMockitoRule = new ExtendedMockitoRule.Builder()
-            .addStaticMockFixtures(MockAppSearchStatsLog::new)
+            .addStaticMockFixtures(TestMockFixture::new)
             .build();
 
     private final ExecutorService mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
@@ -672,10 +665,10 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         assertThat(mUpdateStats.mUpdateStatuses).hasSize(1);
         assertThat(mUpdateStats.mUpdateStatuses).containsExactly(AppSearchResult.RESULT_OK);
         assertThat(mUpdateStats.mDeleteStatuses).hasSize(1);
-        assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_OK);
+        assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_NOT_FOUND);
         assertThat(mUpdateStats.mContactsUpdateFailedCount).isEqualTo(0);
         // 4 contacts deleted in CP2, but we don't have those in AppSearch. So we will get
-        // NOT_FOUND. We don't treat the NOT_FOUND as failures, so the status code is still OK.
+        // NOT_FOUND.
         assertThat(mUpdateStats.mContactsDeleteFailedCount).isEqualTo(4);
         assertThat(mUpdateStats.mContactsDeleteNotFoundCount).isEqualTo(4);
         assertThat(mUpdateStats.mNewContactsToBeUpdated).isEqualTo(6);
@@ -769,86 +762,31 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 settingsBundle.getLong(ContactsIndexerSettings.LAST_CONTACT_DELETE_TIMESTAMP_KEY));
     }
 
-    // TODO(b/243542728) This tests whether a full update job will be run to prune the person
-    //  corpus when AppSearch reaches its max document limit. So we do want to change the device
-    //  config on the system to make the max document limit 100. And after we try to index 250
-    //  documents, the full update can be triggered. Disable this test for now as the asked
-    //  permissions are always denied.
-    @Ignore
     @Test
     public void testDeltaUpdate_outOfSpaceError_fullUpdateScheduled() throws Exception {
-        UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
-        int maxDocumentCountBeforeTest = -1;
-        try {
-            uiAutomation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG, WRITE_DEVICE_CONFIG);
-            maxDocumentCountBeforeTest = FrameworkAppSearchConfig.getInstance(
-                    mSingleThreadedExecutor).getMaxDocumentCount();
-            int totalContactCount = 250;
-            int maxDocumentCount = 100;
-            // Override the configs in AppSearch. This is hard to be mocked since we are not testing
-            // AppSearch here.
-            DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                    FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
-                    String.valueOf(maxDocumentCount), false);
-            // Cancel any existing jobs.
-            ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(mContext,
-                    mContext.getUser());
+        // This tests whether a full update job will be run to prune the person corpus when
+        // AppSearch reaches its max document limit. Since there are issues with obtaining the
+        // permissions to change the device config for max document limit, and we don't want to
+        // index 10000+ documents in this test, we simulate the out of space error by manually
+        // adding it to update stats beforehand.
 
-            JobScheduler mockJobScheduler = mock(JobScheduler.class);
-            mContextWrapper.setJobScheduler(mockJobScheduler);
+        // Cancel any existing jobs.
+        ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(mContext,
+                mContext.getUser());
 
-            // We are trying to index 250 contacts, but our max documentCount is 100. So we would
-            // index 100 contacts, reach the limit, and trigger a full update.
-            CountDownLatch latch = new CountDownLatch(maxDocumentCount);
-            GlobalSearchSessionShim shim =
-                    GlobalSearchSessionShimImpl.createGlobalSearchSessionAsync(mContext).get();
-            ObserverCallback callback = new ObserverCallback() {
-                @Override
-                public void onSchemaChanged(SchemaChangeInfo changeInfo) {
-                    // Do nothing
-                }
+        JobScheduler mockJobScheduler = mock(JobScheduler.class);
+        mContextWrapper.setJobScheduler(mockJobScheduler);
 
-                @Override
-                public void onDocumentChanged(DocumentChangeInfo changeInfo) {
-                    for (int i = 0; i < changeInfo.getChangedDocumentIds().size(); i++) {
-                        latch.countDown();
-                    }
-                }
-            };
-            shim.registerObserverCallback(mContext.getPackageName(),
-                    new ObserverSpec.Builder().addFilterSchemas("builtin:Person").build(),
-                    mSingleThreadedExecutor,
-                    callback);
+        // manually add out of space error
+        mUpdateStats.mUpdateStatuses.add(AppSearchResult.RESULT_OUT_OF_SPACE);
 
-            long timeBeforeDeltaChangeNotification = System.currentTimeMillis();
-            // Insert contacts to trigger delta update.
-            ContentResolver resolver = mContext.getContentResolver();
-            ContentValues dummyValues = new ContentValues();
-            for (int i = 0; i < totalContactCount; i++) {
-                resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
-            }
+        executeAndWaitForCompletion(
+                mInstance.doDeltaUpdateAsync(ContactsProviderUtil.UPDATE_LIMIT_NONE,
+                        mUpdateStats),
+                mSingleThreadedExecutor);
 
-            executeAndWaitForCompletion(
-                    mInstance.doDeltaUpdateAsync(ContactsProviderUtil.UPDATE_LIMIT_NONE,
-                            mUpdateStats),
-                    mSingleThreadedExecutor);
-            latch.await(30L, TimeUnit.SECONDS);
-
-            // Verify the full update job is scheduled due to out_of_space.
-            verify(mockJobScheduler).schedule(any());
-            PersistableBundle settingsBundle = ContactsIndexerSettings.readBundle(mSettingsFile);
-            assertThat(
-                    settingsBundle.getLong(
-                            ContactsIndexerSettings.LAST_CONTACT_UPDATE_TIMESTAMP_KEY))
-                    .isAtLeast(timeBeforeDeltaChangeNotification);
-        } finally {
-            if (maxDocumentCountBeforeTest > 0) {
-                DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                        FrameworkAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
-                        String.valueOf(maxDocumentCountBeforeTest), false);
-            }
-            uiAutomation.dropShellPermissionIdentity();
-        }
+        // Verify the full update job is scheduled due to out_of_space.
+        verify(mockJobScheduler).schedule(any());
     }
 
     @Test
@@ -1128,7 +1066,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         }
     }
 
-    private static class MockAppSearchStatsLog implements StaticMockFixture {
+    private static class TestMockFixture implements StaticMockFixture {
         @Override
         public StaticMockitoSessionBuilder setUpMockedClasses(
                 @NonNull StaticMockitoSessionBuilder sessionBuilder) {
