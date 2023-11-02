@@ -19,7 +19,6 @@ package android.app.appsearch.aidl;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresApi;
-import android.app.Activity;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.os.Binder;
@@ -49,7 +48,7 @@ import java.util.Objects;
 public final class AppSearchAttributionSource implements Parcelable {
 
     private final Compat mCompat;
-    private final String mCallingPackageName;
+    @Nullable private final String mCallingPackageName;
     private final int mCallingUid;
 
     /**
@@ -64,8 +63,8 @@ public final class AppSearchAttributionSource implements Parcelable {
     }
 
     @VisibleForTesting
-    public AppSearchAttributionSource(@NonNull String callingPackageName, int callingUid) {
-        mCallingPackageName = Objects.requireNonNull(callingPackageName);
+    public AppSearchAttributionSource(@Nullable String callingPackageName, int callingUid) {
+        mCallingPackageName = callingPackageName;
         mCallingUid = callingUid;
 
         if (VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -88,7 +87,7 @@ public final class AppSearchAttributionSource implements Parcelable {
             mCallingPackageName = mCompat.getPackageName();
             mCallingUid = mCompat.getUid();
         } else {
-            mCallingPackageName = Objects.requireNonNull(in.readString());
+            mCallingPackageName = in.readString();
             mCallingUid = in.readInt();
             Api19Impl impl = new Api19Impl(mCallingPackageName, mCallingUid);
             // Enforce calling pid and uid must be called here on R and below similar to how
@@ -126,7 +125,7 @@ public final class AppSearchAttributionSource implements Parcelable {
      * @return wrapped class
      */
     private static AppSearchAttributionSource toAppSearchAttributionSource(
-        @NonNull String packageName, int uid) {
+        @Nullable String packageName, int uid) {
         return new AppSearchAttributionSource(
             new Api19Impl(packageName, uid));
     }
@@ -160,6 +159,36 @@ public final class AppSearchAttributionSource implements Parcelable {
 
     public int getUid() {
         return mCompat.getUid();
+    }
+
+    @Override
+    public int hashCode() {
+        if (VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AttributionSource attributionSource = Objects.requireNonNull(
+                    mCompat.getAttributionSource());
+            return attributionSource.hashCode();
+        }
+
+        return Objects.hash(mCompat.getUid(), mCompat.getPackageName());
+    }
+
+    @Override
+    public boolean equals(@Nullable Object o) {
+        if (o == null || !(o instanceof AppSearchAttributionSource)) {
+            return false;
+        }
+
+        AppSearchAttributionSource that = (AppSearchAttributionSource) o;
+        if (VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AttributionSource thisAttributionSource = Objects.requireNonNull(
+                    mCompat.getAttributionSource());
+            AttributionSource thatAttributionSource = Objects.requireNonNull(
+                    that.getAttributionSource());
+            return thisAttributionSource.equals(thatAttributionSource);
+        }
+
+        return (Objects.equals(mCompat.getPackageName(), that.getPackageName())
+                && (mCompat.getUid() == that.getUid()));
     }
 
     @Override
@@ -239,7 +268,7 @@ public final class AppSearchAttributionSource implements Parcelable {
 
     private static class Api19Impl implements Compat {
 
-        private final String mPackageName;
+        @Nullable private final String mPackageName;
         private final int mUid;
 
         /**
@@ -248,7 +277,7 @@ public final class AppSearchAttributionSource implements Parcelable {
          * @param packageName The package name that is accessing permission protected data.
          * @param uid The uid that is accessing permission protected data.
          */
-        Api19Impl(String packageName, int uid) {
+        Api19Impl(@Nullable String packageName, int uid) {
             mPackageName = packageName;
             mUid = uid;
         }

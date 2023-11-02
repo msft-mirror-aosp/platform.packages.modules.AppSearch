@@ -14,14 +14,10 @@
  * limitations under the License.
  */
 
-package android.app.appsearch;
+package android.app.appsearch.safeparcel;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.app.appsearch.safeparcel.AbstractSafeParcelable;
-import android.app.appsearch.safeparcel.SafeParcelable;
-import android.app.appsearch.util.BundleUtil;
-import android.os.Bundle;
 import android.os.Parcel;
 
 import java.util.Arrays;
@@ -62,10 +58,9 @@ public final class PropertyParcel extends AbstractSafeParcelable {
     @Field(id = 6, getter = "getBytesValues")
     private final byte[][] mBytesValues;
 
-    // TODO(b/24205844) Change it to GenericDocumentParcel once it is added.
     @Nullable
     @Field(id = 7, getter = "getDocumentValues")
-    private final Bundle[] mDocumentValues;
+    private final GenericDocumentParcel[] mDocumentValues;
 
     @Nullable private Integer mHashCode;
 
@@ -77,7 +72,7 @@ public final class PropertyParcel extends AbstractSafeParcelable {
             @Param(id = 4) @Nullable double[] doubleValues,
             @Param(id = 5) @Nullable boolean[] booleanValues,
             @Param(id = 6) @Nullable byte[][] bytesValues,
-            @Param(id = 7) @Nullable Bundle[] documentValues) {
+            @Param(id = 7) @Nullable GenericDocumentParcel[] documentValues) {
         mPropertyName = Objects.requireNonNull(propertyName);
         mStringValues = stringValues;
         mLongValues = longValues;
@@ -124,9 +119,9 @@ public final class PropertyParcel extends AbstractSafeParcelable {
         return mBytesValues;
     }
 
-    /** Returns {@link Bundle} in an array. */
+    /** Returns {@link GenericDocumentParcel}s in an array. */
     @Nullable
-    public Bundle[] getDocumentValues() {
+    public GenericDocumentParcel[] getDocumentValues() {
         return mDocumentValues;
     }
 
@@ -204,13 +199,7 @@ public final class PropertyParcel extends AbstractSafeParcelable {
             } else if (mBytesValues != null) {
                 hashCode = Arrays.deepHashCode(mBytesValues);
             } else if (mDocumentValues != null) {
-                // TODO(b/24205844) change those to Arrays.hashCode() as well once we replace
-                //  this Bundle[] with GenericDocumentParcel[].
-                int[] innerHashCodes = new int[mDocumentValues.length];
-                for (int i = 0; i < mDocumentValues.length; ++i) {
-                    innerHashCodes[i] = BundleUtil.deepHashCode(mDocumentValues[i]);
-                }
-                hashCode = Arrays.hashCode(innerHashCodes);
+                hashCode = Arrays.hashCode(mDocumentValues);
             }
             mHashCode = Objects.hash(mPropertyName, hashCode);
         }
@@ -234,9 +223,7 @@ public final class PropertyParcel extends AbstractSafeParcelable {
                 && Arrays.equals(mDoubleValues, otherPropertyParcel.mDoubleValues)
                 && Arrays.equals(mBooleanValues, otherPropertyParcel.mBooleanValues)
                 && Arrays.deepEquals(mBytesValues, otherPropertyParcel.mBytesValues)
-                // TODO(b/24205844) Change it to Arrays.equals once GenericDocumentParcel is added.
-                && BundleUtil.bundleValueEquals(
-                        mDocumentValues, otherPropertyParcel.mDocumentValues);
+                && Arrays.equals(mDocumentValues, otherPropertyParcel.mDocumentValues);
     }
 
     /** Builder for {@link PropertyParcel}. */
@@ -247,7 +234,7 @@ public final class PropertyParcel extends AbstractSafeParcelable {
         private double[] mDoubleValues;
         private boolean[] mBooleanValues;
         private byte[][] mBytesValues;
-        private Bundle[] mDocumentValues;
+        private GenericDocumentParcel[] mDocumentValues;
 
         public Builder(@NonNull String propertyName) {
             mPropertyName = Objects.requireNonNull(propertyName);
@@ -290,7 +277,7 @@ public final class PropertyParcel extends AbstractSafeParcelable {
 
         /** Sets document values. */
         @NonNull
-        public Builder setDocumentValues(@NonNull Bundle[] documentValues) {
+        public Builder setDocumentValues(@NonNull GenericDocumentParcel[] documentValues) {
             mDocumentValues = Objects.requireNonNull(documentValues);
             return this;
         }

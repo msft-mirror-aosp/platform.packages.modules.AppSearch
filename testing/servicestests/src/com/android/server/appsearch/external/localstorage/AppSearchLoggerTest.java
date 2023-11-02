@@ -77,8 +77,8 @@ public class AppSearchLoggerTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -375,8 +375,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -407,8 +407,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -439,8 +439,8 @@ public class AppSearchLoggerTest {
         appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -471,8 +471,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -513,8 +513,8 @@ public class AppSearchLoggerTest {
         appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);

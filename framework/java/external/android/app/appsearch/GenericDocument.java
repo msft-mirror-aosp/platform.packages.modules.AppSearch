@@ -71,12 +71,17 @@ public class GenericDocument {
     private static final String NAMESPACE_FIELD = "namespace";
     private static final String PARENT_TYPES_FIELD = "parentTypes";
 
+    /** @hide */
+    public static final String PARENT_TYPES_SYNTHETIC_PROPERTY = "$$__AppSearch__parentTypes";
+
     /**
      * The maximum number of indexed properties a document can have.
      *
      * <p>Indexed properties are properties which are strings where the {@link
      * AppSearchSchema.StringPropertyConfig#getIndexingType} value is anything other than {@link
-     * AppSearchSchema.StringPropertyConfig#INDEXING_TYPE_NONE}.
+     * AppSearchSchema.StringPropertyConfig#INDEXING_TYPE_NONE}, as well as long properties where
+     * the {@link AppSearchSchema.LongPropertyConfig#getIndexingType} value is {@link
+     * AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE}.
      */
     public static int getMaxIndexedProperties() {
         return MAX_INDEXED_PROPERTIES;

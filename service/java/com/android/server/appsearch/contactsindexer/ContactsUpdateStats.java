@@ -18,7 +18,6 @@ package com.android.server.appsearch.contactsindexer;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.app.appsearch.AppSearchResult;
 import android.util.ArraySet;
 
 import com.android.server.appsearch.stats.AppSearchStatsLog;
@@ -57,17 +56,36 @@ public class ContactsUpdateStats {
     public static final int FULL_UPDATE =
             AppSearchStatsLog.CONTACTS_INDEXER_UPDATE_STATS_REPORTED__UPDATE_TYPE__FULL;
 
+    @IntDef(
+            value = {
+                    ERROR_CODE_CP2_RUNTIME_EXCEPTION,
+                    ERROR_CODE_CP2_NULL_CURSOR,
+                    ERROR_CODE_APP_SEARCH_SYSTEM_ERROR,
+                    ERROR_CODE_CONTACTS_INDEXER_UNKNOWN_ERROR,
+            })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface ErrorCode {
+    }
+
+    // Error code logged from CP2 runtime exceptions
+    public static final int ERROR_CODE_CP2_RUNTIME_EXCEPTION = 10000;
+    // Error code logged from CP2 null query cursors
+    public static final int ERROR_CODE_CP2_NULL_CURSOR = 10001;
+    // Error code logged from AppSearch system errors. This code may be combined with an
+    // AppSearchResult code from toFailedResult on the throwable from onSystemError().
+    public static final int ERROR_CODE_APP_SEARCH_SYSTEM_ERROR = 10100;
+    // Error code logged from ContactsIndexer for otherwise uncaught exceptions
+    public static final int ERROR_CODE_CONTACTS_INDEXER_UNKNOWN_ERROR = 10200;
+
     @UpdateType
     int mUpdateType = UNKNOWN_UPDATE_TYPE;
     // Status for updates.
     // In case of success, we will just have one success status stored.
     // In case of Error,  we store the unique error codes during the update.
-    @AppSearchResult.ResultCode
     Set<Integer> mUpdateStatuses = new ArraySet<>();
     // Status for deletions.
     // In case of success, we will just have one success status stored.
     // In case of Error,  we store the unique error codes during the deletion.
-    @AppSearchResult.ResultCode
     Set<Integer> mDeleteStatuses = new ArraySet<>();
 
     // Start time in millis for update and delete.
