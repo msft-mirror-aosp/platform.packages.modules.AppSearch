@@ -77,8 +77,8 @@ public class AppSearchLoggerTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -155,6 +155,10 @@ public class AppSearchLoggerTest {
         final int nativeDocumentSize = 7;
         final int nativeNumTokensIndexed = 8;
         final boolean nativeExceededMaxNumTokens = true;
+        final int nativeTermIndexLatencyMillis = 9;
+        final int nativeIntegerIndexLatencyMillis = 10;
+        final int nativeQualifiedIdJoinIndexLatencyMillis = 11;
+        final int nativeLiteIndexSortLatencyMillis = 12;
         PutDocumentStatsProto nativePutDocumentStats =
                 PutDocumentStatsProto.newBuilder()
                         .setLatencyMs(nativeLatencyMillis)
@@ -166,6 +170,10 @@ public class AppSearchLoggerTest {
                                 PutDocumentStatsProto.TokenizationStats.newBuilder()
                                         .setNumTokensIndexed(nativeNumTokensIndexed)
                                         .build())
+                        .setTermIndexLatencyMs(nativeTermIndexLatencyMillis)
+                        .setIntegerIndexLatencyMs(nativeIntegerIndexLatencyMillis)
+                        .setQualifiedIdJoinIndexLatencyMs(nativeQualifiedIdJoinIndexLatencyMillis)
+                        .setLiteIndexSortLatencyMs(nativeLiteIndexSortLatencyMillis)
                         .build();
         PutDocumentStats.Builder pBuilder = new PutDocumentStats.Builder(PACKAGE_NAME, DATABASE);
 
@@ -180,6 +188,14 @@ public class AppSearchLoggerTest {
                 .isEqualTo(nativeIndexMergeLatencyMillis);
         assertThat(pStats.getNativeDocumentSizeBytes()).isEqualTo(nativeDocumentSize);
         assertThat(pStats.getNativeNumTokensIndexed()).isEqualTo(nativeNumTokensIndexed);
+        assertThat(pStats.getNativeTermIndexLatencyMillis())
+                .isEqualTo(nativeTermIndexLatencyMillis);
+        assertThat(pStats.getNativeIntegerIndexLatencyMillis())
+                .isEqualTo(nativeIntegerIndexLatencyMillis);
+        assertThat(pStats.getNativeQualifiedIdJoinIndexLatencyMillis())
+                .isEqualTo(nativeQualifiedIdJoinIndexLatencyMillis);
+        assertThat(pStats.getNativeLiteIndexSortLatencyMillis())
+                .isEqualTo(nativeLiteIndexSortLatencyMillis);
     }
 
     @Test
@@ -359,8 +375,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -391,8 +407,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -423,8 +439,8 @@ public class AppSearchLoggerTest {
         appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -455,8 +471,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -497,8 +513,8 @@ public class AppSearchLoggerTest {
         appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);

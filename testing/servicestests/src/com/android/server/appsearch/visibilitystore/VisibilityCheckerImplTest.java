@@ -38,6 +38,7 @@ import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
+import android.app.appsearch.testutil.FakeAppSearchConfig;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.content.ContextWrapper;
@@ -106,8 +107,7 @@ public class VisibilityCheckerImplTest {
         // Give ourselves global query permissions
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
                 mTemporaryFolder.newFolder(),
-                new UnlimitedLimitConfig(),
-                new DefaultIcingOptionsConfig(),
+                new FakeAppSearchConfig(),
                 /*initStatsBuilder=*/ null,
                 ALWAYS_OPTIMIZE,
                 mVisibilityChecker);

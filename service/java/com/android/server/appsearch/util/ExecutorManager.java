@@ -23,7 +23,7 @@ import android.util.ArrayMap;
 import com.android.internal.annotations.GuardedBy;
 import com.android.server.appsearch.AppSearchEnvironmentFactory;
 import com.android.server.appsearch.FrameworkAppSearchConfig;
-import com.android.server.appsearch.AppSearchConfig;
+import com.android.server.appsearch.FrameworkAppSearchConfigImpl;
 import com.android.server.appsearch.AppSearchRateLimitConfig;
 
 import java.util.Map;
@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit;
  * @hide
  */
 public class ExecutorManager {
-    private final AppSearchConfig mAppSearchConfig;
+    private final FrameworkAppSearchConfig mAppSearchConfig;
 
     /**
      * A map of per-user executors for queued work. These can be started or shut down via this
@@ -59,7 +59,7 @@ public class ExecutorManager {
      */
     @NonNull
     public static ExecutorService createDefaultExecutorService() {
-        boolean useFixedExecutorService = FrameworkAppSearchConfig.getUseFixedExecutorService();
+        boolean useFixedExecutorService = FrameworkAppSearchConfigImpl.getUseFixedExecutorService();
         int corePoolSize = useFixedExecutorService ? Runtime.getRuntime().availableProcessors() : 1;
         long keepAliveTime = useFixedExecutorService ? 0L : 60L;
 
@@ -72,7 +72,7 @@ public class ExecutorManager {
                 /*priority=*/ 0); // priority is unused.
     }
 
-    public ExecutorManager(@NonNull AppSearchConfig appSearchConfig) {
+    public ExecutorManager(@NonNull FrameworkAppSearchConfig appSearchConfig) {
         mAppSearchConfig = Objects.requireNonNull(appSearchConfig);
     }
 
