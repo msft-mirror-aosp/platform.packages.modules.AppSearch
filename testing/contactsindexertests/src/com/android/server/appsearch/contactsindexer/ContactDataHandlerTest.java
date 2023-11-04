@@ -28,8 +28,6 @@ import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.provider.ContactsContract.CommonDataKinds;
 import android.provider.ContactsContract.Data;
-import android.telephony.PhoneNumberUtils;
-import android.util.Log;
 
 import androidx.test.core.app.ApplicationProvider;
 
@@ -177,7 +175,8 @@ public class ContactDataHandlerTest {
         int type = 1; // Home
         String name = "name";
         String address = "emailAddress@google.com";
-        String label = "Home";
+        String label = CommonDataKinds.Email.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Email.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Email.ADDRESS, address);
@@ -196,7 +195,7 @@ public class ContactDataHandlerTest {
         convertRowToPerson(cursor, helperTested);
         Person personTested = helperTested.buildPerson();
 
-        // Since the type is 1(Homes), we won't use user provided label. So it is fine to be null.
+        // Since the type is 1(Home), we won't use user provided label. So it is fine to be null.
         ContactPoint[] contactPoints = personTested.getContactPoints();
         assertThat(contactPoints.length).isEqualTo(1);
         assertThat(contactPoints[0].getLabel()).isEqualTo(label);
@@ -209,7 +208,8 @@ public class ContactDataHandlerTest {
         int type = 1; // Home
         String name = "name";
         String address = "emailAddress@google.com";
-        String label = "Home";
+        String label = CommonDataKinds.Email.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Email.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Email.ADDRESS, address);
@@ -290,7 +290,8 @@ public class ContactDataHandlerTest {
         String number = "(202) 555-0111";
         String numberInE164 = "+1202 5550111";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -322,7 +323,8 @@ public class ContactDataHandlerTest {
         String number = "809-686-5797";
         String numberInE164 = "+1 8096865797";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -357,7 +359,8 @@ public class ContactDataHandlerTest {
         String number = "134-5678-9012-0000";
         String numberE164 = "+8613456789012";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -390,7 +393,8 @@ public class ContactDataHandlerTest {
         String number = "913 30 28 00";
         String numberE164 = "+34913302800";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -423,7 +427,8 @@ public class ContactDataHandlerTest {
         String number = "29335000";
         String numberE164 = "+35929335000";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -455,7 +460,8 @@ public class ContactDataHandlerTest {
         // Original number is in e164 format.
         String number = "(202) 555-0111";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -484,7 +490,8 @@ public class ContactDataHandlerTest {
         // Original number is in e164 format.
         String number = "+12025550111";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -513,7 +520,8 @@ public class ContactDataHandlerTest {
         String name = "name";
         String number = "+11234567890";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -541,7 +549,8 @@ public class ContactDataHandlerTest {
         String name = "name";
         String number = "123-456-7890";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number);
@@ -570,7 +579,8 @@ public class ContactDataHandlerTest {
         String name = "name";
         String number1 = "+12025550111";
         int type = 1; // Home
-        String label = "Home";
+        String label = CommonDataKinds.Phone.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.Phone.NUMBER, number1);
@@ -609,7 +619,8 @@ public class ContactDataHandlerTest {
         String name = "name";
         int type = 1; // Home
         String postal = "structuredPostalFormattedAddress";
-        String label = "Home";
+        String label = CommonDataKinds.StructuredPostal.getTypeLabel(mResources, type, /* label= */
+                null).toString(); // usually "Home"
         ContentValues values = new ContentValues();
         values.put(Data.MIMETYPE, CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE);
         values.put(CommonDataKinds.StructuredPostal.FORMATTED_ADDRESS, postal);
