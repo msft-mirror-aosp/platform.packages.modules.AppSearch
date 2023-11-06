@@ -101,7 +101,6 @@ public final class SchemaToProtoConverter {
                                 .setValueType(
                                         convertJoinableValueTypeToProto(
                                                 stringProperty.getJoinableValueType()))
-                                .setPropagateDelete(stringProperty.getDeletionPropagation())
                                 .build();
                 builder.setJoinableConfig(joinableConfig);
             }
