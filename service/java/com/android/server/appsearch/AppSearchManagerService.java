@@ -521,7 +521,7 @@ public class AppSearchManagerService extends SystemService {
                                     targetPackageName,
                                     databaseName,
                                     new FrameworkCallerAccess(callerAttributionSource,
-                                            callerHasSystemAccess));
+                                            callerHasSystemAccess, /*isForEnterprise=*/ false));
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback, AppSearchResult.newSuccessfulResult(response));
@@ -837,7 +837,7 @@ public class AppSearchManagerService extends SystemService {
                                         id,
                                         typePropertyPaths,
                                         new FrameworkCallerAccess(callerAttributionSource,
-                                                callerHasSystemAccess));
+                                                callerHasSystemAccess, /*isForEnterprise=*/ false));
                             } else {
                                 document = instance.getAppSearchImpl().getDocument(
                                         targetPackageName,
@@ -1024,7 +1024,7 @@ public class AppSearchManagerService extends SystemService {
                             queryExpression,
                             searchSpec,
                             new FrameworkCallerAccess(callerAttributionSource,
-                                    callerHasSystemAccess),
+                                    callerHasSystemAccess, /*isForEnterprise=*/ false),
                             instance.getLogger());
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
@@ -2057,8 +2057,8 @@ public class AppSearchManagerService extends SystemService {
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callingPackageName);
                     instance.getAppSearchImpl().registerObserverCallback(
-                            new FrameworkCallerAccess(
-                                    callerAttributionSource, callerHasSystemAccess),
+                            new FrameworkCallerAccess(callerAttributionSource,
+                                    callerHasSystemAccess, /*isForEnterprise=*/ false),
                             targetPackageName,
                             observerSpec,
                             mExecutorManager.getOrCreateUserExecutor(targetUser),
