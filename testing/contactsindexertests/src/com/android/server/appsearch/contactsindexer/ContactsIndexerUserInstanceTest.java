@@ -37,6 +37,7 @@ import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.observer.SchemaChangeInfo;
 import android.app.appsearch.testutil.AppSearchSessionShimImpl;
 import android.app.appsearch.testutil.GlobalSearchSessionShimImpl;
+import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.app.job.JobInfo;
 import android.app.job.JobScheduler;
 import android.content.ContentResolver;
