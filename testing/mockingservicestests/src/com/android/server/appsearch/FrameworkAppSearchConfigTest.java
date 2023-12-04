@@ -33,6 +33,7 @@ import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE
 import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD;
 import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LITE_INDEX_SORT_AT_INDEXING;
 import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LITE_INDEX_SORT_SIZE;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_PUT_DOCUMENT_STATS;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_DEFAULT;
@@ -66,7 +67,10 @@ import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_API_COSTS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX;
 
+import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_BUILD_PROPERTY_EXISTENCE_METADATA_HITS;
+import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX;
 import static com.google.common.truth.Truth.assertThat;
 
 import android.provider.DeviceConfig;
@@ -161,6 +165,10 @@ public class FrameworkAppSearchConfigTest {
         assertThat(appSearchConfig.getLiteIndexSortAtIndexing()).isEqualTo(
                 DEFAULT_LITE_INDEX_SORT_AT_INDEXING);
         assertThat(appSearchConfig.getLiteIndexSortSize()).isEqualTo(DEFAULT_LITE_INDEX_SORT_SIZE);
+        assertThat(appSearchConfig.getUseNewQualifiedIdJoinIndex())
+            .isEqualTo(DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX);
+        assertThat(appSearchConfig.getBuildPropertyExistenceMetadataHits())
+            .isEqualTo(DEFAULT_BUILD_PROPERTY_EXISTENCE_METADATA_HITS);
     }
 
     @Test
@@ -824,6 +832,44 @@ public class FrameworkAppSearchConfigTest {
     }
 
     @Test
+    public void testCustomizedValue_joins() {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+            KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX, Boolean.toString(true), false);
+
+        FrameworkAppSearchConfig appSearchConfig =
+            FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
+
+        assertThat(appSearchConfig.getUseNewQualifiedIdJoinIndex()).isEqualTo(true);
+    }
+
+    @Test
+    public void testCustomizedValueOverride_joins() {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+            KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX, Boolean.toString(true), false);
+
+        FrameworkAppSearchConfig appSearchConfig =
+            FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
+
+        // Override
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+            KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX, Boolean.toString(false), false);
+
+        assertThat(appSearchConfig.getUseNewQualifiedIdJoinIndex()).isEqualTo(false);
+    }
+
+    @Test
+    public void testCustomizedValue_hasProperty_alwaysFalse() {
+        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
+            KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS, Boolean.toString(true), false);
+
+        FrameworkAppSearchConfig appSearchConfig =
+            FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
+
+        // We never turn on this flag in udc-mainline-prod.
+        assertThat(appSearchConfig.getBuildPropertyExistenceMetadataHits()).isEqualTo(false);
+    }
+
+    @Test
     public void testNotUsable_afterClose() {
         FrameworkAppSearchConfig appSearchConfig =
             FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
@@ -920,5 +966,8 @@ public class FrameworkAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getLiteIndexSortSize());
+        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getUseNewQualifiedIdJoinIndex());
     }
 }
