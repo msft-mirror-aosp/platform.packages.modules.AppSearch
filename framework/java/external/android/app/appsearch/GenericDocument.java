@@ -887,10 +887,13 @@ public class GenericDocument {
      *
      * <p>The returned builder is a deep copy whose data is separate from this document.
      *
+     * @deprecated This API is not compliant with API guidelines. Use {@link
+     *     Builder#Builder(GenericDocument)} instead.
      * @hide
      */
     // TODO(b/171882200): Expose this API in Android T
     @NonNull
+    @Deprecated
     public GenericDocument.Builder<GenericDocument.Builder<?>> toBuilder() {
         Bundle clonedBundle = BundleUtil.deepCopy(mBundle);
         return new GenericDocument.Builder<>(clonedBundle);
@@ -999,7 +1002,6 @@ public class GenericDocument {
                 builder.append("\n");
                 builder.decreaseIndentLevel();
             }
-            builder.append("]");
         } else {
             int propertyArrLength = Array.getLength(property);
             for (int i = 0; i < propertyArrLength; i++) {
@@ -1013,11 +1015,10 @@ public class GenericDocument {
                 }
                 if (i != propertyArrLength - 1) {
                     builder.append(", ");
-                } else {
-                    builder.append("]");
                 }
             }
         }
+        builder.append("]");
     }
 
     /**
@@ -1079,6 +1080,18 @@ public class GenericDocument {
             // mProperties is NonNull and initialized to empty Bundle() in builder.
             mProperties = Objects.requireNonNull(mBundle.getBundle(PROPERTIES_FIELD));
             mBuilderTypeInstance = (BuilderType) this;
+        }
+
+        /**
+         * Creates a new {@link GenericDocument.Builder} from the given GenericDocument.
+         *
+         * <p>The GenericDocument is deep copied, i.e. changes to the new GenericDocument returned
+         * by this function will NOT affect the original GenericDocument.
+         *
+         * @hide
+         */
+        public Builder(@NonNull GenericDocument document) {
+            this(BundleUtil.deepCopy(document.getBundle()));
         }
 
         /**
