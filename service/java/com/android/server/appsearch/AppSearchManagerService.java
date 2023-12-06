@@ -1315,7 +1315,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull String databaseName,
                 @NonNull ParcelFileDescriptor fileDescriptor,
                 @NonNull UserHandle userHandle,
-                @NonNull Bundle schemaMigrationStatsBundle,
+                @NonNull SchemaMigrationStats schemaMigrationStats,
                 @ElapsedRealtimeLong long totalLatencyStartTimeMillis,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
@@ -1323,7 +1323,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(fileDescriptor);
             Objects.requireNonNull(userHandle);
-            Objects.requireNonNull(schemaMigrationStatsBundle);
+            Objects.requireNonNull(schemaMigrationStats);
             Objects.requireNonNull(callback);
 
             long callStatsTotalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1350,7 +1350,7 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 SchemaMigrationStats.Builder schemaMigrationStatsBuilder = new SchemaMigrationStats
-                        .Builder(schemaMigrationStatsBundle);
+                        .Builder(schemaMigrationStats);
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
 

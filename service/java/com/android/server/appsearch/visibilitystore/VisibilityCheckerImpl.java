@@ -38,6 +38,7 @@ import android.permission.PermissionManager;
 import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
+import com.android.server.appsearch.util.PackageManagerUtil;
 import com.android.server.appsearch.util.PackageUtil;
 
 import java.util.Objects;
@@ -129,12 +130,10 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
             }
 
             // Check that the package also has the matching certificate
-            if (mUserContext
-                    .getPackageManager()
-                    .hasSigningCertificate(
-                            packageNames[i],
-                            sha256Certs[i],
-                            PackageManager.CERT_INPUT_SHA256)) {
+            if (PackageManagerUtil.hasSigningCertificate(
+                    mUserContext,
+                    packageNames[i],
+                    sha256Certs[i])) {
                 // The caller has the right package name and right certificate!
                 return true;
             }
