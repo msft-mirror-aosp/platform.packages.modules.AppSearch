@@ -104,6 +104,10 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
         "icing_lite_index_sort_size";
     public static final String KEY_SHOULD_RETRIEVE_PARENT_INFO =
         "should_retrieve_parent_info";
+    public static final String KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX =
+        "use_new_qualified_id_join_index";
+    public static final String KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS =
+        "build_property_existence_metadata_hits";
 
     /**
      * This config does not need to be cached in FrameworkAppSearchConfigImpl as it is only accessed
@@ -147,6 +151,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
             KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
             KEY_ICING_LITE_INDEX_SORT_SIZE,
             KEY_SHOULD_RETRIEVE_PARENT_INFO,
+            KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX,
+            KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS,
     };
 
     // Lock needed for all the operations in this class.
@@ -549,6 +555,22 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     }
 
     @Override
+    public boolean getUseNewQualifiedIdJoinIndex() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getBoolean(
+                KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX,
+                DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX);
+        }
+    }
+
+    @Override
+    public boolean getBuildPropertyExistenceMetadataHits() {
+        // TODO(b/309826655) Set this value properly in main branch
+        return false; // We never turn this feature on in udc-mainline-prod
+    }
+
+    @Override
     public boolean shouldStoreParentInfoAsSyntheticProperty() {
       // This option is always true in Framework.
       return true;
@@ -773,6 +795,15 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
                             DEFAULT_SHOULD_RETRIEVE_PARENT_INFO));
                 }
                 break;
+            case KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX:
+                synchronized (mLock) {
+                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
+                            DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX));
+                }
+                break;
+            case KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS:
+                // TODO(b/309826655) Set this value properly in main branch
+                // fall throw to default since we never turn this feature on in udc-mainline-prod
             default:
                 break;
         }

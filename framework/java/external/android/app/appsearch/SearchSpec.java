@@ -1199,8 +1199,7 @@ public final class SearchSpec {
         }
 
         /**
-         * Sets the NUMERIC_SEARCH feature as enabled/disabled according to the
-         * enabled parameter.
+         * Sets the NUMERIC_SEARCH feature as enabled/disabled according to the enabled parameter.
          *
          * @param enabled Enables the feature if true, otherwise disables it.
          *     <p>If disabled, disallows use of {@link
@@ -1214,8 +1213,7 @@ public final class SearchSpec {
         }
 
         /**
-         * Sets the VERBATIM_SEARCH feature as enabled/disabled according to the
-         * enabled parameter.
+         * Sets the VERBATIM_SEARCH feature as enabled/disabled according to the enabled parameter.
          *
          * @param enabled Enables the feature if true, otherwise disables it
          *     <p>If disabled, disallows use of {@link
@@ -1232,8 +1230,8 @@ public final class SearchSpec {
         }
 
         /**
-         * Sets the LIST_FILTER_QUERY_LANGUAGE feature as enabled/disabled
-         * according to the enabled parameter.
+         * Sets the LIST_FILTER_QUERY_LANGUAGE feature as enabled/disabled according to the enabled
+         * parameter.
          *
          * @param enabled Enables the feature if true, otherwise disables it.
          *     <p>This feature covers the expansion of the query language to conform to the
