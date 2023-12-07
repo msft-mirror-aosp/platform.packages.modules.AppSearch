@@ -1,8 +1,13 @@
 package: "com.android.appsearch.flags"
 
+#
+# all the flags we are adding in V have to be is_fixed_read_only true.
+#
+
 flag {
     name: "enable_safe_parcelable"
     namespace: "appsearch"
     description: "Use SafeParcelable to serialize data through binder"
     bug: "275629842"
+    is_fixed_read_only: true
 }
