@@ -16,6 +16,10 @@
 
 package android.app.appsearch.safeparcel;
 
+import android.annotation.FlaggedApi;
+import android.app.appsearch.flags.Flags;
+
+
 /**
  * Implements {@link SafeParcelable} and implements some default methods defined by {@link
  * android.os.Parcelable}.
@@ -24,7 +28,9 @@ package android.app.appsearch.safeparcel;
  */
 // Include the SafeParcel source code directly in AppSearch until it gets officially open-sourced.
 public abstract class AbstractSafeParcelable implements SafeParcelable {
+
     /** @hide */
+    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE)
     @Override
     public final int describeContents() {
         return 0;
