@@ -39,7 +39,7 @@ public final class SchemaMigrationStats extends AbstractSafeParcelable {
     @NonNull
     public static final SchemaMigrationStatsCreator CREATOR = new SchemaMigrationStatsCreator();
 
-    // Indicate how a SetSchema call relative to SchemaMigration case.
+    // Indicate the how a SetSchema call relative to SchemaMigration case.
     @IntDef(
             value = {
                 NO_MIGRATION,
