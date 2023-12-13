@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
+import android.app.appsearch.testutil.FakeAppSearchConfig;
 
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
@@ -131,8 +132,7 @@ public class AdbDumpUtilTest {
     @Test
     public void testDesensitizeRealDebugInfo() throws Exception {
         AppSearchImpl appSearchImpl = AppSearchImpl.create(mTemporaryFolder.newFolder(),
-                new UnlimitedLimitConfig(),
-                new DefaultIcingOptionsConfig(),
+                new FakeAppSearchConfig(),
                 /*initStatsBuilder=*/ null, optimizeInfo -> true,
                 /*visibilityChecker=*/ null);
         List<AppSearchSchema> schemas = Collections.singletonList(new AppSearchSchema.Builder(

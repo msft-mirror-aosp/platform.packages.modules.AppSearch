@@ -164,15 +164,16 @@ public class SchemaToProtoConverterTest {
                                         .setJoinableValueType(
                                                 AppSearchSchema.StringPropertyConfig
                                                         .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                                        // TODO(b/274157614): Export this to framework when we can
+                                        // access hidden
+                                        //  APIs.
+
                                         .build())
                         .build();
 
         JoinableConfig joinableConfig =
                 JoinableConfig.newBuilder()
                         .setValueType(JoinableConfig.ValueType.Code.QUALIFIED_ID)
-                        // TODO(b/291122592): Switch this to 'true' and update assertions when
-                        //  deletion propagation APIs are exposed
-                        .setPropagateDelete(false)
                         .build();
 
         SchemaTypeConfigProto expectedAlbumProto =
@@ -216,19 +217,10 @@ public class SchemaToProtoConverterTest {
                         .addParentTypes("Email")
                         .addParentTypes("Message")
                         .build();
-        SchemaTypeConfigProto alternativeExpectedSchemaProto =
-                SchemaTypeConfigProto.newBuilder()
-                        .setSchemaType("EmailMessage")
-                        .setVersion(12345)
-                        .addParentTypes("Message")
-                        .addParentTypes("Email")
-                        .build();
 
         assertThat(SchemaToProtoConverter.toSchemaTypeConfigProto(schema, /*version=*/ 12345))
-                .isAnyOf(expectedSchemaProto, alternativeExpectedSchemaProto);
+                .isEqualTo(expectedSchemaProto);
         assertThat(SchemaToProtoConverter.toAppSearchSchema(expectedSchemaProto)).isEqualTo(schema);
-        assertThat(SchemaToProtoConverter.toAppSearchSchema(alternativeExpectedSchemaProto))
-                .isEqualTo(schema);
     }
 
     @Test

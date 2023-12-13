@@ -69,13 +69,19 @@ public class GenericDocument {
     private static final String TTL_MILLIS_FIELD = "ttlMillis";
     private static final String CREATION_TIMESTAMP_MILLIS_FIELD = "creationTimestampMillis";
     private static final String NAMESPACE_FIELD = "namespace";
+    private static final String PARENT_TYPES_FIELD = "parentTypes";
+
+    /** @hide */
+    public static final String PARENT_TYPES_SYNTHETIC_PROPERTY = "$$__AppSearch__parentTypes";
 
     /**
      * The maximum number of indexed properties a document can have.
      *
      * <p>Indexed properties are properties which are strings where the {@link
      * AppSearchSchema.StringPropertyConfig#getIndexingType} value is anything other than {@link
-     * AppSearchSchema.StringPropertyConfig#INDEXING_TYPE_NONE}.
+     * AppSearchSchema.StringPropertyConfig#INDEXING_TYPE_NONE}, as well as long properties where
+     * the {@link AppSearchSchema.LongPropertyConfig#getIndexingType} value is {@link
+     * AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE}.
      */
     public static int getMaxIndexedProperties() {
         return MAX_INDEXED_PROPERTIES;
@@ -149,6 +155,22 @@ public class GenericDocument {
     @NonNull
     public String getSchemaType() {
         return mSchemaType;
+    }
+
+    /**
+     * Returns the list of parent types of the {@link GenericDocument}'s type.
+     *
+     * <p>It is guaranteed that child types appear before parent types in the list.
+     *
+     * @hide
+     */
+    @Nullable
+    public List<String> getParentTypes() {
+        List<String> result = mBundle.getStringArrayList(PARENT_TYPES_FIELD);
+        if (result == null) {
+            return null;
+        }
+        return Collections.unmodifiableList(result);
     }
 
     /**
@@ -865,10 +887,13 @@ public class GenericDocument {
      *
      * <p>The returned builder is a deep copy whose data is separate from this document.
      *
+     * @deprecated This API is not compliant with API guidelines. Use {@link
+     *     Builder#Builder(GenericDocument)} instead.
      * @hide
      */
     // TODO(b/171882200): Expose this API in Android T
     @NonNull
+    @Deprecated
     public GenericDocument.Builder<GenericDocument.Builder<?>> toBuilder() {
         Bundle clonedBundle = BundleUtil.deepCopy(mBundle);
         return new GenericDocument.Builder<>(clonedBundle);
@@ -917,6 +942,10 @@ public class GenericDocument {
         builder.append("id: \"").append(getId()).append("\",\n");
         builder.append("score: ").append(getScore()).append(",\n");
         builder.append("schemaType: \"").append(getSchemaType()).append("\",\n");
+        List<String> parentTypes = getParentTypes();
+        if (parentTypes != null) {
+            builder.append("parentTypes: ").append(parentTypes).append("\n");
+        }
         builder.append("creationTimestampMillis: ")
                 .append(getCreationTimestampMillis())
                 .append(",\n");
@@ -973,7 +1002,6 @@ public class GenericDocument {
                 builder.append("\n");
                 builder.decreaseIndentLevel();
             }
-            builder.append("]");
         } else {
             int propertyArrLength = Array.getLength(property);
             for (int i = 0; i < propertyArrLength; i++) {
@@ -987,11 +1015,10 @@ public class GenericDocument {
                 }
                 if (i != propertyArrLength - 1) {
                     builder.append(", ");
-                } else {
-                    builder.append("]");
                 }
             }
         }
+        builder.append("]");
     }
 
     /**
@@ -1056,6 +1083,18 @@ public class GenericDocument {
         }
 
         /**
+         * Creates a new {@link GenericDocument.Builder} from the given GenericDocument.
+         *
+         * <p>The GenericDocument is deep copied, i.e. changes to the new GenericDocument returned
+         * by this function will NOT affect the original GenericDocument.
+         *
+         * @hide
+         */
+        public Builder(@NonNull GenericDocument document) {
+            this(BundleUtil.deepCopy(document.getBundle()));
+        }
+
+        /**
          * Sets the app-defined namespace this document resides in, changing the value provided in
          * the constructor. No special values are reserved or understood by the infrastructure.
          *
@@ -1105,6 +1144,23 @@ public class GenericDocument {
             Objects.requireNonNull(schemaType);
             resetIfBuilt();
             mBundle.putString(GenericDocument.SCHEMA_TYPE_FIELD, schemaType);
+            return mBuilderTypeInstance;
+        }
+
+        /**
+         * Sets the list of parent types of the {@link GenericDocument}'s type.
+         *
+         * <p>Child types must appear before parent types in the list.
+         *
+         * @hide
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        public BuilderType setParentTypes(@NonNull List<String> parentTypes) {
+            Objects.requireNonNull(parentTypes);
+            resetIfBuilt();
+            mBundle.putStringArrayList(
+                    GenericDocument.PARENT_TYPES_FIELD, new ArrayList<>(parentTypes));
             return mBuilderTypeInstance;
         }
 

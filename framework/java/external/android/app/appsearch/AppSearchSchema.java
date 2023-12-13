@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -181,7 +182,7 @@ public final class AppSearchSchema {
     public static final class Builder {
         private final String mSchemaType;
         private ArrayList<Bundle> mPropertyBundles = new ArrayList<>();
-        private ArraySet<String> mParentTypes = new ArraySet<>();
+        private LinkedHashSet<String> mParentTypes = new LinkedHashSet<>();
         private final Set<String> mPropertyNames = new ArraySet<>();
         private boolean mBuilt = false;
 
@@ -289,7 +290,7 @@ public final class AppSearchSchema {
         private void resetIfBuilt() {
             if (mBuilt) {
                 mPropertyBundles = new ArrayList<>(mPropertyBundles);
-                mParentTypes = new ArraySet<>(mParentTypes);
+                mParentTypes = new LinkedHashSet<>(mParentTypes);
                 mBuilt = false;
             }
         }
@@ -1342,7 +1343,7 @@ public final class AppSearchSchema {
              *
              * @throws IllegalArgumentException if the provided PropertyConfig sets {@link
              *     #shouldIndexNestedProperties()} to true and has one or more properties defined
-             *     for {@link #getIndexableNestedProperties()}.
+             *     using {@link #addIndexableNestedProperties(Collection)}.
              */
             @NonNull
             public DocumentPropertyConfig build() {
@@ -1378,12 +1379,9 @@ public final class AppSearchSchema {
                     .append(shouldIndexNestedProperties())
                     .append(",\n");
 
-            List<String> indexableNestedProperties = getIndexableNestedProperties();
-            if (!indexableNestedProperties.isEmpty()) {
-                builder.append("indexableNestedProperties: ")
-                        .append(indexableNestedProperties)
-                        .append(",\n");
-            }
+            builder.append("indexableNestedProperties: ")
+                    .append(getIndexableNestedProperties())
+                    .append(",\n");
 
             builder.append("schemaType: \"").append(getSchemaType()).append("\",\n");
         }
