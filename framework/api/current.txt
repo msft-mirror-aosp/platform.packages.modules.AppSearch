@@ -467,8 +467,11 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSpec.Builder setVerbatimSearchEnabled(boolean);
   }
 
-  public final class SearchSuggestionResult {
+  public final class SearchSuggestionResult implements android.os.Parcelable {
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") public final int describeContents();
     method @NonNull public String getSuggestedResult();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.SearchSuggestionResult> CREATOR;
   }
 
   public static final class SearchSuggestionResult.Builder {

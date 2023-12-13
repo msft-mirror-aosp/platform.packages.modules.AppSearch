@@ -312,8 +312,8 @@ interface IAppSearchManager {
      * @param searchSuggestionSpecBundle SearchSuggestionSpec bundle
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param callback {@link AppSearchResult}&lt;List&lt;{@link Bundle}&gt; of performing this
-     *   operation. List contains SearchSuggestionResult bundles.
+     * @param callback {@link AppSearchResult}&lt;List&lt;{@link SearchSuggestionResult}&gt; of
+     *   performing this operation.
      */
     void searchSuggestion(
             in AppSearchAttributionSource callerAttributionSource,

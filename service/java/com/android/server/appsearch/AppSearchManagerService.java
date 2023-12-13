@@ -1493,16 +1493,10 @@ public class AppSearchManagerService extends SystemService {
                                     databaseName,
                                     searchQueryExpression,
                                     new SearchSuggestionSpec(searchSuggestionSpecBundle));
-                    List<Bundle> searchSuggestionResultBundles =
-                            new ArrayList<>(searchSuggestionResults.size());
-                    for (int i = 0; i < searchSuggestionResults.size(); i++) {
-                        searchSuggestionResultBundles.add(
-                                searchSuggestionResults.get(i).getBundle());
-                    }
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
-                            AppSearchResult.newSuccessfulResult(searchSuggestionResultBundles));
+                            AppSearchResult.newSuccessfulResult(searchSuggestionResults));
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
