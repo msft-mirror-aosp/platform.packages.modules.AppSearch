@@ -566,8 +566,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
 
     @Override
     public boolean getBuildPropertyExistenceMetadataHits() {
-        // TODO(b/309826655) Set this value properly in main branch
-        return false; // We never turn this feature on in udc-mainline-prod
+        // This option is always true in Framework due to trunk stable frozen flags.
+        return true;
     }
 
     @Override

@@ -192,6 +192,7 @@ package android.app.appsearch {
 
   public static class GenericDocument.Builder<BuilderType extends android.app.appsearch.GenericDocument.Builder> {
     ctor public GenericDocument.Builder(@NonNull String, @NonNull String, @NonNull String);
+    ctor @FlaggedApi("com.android.appsearch.flags.enable_generic_document_copy_constructor") public GenericDocument.Builder(@NonNull android.app.appsearch.GenericDocument);
     method @NonNull public android.app.appsearch.GenericDocument build();
     method @NonNull public BuilderType setCreationTimestampMillis(long);
     method @NonNull public BuilderType setPropertyBoolean(@NonNull String, @NonNull boolean...);
@@ -417,11 +418,13 @@ package android.app.appsearch {
     method public int getSnippetCount();
     method public int getSnippetCountPerProperty();
     method public int getTermMatch();
+    method @FlaggedApi("com.android.appsearch.flags.enable_list_filter_has_property_function") public boolean isListFilterHasPropertyFunctionEnabled();
     method public boolean isListFilterQueryLanguageEnabled();
     method public boolean isNumericSearchEnabled();
     method public boolean isVerbatimSearchEnabled();
     field public static final int GROUPING_TYPE_PER_NAMESPACE = 2; // 0x2
     field public static final int GROUPING_TYPE_PER_PACKAGE = 1; // 0x1
+    field @FlaggedApi("com.android.appsearch.flags.enable_grouping_type_per_schema") public static final int GROUPING_TYPE_PER_SCHEMA = 4; // 0x4
     field public static final int ORDER_ASCENDING = 1; // 0x1
     field public static final int ORDER_DESCENDING = 0; // 0x0
     field public static final String PROJECTION_SCHEMA_TYPE_WILDCARD = "*";
@@ -451,6 +454,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSpec.Builder addProjectionPaths(@NonNull String, @NonNull java.util.Collection<android.app.appsearch.PropertyPath>);
     method @NonNull public android.app.appsearch.SearchSpec build();
     method @NonNull public android.app.appsearch.SearchSpec.Builder setJoinSpec(@NonNull android.app.appsearch.JoinSpec);
+    method @FlaggedApi("com.android.appsearch.flags.enable_list_filter_has_property_function") @NonNull public android.app.appsearch.SearchSpec.Builder setListFilterHasPropertyFunctionEnabled(boolean);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setListFilterQueryLanguageEnabled(boolean);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setMaxSnippetSize(@IntRange(from=0, to=0x2710) int);
     method @NonNull public android.app.appsearch.SearchSpec.Builder setNumericSearchEnabled(boolean);

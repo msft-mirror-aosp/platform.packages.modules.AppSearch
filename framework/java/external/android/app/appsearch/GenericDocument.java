@@ -17,12 +17,14 @@
 package android.app.appsearch;
 
 import android.annotation.CurrentTimeMillisLong;
+import android.annotation.FlaggedApi;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.appsearch.PropertyPath.PathSegment;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
+import android.app.appsearch.flags.Flags;
 import android.app.appsearch.util.BundleUtil;
 import android.app.appsearch.util.IndentingStringBuilder;
 import android.os.Bundle;
@@ -1087,9 +1089,8 @@ public class GenericDocument {
          *
          * <p>The GenericDocument is deep copied, i.e. changes to the new GenericDocument returned
          * by this function will NOT affect the original GenericDocument.
-         *
-         * @hide
          */
+        @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_COPY_CONSTRUCTOR)
         public Builder(@NonNull GenericDocument document) {
             this(BundleUtil.deepCopy(document.getBundle()));
         }
