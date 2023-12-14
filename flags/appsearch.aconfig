@@ -19,3 +19,11 @@ flag {
     bug: "258715421"
     is_fixed_read_only: true
 }
+
+flag {
+    name: "enable_generic_document_copy_constructor"
+    namespace: "appsearch"
+    description: "Enable GenericDocument to take another GenericDocument to copy construct."
+    bug: "171882200"
+    is_fixed_read_only: true
+}
