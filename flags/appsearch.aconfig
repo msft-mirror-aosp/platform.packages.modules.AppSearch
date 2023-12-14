@@ -11,3 +11,11 @@ flag {
     bug: "275629842"
     is_fixed_read_only: true
 }
+
+flag {
+    name: "enable_grouping_type_per_schema"
+    namespace: "appsearch"
+    description: "Enable result grouping by schema type"
+    bug: "258715421"
+    is_fixed_read_only: true
+}
