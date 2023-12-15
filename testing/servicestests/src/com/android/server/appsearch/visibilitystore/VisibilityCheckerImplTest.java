@@ -25,9 +25,7 @@ import static android.Manifest.permission.READ_HOME_APP_SEARCH_DATA;
 import static android.Manifest.permission.READ_SMS;
 import static android.content.pm.PackageManager.PERMISSION_DENIED;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
-
 import static com.google.common.truth.Truth.assertThat;
-
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -39,33 +37,25 @@ import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.testutil.FakeAppSearchConfig;
-import android.content.AttributionSource;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.pm.PackageManager;
 import android.os.UserHandle;
 import android.util.ArrayMap;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
-
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
-import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
-import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
-
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-
+import java.util.Map;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.Mockito;
-
-import java.util.Map;
 
 public class VisibilityCheckerImplTest {
     /**

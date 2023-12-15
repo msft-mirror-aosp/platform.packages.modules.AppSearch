@@ -23,6 +23,7 @@ import static com.android.server.appsearch.external.localstorage.util.PrefixUtil
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.FeatureConstants;
 import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchResult;
 import android.app.appsearch.SearchSpec;
@@ -338,19 +339,30 @@ public final class SearchSpecToProtoConverter {
             protoBuilder.setJoinSpec(joinSpecProtoBuilder);
         }
 
+        if (mSearchSpec.isListFilterHasPropertyFunctionEnabled()
+                && !mIcingOptionsConfig.getBuildPropertyExistenceMetadataHits()) {
+            // This condition should never be reached as long as Features.isFeatureSupported() is
+            // consistent with IcingOptionsConfig.
+            throw new UnsupportedOperationException(
+                    FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION
+                            + " is currently not operational because the building process for the "
+                            + "associated metadata has not yet been turned on.");
+        }
+
         // TODO(b/208654892) Remove this field once EXPERIMENTAL_ICING_ADVANCED_QUERY is fully
         //  supported.
         boolean turnOnIcingAdvancedQuery =
                 mSearchSpec.isNumericSearchEnabled()
                         || mSearchSpec.isVerbatimSearchEnabled()
-                        || mSearchSpec.isListFilterQueryLanguageEnabled();
+                        || mSearchSpec.isListFilterQueryLanguageEnabled()
+                        || mSearchSpec.isListFilterHasPropertyFunctionEnabled();
         if (turnOnIcingAdvancedQuery) {
             protoBuilder.setSearchType(
                     SearchSpecProto.SearchType.Code.EXPERIMENTAL_ICING_ADVANCED_QUERY);
         }
 
         // Set enabled features
-        protoBuilder.addAllEnabledFeatures(mSearchSpec.getEnabledFeatures());
+        protoBuilder.addAllEnabledFeatures(toIcingSearchFeatures(mSearchSpec.getEnabledFeatures()));
 
         return protoBuilder.build();
     }
@@ -551,6 +563,26 @@ public final class SearchSpecToProtoConverter {
                 throw new IllegalArgumentException(
                         "Invalid result ranking strategy: " + rankingStrategyCode);
         }
+    }
+
+    /**
+     * Maps a list of AppSearch search feature strings to the list of the corresponding Icing
+     * feature strings.
+     *
+     * @param appSearchFeatures The list of AppSearch search feature strings.
+     */
+    @NonNull
+    private static List<String> toIcingSearchFeatures(@NonNull List<String> appSearchFeatures) {
+        List<String> result = new ArrayList<>();
+        for (int i = 0; i < appSearchFeatures.size(); i++) {
+            String appSearchFeature = appSearchFeatures.get(i);
+            if (appSearchFeature.equals(FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION)) {
+                result.add("HAS_PROPERTY_FUNCTION");
+            } else {
+                result.add(appSearchFeature);
+            }
+        }
+        return result;
     }
 
     /**

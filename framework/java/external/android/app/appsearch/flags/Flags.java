@@ -39,10 +39,42 @@ public final class Flags {
     //
     // The name of the each static variable should be "FLAG_" + capitalized value of the flag.
 
-    /**
-     * Enable SafeParcelable related features.
-     *
-     * @hide
-     */
+    /** Enable SafeParcelable related features. */
     public static final String FLAG_ENABLE_SAFE_PARCELABLE = FLAG_PREFIX + "enable_safe_parcelable";
+
+    /** Enable the "hasProperty" function in list filter query expressions. */
+    public static final String FLAG_ENABLE_LIST_FILTER_HAS_PROPERTY_FUNCTION =
+            FLAG_PREFIX + "enable_list_filter_has_property_function";
+
+    /** Enable Schema Type Grouping related features. */
+    public static final String FLAG_ENABLE_GROUPING_TYPE_PER_SCHEMA =
+            FLAG_PREFIX + "enable_grouping_type_per_schema";
+
+    /** Enable GenericDocument to take another GenericDocument to copy construct. */
+    public static final String FLAG_ENABLE_GENERIC_DOCUMENT_COPY_CONSTRUCTOR =
+            FLAG_PREFIX + "enable_generic_document_copy_constructor";
+
+    // Whether the features should be enabled.
+    //
+    // In Jetpack, those should always return true.
+
+    /** Whether SafeParcelable should be enabled. */
+    public static boolean enableSafeParcelable() {
+        return true;
+    }
+
+    /** Whether the "hasProperty" function in list filter query expressions should be enabled. */
+    public static boolean enableListFilterHasPropertyFunction() {
+        return true;
+    }
+
+    /** Whether Schema Type Grouping should be enabled. */
+    public static boolean enableGroupingTypePerSchema() {
+        return true;
+    }
+
+    /** Whether Generic Document Copy Constructing should be enabled. */
+    public static boolean enableGenericDocumentCopyConstructor() {
+        return true;
+    }
 }
