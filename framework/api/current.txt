@@ -64,6 +64,7 @@ package android.app.appsearch {
 
   public static final class AppSearchSchema.Builder {
     ctor public AppSearchSchema.Builder(@NonNull String);
+    method @NonNull public android.app.appsearch.AppSearchSchema.Builder addParentType(@NonNull String);
     method @NonNull public android.app.appsearch.AppSearchSchema.Builder addProperty(@NonNull android.app.appsearch.AppSearchSchema.PropertyConfig);
     method @NonNull public android.app.appsearch.AppSearchSchema build();
   }
@@ -84,6 +85,7 @@ package android.app.appsearch {
 
   public static final class AppSearchSchema.DocumentPropertyConfig.Builder {
     ctor public AppSearchSchema.DocumentPropertyConfig.Builder(@NonNull String, @NonNull String);
+    method @NonNull public android.app.appsearch.AppSearchSchema.DocumentPropertyConfig.Builder addIndexableNestedProperties(@NonNull java.util.Collection<java.lang.String>);
     method @NonNull public android.app.appsearch.AppSearchSchema.DocumentPropertyConfig build();
     method @NonNull public android.app.appsearch.AppSearchSchema.DocumentPropertyConfig.Builder setCardinality(int);
     method @NonNull public android.app.appsearch.AppSearchSchema.DocumentPropertyConfig.Builder setShouldIndexNestedProperties(boolean);
