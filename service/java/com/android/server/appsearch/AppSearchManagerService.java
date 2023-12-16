@@ -35,7 +35,6 @@ import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchMigrationHelper;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
-import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
@@ -57,7 +56,6 @@ import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.LogUtil;
-import android.content.AttributionSource;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -84,11 +82,10 @@ import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
-import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.AdbDumpUtil;
+import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.ExceptionUtil;
 import com.android.server.appsearch.util.ExecutorManager;
-import com.android.server.appsearch.util.RateLimitedExecutor;
 import com.android.server.appsearch.util.ServiceImplHelper;
 import com.android.server.appsearch.visibilitystore.FrameworkCallerAccess;
 import com.android.server.usage.StorageStatsManagerLocal;
@@ -1496,16 +1493,10 @@ public class AppSearchManagerService extends SystemService {
                                     databaseName,
                                     searchQueryExpression,
                                     new SearchSuggestionSpec(searchSuggestionSpecBundle));
-                    List<Bundle> searchSuggestionResultBundles =
-                            new ArrayList<>(searchSuggestionResults.size());
-                    for (int i = 0; i < searchSuggestionResults.size(); i++) {
-                        searchSuggestionResultBundles.add(
-                                searchSuggestionResults.get(i).getBundle());
-                    }
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
-                            AppSearchResult.newSuccessfulResult(searchSuggestionResultBundles));
+                            AppSearchResult.newSuccessfulResult(searchSuggestionResults));
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -1880,10 +1871,9 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     StorageInfo storageInfo = instance.getAppSearchImpl().getStorageInfoForDatabase(
                             callingPackageName, databaseName);
-                    Bundle storageInfoBundle = storageInfo.getBundle();
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
-                            callback, AppSearchResult.newSuccessfulResult(storageInfoBundle));
+                            callback, AppSearchResult.newSuccessfulResult(storageInfo));
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);

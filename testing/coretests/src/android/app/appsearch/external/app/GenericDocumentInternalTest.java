@@ -107,4 +107,32 @@ public class GenericDocumentInternalTest {
         assertThat(outDoc.getPropertyDocument("propDocument").getPropertyBytesArray("propBytes"))
                 .isEqualTo(new byte[][] {{3, 4}});
     }
+
+    @Test
+    public void testGenericDocumentBuilderDoesNotMutateOriginal() {
+        GenericDocument oldDoc =
+                new GenericDocument.Builder<>("namespace", "id1", "schema1")
+                        .setParentTypes(new ArrayList<>(Arrays.asList("Class1", "Class2")))
+                        .setScore(42)
+                        .setPropertyString("propString", "Hello")
+                        .build();
+
+        GenericDocument newDoc =
+                new GenericDocument.Builder<>(oldDoc)
+                        .setParentTypes(new ArrayList<>(Arrays.asList("Class3", "Class4")))
+                        .setPropertyString("propString", "Bye")
+                        .build();
+
+        // Check that the original GenericDocument is unmodified.
+        assertThat(oldDoc.getParentTypes()).isEqualTo(Arrays.asList("Class1", "Class2"));
+        assertThat(oldDoc.getScore()).isEqualTo(42);
+        assertThat(oldDoc.getPropertyString("propString")).isEqualTo("Hello");
+
+        // Check that the new GenericDocument has modified the original fields correctly.
+        assertThat(newDoc.getParentTypes()).isEqualTo(Arrays.asList("Class3", "Class4"));
+        assertThat(newDoc.getPropertyString("propString")).isEqualTo("Bye");
+
+        // Check that the new GenericDocument copies fields that aren't set.
+        assertThat(oldDoc.getScore()).isEqualTo(newDoc.getScore());
+    }
 }
