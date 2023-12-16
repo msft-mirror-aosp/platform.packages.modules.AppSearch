@@ -16,6 +16,7 @@
 
 package android.app.appsearch;
 
+import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
@@ -23,6 +24,7 @@ import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.flags.Flags;
 import android.app.appsearch.util.BundleUtil;
 import android.os.Bundle;
 import android.util.ArrayMap;
@@ -214,9 +216,8 @@ public final class SearchSpec {
     /**
      * Results should be grouped together by schema type for the purpose of enforcing a limit on the
      * number of results returned per schema type.
-     *
-     * @hide TODO(b/291122592): Unhide in Mainline when API updates via Mainline are possible.
      */
+    @FlaggedApi(Flags.FLAG_ENABLE_GROUPING_TYPE_PER_SCHEMA)
     public static final int GROUPING_TYPE_PER_SCHEMA = 1 << 2;
 
     private final Bundle mBundle;
@@ -500,6 +501,12 @@ public final class SearchSpec {
     /** Returns whether the LIST_FILTER_QUERY_LANGUAGE feature is enabled. */
     public boolean isListFilterQueryLanguageEnabled() {
         return getEnabledFeatures().contains(FeatureConstants.LIST_FILTER_QUERY_LANGUAGE);
+    }
+
+    /** Returns whether the LIST_FILTER_HAS_PROPERTY_FUNCTION feature is enabled. */
+    @FlaggedApi(Flags.FLAG_ENABLE_LIST_FILTER_HAS_PROPERTY_FUNCTION)
+    public boolean isListFilterHasPropertyFunctionEnabled() {
+        return getEnabledFeatures().contains(FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION);
     }
 
     /**
@@ -1257,6 +1264,21 @@ public final class SearchSpec {
         @NonNull
         public Builder setListFilterQueryLanguageEnabled(boolean enabled) {
             modifyEnabledFeature(FeatureConstants.LIST_FILTER_QUERY_LANGUAGE, enabled);
+            return this;
+        }
+
+        /**
+         * Sets the LIST_FILTER_HAS_PROPERTY_FUNCTION feature as enabled/disabled according to the
+         * enabled parameter.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it
+         *     <p>If disabled, disallows the use of the "hasProperty" function. See {@link
+         *     AppSearchSession#search} for more details about the function.
+         */
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_LIST_FILTER_HAS_PROPERTY_FUNCTION)
+        public Builder setListFilterHasPropertyFunctionEnabled(boolean enabled) {
+            modifyEnabledFeature(FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION, enabled);
             return this;
         }
 

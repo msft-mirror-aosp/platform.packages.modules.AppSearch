@@ -5,7 +5,7 @@ package: "com.android.appsearch.flags"
 #
 
 flag {
-    name: "enable_safe_parcelable"
+    name: "enable_safe_parcelable_2"
     namespace: "appsearch"
     description: "Use SafeParcelable to serialize data through binder"
     bug: "275629842"
@@ -17,5 +17,13 @@ flag {
     namespace: "appsearch"
     description: "Enable result grouping by schema type"
     bug: "258715421"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_generic_document_copy_constructor"
+    namespace: "appsearch"
+    description: "Enable GenericDocument to take another GenericDocument to copy construct."
+    bug: "171882200"
     is_fixed_read_only: true
 }

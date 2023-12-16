@@ -23,7 +23,7 @@ import android.app.appsearch.SearchResult;
 import android.app.appsearch.SearchResultPage;
 
 import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
-import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
+import com.android.server.appsearch.external.localstorage.LocalStorageIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.icing.proto.DocumentProto;
@@ -105,7 +105,7 @@ public class SnippetTest {
                         searchResultProto,
                         SCHEMA_MAP,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()));
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match.getPropertyPath()).isEqualTo(propertyKeyString);
@@ -154,7 +154,7 @@ public class SnippetTest {
                         searchResultProto,
                         SCHEMA_MAP,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()));
         assertThat(searchResultPage.getResults()).hasSize(1);
         assertThat(searchResultPage.getResults().get(0).getMatchInfos()).isEmpty();
     }
@@ -223,7 +223,7 @@ public class SnippetTest {
                         searchResultProto,
                         SCHEMA_MAP,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()));
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match1 = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match1.getPropertyPath()).isEqualTo("senderName");
@@ -327,7 +327,7 @@ public class SnippetTest {
                         searchResultProto,
                         SCHEMA_MAP,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()));
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match1 = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match1.getPropertyPath()).isEqualTo("sender.name");

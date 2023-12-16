@@ -17,69 +17,64 @@
 package com.android.server.appsearch;
 
 import static com.android.internal.util.ConcurrentUtils.DIRECT_EXECUTOR;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_SAMPLING_INTERVAL;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_BYTES_OPTIMIZE_THRESHOLD;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD;
 import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_API_CALL_STATS_LIMIT;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_BYTES_OPTIMIZE_THRESHOLD;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD;
 import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_ENABLED;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
-import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
 import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT;
 import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LITE_INDEX_SORT_AT_INDEXING;
 import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_LITE_INDEX_SORT_SIZE;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_PUT_DOCUMENT_STATS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_DEFAULT;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_BATCH_CALL_STATS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_INITIALIZE_STATS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_SEARCH_STATS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_GLOBAL_SEARCH_STATS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_OPTIMIZE_STATS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_BYTES_OPTIMIZE_THRESHOLD;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_ENABLED;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_SAMPLING_INTERVAL;
+import static com.android.server.appsearch.FrameworkAppSearchConfig.DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_API_CALL_STATS_LIMIT;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_BYTES_OPTIMIZE_THRESHOLD;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_DENYLIST;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_MAX_TOKEN_LENGTH;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_INDEX_MERGE_SIZE;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_DOC_COUNT_OPTIMIZE_THRESHOLD;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_COMPRESSION_LEVEL;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_USE_READ_ONLY_SEARCH;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_USE_PERSISTENT_HASHMAP;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_MAX_PAGE_BYTES_LIMIT;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_INDEX_MERGE_SIZE;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_LITE_INDEX_SORT_AT_INDEXING;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_LITE_INDEX_SORT_SIZE;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_ENABLED;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_MAX_PAGE_BYTES_LIMIT;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_MAX_TOKEN_LENGTH;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_USE_PERSISTENT_HASHMAP;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_ICING_USE_READ_ONLY_SEARCH;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_API_COSTS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_ENABLED;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_DEFAULT;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_BATCH_CALL_STATS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_GLOBAL_SEARCH_STATS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_INITIALIZE_STATS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_OPTIMIZE_STATS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_PUT_DOCUMENT_STATS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_SAMPLING_INTERVAL_FOR_SEARCH_STATS;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX;
-
-import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_BUILD_PROPERTY_EXISTENCE_METADATA_HITS;
 import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX;
 import static com.google.common.truth.Truth.assertThat;
 
 import android.provider.DeviceConfig;
-
 import com.android.modules.utils.testing.TestableDeviceConfig;
 import com.android.server.appsearch.external.localstorage.AppSearchConfig;
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
-
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -167,8 +162,6 @@ public class FrameworkAppSearchConfigTest {
         assertThat(appSearchConfig.getLiteIndexSortSize()).isEqualTo(DEFAULT_LITE_INDEX_SORT_SIZE);
         assertThat(appSearchConfig.getUseNewQualifiedIdJoinIndex())
             .isEqualTo(DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX);
-        assertThat(appSearchConfig.getBuildPropertyExistenceMetadataHits())
-            .isEqualTo(DEFAULT_BUILD_PROPERTY_EXISTENCE_METADATA_HITS);
     }
 
     @Test
@@ -855,18 +848,6 @@ public class FrameworkAppSearchConfigTest {
             KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX, Boolean.toString(false), false);
 
         assertThat(appSearchConfig.getUseNewQualifiedIdJoinIndex()).isEqualTo(false);
-    }
-
-    @Test
-    public void testCustomizedValue_hasProperty_alwaysFalse() {
-        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-            KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS, Boolean.toString(true), false);
-
-        FrameworkAppSearchConfig appSearchConfig =
-            FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
-
-        // We never turn on this flag in udc-mainline-prod.
-        assertThat(appSearchConfig.getBuildPropertyExistenceMetadataHits()).isEqualTo(false);
     }
 
     @Test

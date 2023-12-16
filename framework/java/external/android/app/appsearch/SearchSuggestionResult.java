@@ -23,7 +23,6 @@ import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
-import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
 
@@ -34,19 +33,19 @@ import java.util.Objects;
 /** The result class of the {@link AppSearchSession#searchSuggestion}. */
 @SafeParcelable.Class(creator = "SearchSuggestionResultCreator")
 public final class SearchSuggestionResult extends AbstractSafeParcelable {
+
     @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE)
-    @NonNull public static final Parcelable.Creator<SearchSuggestionResult> CREATOR =
+    @NonNull
+    public static final Parcelable.Creator<SearchSuggestionResult> CREATOR =
             new SearchSuggestionResultCreator();
 
-    private static final String SUGGESTED_RESULT_FIELD = "suggestedResult";
-    @Nullable private Integer mHashCode;
-
-    @SafeParcelable.Field(id = 1, getter = "getSuggestedResult")
+    @Field(id = 1, getter = "getSuggestedResult")
     private final String mSuggestedResult;
 
+    @Nullable private Integer mHashCode;
+
     @Constructor
-    SearchSuggestionResult(
-            @Param(id = 1) @NonNull String suggestedResult) {
+    SearchSuggestionResult(@Param(id = 1) String suggestedResult) {
         mSuggestedResult = Objects.requireNonNull(suggestedResult);
     }
 
@@ -105,8 +104,6 @@ public final class SearchSuggestionResult extends AbstractSafeParcelable {
         /** Build a {@link SearchSuggestionResult} object */
         @NonNull
         public SearchSuggestionResult build() {
-            Bundle bundle = new Bundle();
-            bundle.putString(SUGGESTED_RESULT_FIELD, mSuggestedResult);
             return new SearchSuggestionResult(mSuggestedResult);
         }
     }

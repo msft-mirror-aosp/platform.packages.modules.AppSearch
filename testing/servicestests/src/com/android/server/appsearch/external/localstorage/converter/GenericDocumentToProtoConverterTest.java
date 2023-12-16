@@ -21,7 +21,7 @@ import static com.google.common.truth.Truth.assertThat;
 import android.app.appsearch.GenericDocument;
 
 import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
-import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
+import com.android.server.appsearch.external.localstorage.LocalStorageIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.icing.proto.DocumentProto;
 import com.android.server.appsearch.icing.proto.PropertyConfigProto;
@@ -135,7 +135,7 @@ public class GenericDocumentToProtoConverterTest {
                         PREFIX,
                         SCHEMA_MAP,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(document);
 
@@ -242,7 +242,7 @@ public class GenericDocumentToProtoConverterTest {
                         PREFIX,
                         schemaMap,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(document);
         assertThat(convertedDocumentProto).isEqualTo(documentProto);
@@ -386,7 +386,7 @@ public class GenericDocumentToProtoConverterTest {
                         PREFIX,
                         schemaMap,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()));
         DocumentProto convertedDocumentProto =
                 GenericDocumentToProtoConverter.toDocumentProto(outerDocument);
         assertThat(convertedDocumentProto).isEqualTo(outerDocumentProto);
