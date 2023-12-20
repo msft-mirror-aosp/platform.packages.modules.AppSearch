@@ -34,7 +34,7 @@ import java.util.Objects;
 @SafeParcelable.Class(creator = "SearchSuggestionResultCreator")
 public final class SearchSuggestionResult extends AbstractSafeParcelable {
 
-    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE)
+    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)
     @NonNull
     public static final Parcelable.Creator<SearchSuggestionResult> CREATOR =
             new SearchSuggestionResultCreator();
@@ -108,7 +108,7 @@ public final class SearchSuggestionResult extends AbstractSafeParcelable {
         }
     }
 
-    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE)
+    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         SearchSuggestionResultCreator.writeToParcel(this, dest, flags);

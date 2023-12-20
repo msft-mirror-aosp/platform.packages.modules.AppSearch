@@ -679,6 +679,10 @@ public class AppSearchManagerService extends SystemService {
                             new AppSearchBatchResult.Builder<>();
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     List<GenericDocument> documents = documentsParcel.getDocuments();
+                    List<GenericDocument> takenActionDocuments =
+                            documentsParcel.getTakenActionGenericDocuments();
+
+                    // Write GenericDocuments
                     for (int i = 0; i < documents.size(); i++) {
                         GenericDocument document = documents.get(i);
                         try {
@@ -701,6 +705,31 @@ public class AppSearchManagerService extends SystemService {
                             ++operationFailureCount;
                         }
                     }
+
+                    // Write TakenActions
+                    for (int i = 0; i < takenActionDocuments.size(); i++) {
+                        GenericDocument document = takenActionDocuments.get(i);
+                        try {
+                            instance.getAppSearchImpl().putDocument(
+                                    callingPackageName,
+                                    databaseName,
+                                    document,
+                                    /* sendChangeNotifications= */ true,
+                                    instance.getLogger());
+                            resultBuilder.setSuccess(document.getId(), /* value= */ null);
+                            ++operationSuccessCount;
+                        } catch (AppSearchException | RuntimeException e) {
+                            // We don't rethrow here, so we can keep trying with the
+                            // following documents.
+                            AppSearchResult<Void> result = throwableToFailedResult(e);
+                            resultBuilder.setResult(document.getId(), result);
+                            // Since we can only include one status code in the atom,
+                            // for failures, we would just save the one for the last failure
+                            statusCode = result.getResultCode();
+                            ++operationFailureCount;
+                        }
+                    }
+
                     // Now that the batch has been written. Persist the newly written data.
                     instance.getAppSearchImpl().persistToDisk(PersistType.Code.LITE);
                     invokeCallbackOnResult(callback, resultBuilder.build());
@@ -712,7 +741,9 @@ public class AppSearchManagerService extends SystemService {
                     // The existing documents with same ID will be deleted, so there may be some
                     // resources that could be released after optimize().
                     checkForOptimize(
-                            targetUser, instance, /* mutateBatchSize= */ documents.size());
+                            targetUser,
+                            instance,
+                            /* mutateBatchSize= */ documents.size() + takenActionDocuments.size());
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -1452,14 +1483,14 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String searchQueryExpression,
-                @NonNull Bundle searchSuggestionSpecBundle,
+                @NonNull SearchSuggestionSpec searchSuggestionSpec,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(searchQueryExpression);
-            Objects.requireNonNull(searchSuggestionSpecBundle);
+            Objects.requireNonNull(searchSuggestionSpec);
             Objects.requireNonNull(userHandle);
             Objects.requireNonNull(callback);
 
@@ -1492,7 +1523,7 @@ public class AppSearchManagerService extends SystemService {
                                     callingPackageName,
                                     databaseName,
                                     searchQueryExpression,
-                                    new SearchSuggestionSpec(searchSuggestionSpecBundle));
+                                    searchSuggestionSpec);
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
@@ -1985,13 +2016,13 @@ public class AppSearchManagerService extends SystemService {
         public AppSearchResultParcel<Void> registerObserverCallback(
                 @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
-                @NonNull Bundle observerSpecBundle,
+                @NonNull ObserverSpec observerSpec,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchObserverProxy observerProxyStub) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(targetPackageName);
-            Objects.requireNonNull(observerSpecBundle);
+            Objects.requireNonNull(observerSpec);
             Objects.requireNonNull(userHandle);
             Objects.requireNonNull(observerProxyStub);
 
@@ -2037,7 +2068,7 @@ public class AppSearchManagerService extends SystemService {
                             new FrameworkCallerAccess(
                                     callerAttributionSource, callerHasSystemAccess),
                             targetPackageName,
-                            new ObserverSpec(observerSpecBundle),
+                            observerSpec,
                             mExecutorManager.getOrCreateUserExecutor(targetUser),
                             new AppSearchObserverProxy(observerProxyStub));
                     ++operationSuccessCount;

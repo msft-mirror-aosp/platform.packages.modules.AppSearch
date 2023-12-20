@@ -404,7 +404,7 @@ public class GlobalSearchSession implements Closeable {
                 resultParcel = mService.registerObserverCallback(
                         mCallerAttributionSource,
                         targetPackageName,
-                        spec.getBundle(),
+                        spec,
                         mUserHandle,
                         /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                         stub);

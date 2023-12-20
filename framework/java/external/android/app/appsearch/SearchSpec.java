@@ -51,16 +51,17 @@ public final class SearchSpec {
     /**
      * Schema type to be used in {@link SearchSpec.Builder#addProjection} to apply property paths to
      * all results, excepting any types that have had their own, specific property paths set.
+     *
+     * @deprecated use {@link #SCHEMA_TYPE_WILDCARD} instead.
      */
-    public static final String PROJECTION_SCHEMA_TYPE_WILDCARD = "*";
+    @Deprecated public static final String PROJECTION_SCHEMA_TYPE_WILDCARD = "*";
 
     /**
      * Schema type to be used in {@link SearchSpec.Builder#addFilterProperties(String, Collection)}
-     * to apply property paths to all results, excepting any types that have had their own, specific
-     * property paths set.
-     *
-     * @hide
+     * and {@link SearchSpec.Builder#addProjection} to apply property paths to all results,
+     * excepting any types that have had their own, specific property paths set.
      */
+    @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_PROPERTIES)
     public static final String SCHEMA_TYPE_WILDCARD = "*";
 
     static final String TERM_MATCH_TYPE_FIELD = "termMatchType";
@@ -81,6 +82,7 @@ public final class SearchSpec {
     static final String JOIN_SPEC = "joinSpec";
     static final String ADVANCED_RANKING_EXPRESSION = "advancedRankingExpression";
     static final String ENABLED_FEATURES_FIELD = "enabledFeatures";
+    static final String SEARCH_SOURCE_LOG_TAG_FIELD = "searchSourceLogTag";
 
     /** @hide */
     public static final int DEFAULT_NUM_PER_PAGE = 10;
@@ -265,10 +267,9 @@ public final class SearchSpec {
      *
      * <p>Calling this function repeatedly is inefficient. Prefer to retain the Map returned by this
      * function, rather than calling it multiple times.
-     *
-     * @hide
      */
     @NonNull
+    @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_PROPERTIES)
     public Map<String, List<String>> getFilterProperties() {
         Bundle typePropertyPathsBundle = Objects.requireNonNull(mBundle.getBundle(PROPERTY_FIELD));
         Set<String> schemas = typePropertyPathsBundle.keySet();
@@ -488,6 +489,26 @@ public final class SearchSpec {
         return mBundle.getString(ADVANCED_RANKING_EXPRESSION, "");
     }
 
+    /**
+     * Gets a tag to indicate the source of this search, or {@code null} if {@link
+     * Builder#setSearchSourceLogTag(String)} was not called.
+     *
+     * <p>Some AppSearch implementations may log a hash of this tag using statsd. This tag may be
+     * used for tracing performance issues and crashes to a component of an app.
+     *
+     * <p>Call {@link Builder#setSearchSourceLogTag} and give a unique value if you want to
+     * distinguish this search scenario with other search scenarios during performance analysis.
+     *
+     * <p>Under no circumstances will AppSearch log the raw String value using statsd, but it will
+     * be provided as-is to custom {@code AppSearchLogger} implementations you have registered in
+     * your app.
+     */
+    @Nullable
+    @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_SET_SEARCH_SOURCE_LOG_TAG)
+    public String getSearchSourceLogTag() {
+        return mBundle.getString(SEARCH_SOURCE_LOG_TAG_FIELD);
+    }
+
     /** Returns whether the NUMERIC_SEARCH feature is enabled. */
     public boolean isNumericSearchEnabled() {
         return getEnabledFeatures().contains(FeatureConstants.NUMERIC_SEARCH);
@@ -541,6 +562,7 @@ public final class SearchSpec {
         private int mGroupingLimit = 0;
         private JoinSpec mJoinSpec;
         private String mAdvancedRankingExpression = "";
+        @Nullable private String mSearchSourceLogTag;
         private boolean mBuilt = false;
 
         /**
@@ -609,10 +631,9 @@ public final class SearchSpec {
          * @param schema the {@link AppSearchSchema} that contains the target properties
          * @param propertyPaths The String version of {@link PropertyPath}. A dot-delimited sequence
          *     of property names.
-         * @hide
          */
-        // TODO(b/296088047) unhide from framework when type property filters are made public.
         @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_PROPERTIES)
         public Builder addFilterProperties(
                 @NonNull String schema, @NonNull Collection<String> propertyPaths) {
             Objects.requireNonNull(schema);
@@ -636,10 +657,11 @@ public final class SearchSpec {
          * @see #addFilterProperties(String, Collection)
          * @param schema the {@link AppSearchSchema} that contains the target properties
          * @param propertyPaths The {@link PropertyPath} to search search over
-         * @hide
          */
-        // TODO(b/296088047) unhide from framework when type property filters are made public.
         @NonNull
+        // Getter method is getFilterProperties
+        @SuppressLint("MissingGetterMatchingBuilder")
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_PROPERTIES)
         public Builder addFilterPropertyPaths(
                 @NonNull String schema, @NonNull Collection<PropertyPath> propertyPaths) {
             Objects.requireNonNull(schema);
@@ -881,6 +903,32 @@ public final class SearchSpec {
         }
 
         /**
+         * Sets an optional log tag to indicate the source of this search.
+         *
+         * <p>Some AppSearch implementations may log a hash of this tag using statsd. This tag may
+         * be used for tracing performance issues and crashes to a component of an app.
+         *
+         * <p>Call this method and give a unique value if you want to distinguish this search
+         * scenario with other search scenarios during performance analysis.
+         *
+         * <p>Under no circumstances will AppSearch log the raw String value using statsd, but it
+         * will be provided as-is to custom {@code AppSearchLogger} implementations you have
+         * registered in your app.
+         *
+         * @param searchSourceLogTag A String to indicate the source caller of this search. It is
+         *     used to label the search statsd for performance analysis. It is not the tag we are
+         *     using in {@link android.util.Log}.
+         */
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_SET_SEARCH_SOURCE_LOG_TAG)
+        public Builder setSearchSourceLogTag(@NonNull String searchSourceLogTag) {
+            Preconditions.checkStringNotEmpty(searchSourceLogTag);
+            resetIfBuilt();
+            mSearchSourceLogTag = searchSourceLogTag;
+            return this;
+        }
+
+        /**
          * Sets the order of returned search results, the default is {@link #ORDER_DESCENDING},
          * meaning that results with higher scores come first.
          *
@@ -1000,9 +1048,9 @@ public final class SearchSpec {
          * <p>If no property paths are added for a particular type, then all properties of results
          * of that type will be retrieved.
          *
-         * <p>If property path is added for the {@link SearchSpec#PROJECTION_SCHEMA_TYPE_WILDCARD},
-         * then those property paths will apply to all results, excepting any types that have their
-         * own, specific property paths set.
+         * <p>If property path is added for the {@link SearchSpec#SCHEMA_TYPE_WILDCARD}, then those
+         * property paths will apply to all results, excepting any types that have their own,
+         * specific property paths set.
          *
          * <p>Suppose the following document is in the index.
          *
@@ -1363,6 +1411,7 @@ public final class SearchSpec {
             bundle.putInt(RESULT_GROUPING_LIMIT, mGroupingLimit);
             bundle.putBundle(TYPE_PROPERTY_WEIGHTS_FIELD, mTypePropertyWeights);
             bundle.putString(ADVANCED_RANKING_EXPRESSION, mAdvancedRankingExpression);
+            bundle.putString(SEARCH_SOURCE_LOG_TAG_FIELD, mSearchSourceLogTag);
             mBuilt = true;
             return new SearchSpec(bundle);
         }
