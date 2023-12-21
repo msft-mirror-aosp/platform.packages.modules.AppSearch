@@ -35,3 +35,11 @@ flag {
     bug: "309826655"
     is_fixed_read_only: true
 }
+
+flag {
+    name: "enable_put_documents_request_add_taken_actions"
+    namespace: "appsearch"
+    description: "Enable addTakenActions API in PutDocumentsRequest."
+    bug: "314026345"
+    is_fixed_read_only: true
+}
