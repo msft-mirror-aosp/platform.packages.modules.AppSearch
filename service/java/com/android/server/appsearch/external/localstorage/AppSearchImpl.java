@@ -1353,7 +1353,8 @@ public final class AppSearchImpl implements Closeable {
         if (logger != null) {
             sStatsBuilder =
                     new SearchStats.Builder(SearchStats.VISIBILITY_SCOPE_LOCAL, packageName)
-                            .setDatabase(databaseName);
+                            .setDatabase(databaseName)
+                            .setSearchSourceLogTag(searchSpec.getSearchSourceLogTag());
         }
 
         long javaLockAcquisitionLatencyStartMillis = SystemClock.elapsedRealtime();
@@ -1432,8 +1433,9 @@ public final class AppSearchImpl implements Closeable {
         if (logger != null) {
             sStatsBuilder =
                     new SearchStats.Builder(
-                            SearchStats.VISIBILITY_SCOPE_GLOBAL,
-                            callerAccess.getCallingPackageName());
+                                    SearchStats.VISIBILITY_SCOPE_GLOBAL,
+                                    callerAccess.getCallingPackageName())
+                            .setSearchSourceLogTag(searchSpec.getSearchSourceLogTag());
         }
 
         long javaLockAcquisitionLatencyStartMillis = SystemClock.elapsedRealtime();

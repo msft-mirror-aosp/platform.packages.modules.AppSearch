@@ -18,16 +18,13 @@ package com.android.server.appsearch;
 import static android.Manifest.permission.READ_GLOBAL_APP_SEARCH_DATA;
 import static android.system.OsConstants.O_RDONLY;
 import static android.system.OsConstants.O_WRONLY;
-
 import static com.android.internal.util.ConcurrentUtils.DIRECT_EXECUTOR;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_DENYLIST;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_ENABLED;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
-import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_API_COSTS;
-
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_ENABLED;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
+import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
 import static com.google.common.truth.Truth.assertThat;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -48,6 +45,7 @@ import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
@@ -56,6 +54,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.AttributionSource;
 import android.content.BroadcastReceiver;
@@ -72,10 +71,8 @@ import android.os.ServiceManager;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.DeviceConfig;
-
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
-
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
 import com.android.modules.utils.testing.ExtendedMockitoRule;
@@ -87,23 +84,19 @@ import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.stats.PlatformLogger;
 import com.android.server.usage.StorageStatsManagerLocal;
-
-import libcore.io.IoBridge;
-
 import com.google.common.util.concurrent.SettableFuture;
-
+import java.io.File;
+import java.io.FileDescriptor;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import libcore.io.IoBridge;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.ArgumentCaptor;
-
-import java.io.File;
-import java.io.FileDescriptor;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 public class AppSearchManagerServiceTest {
     private static final String DATABASE_NAME = "databaseName";
@@ -295,8 +288,11 @@ public class AppSearchManagerServiceTest {
     public void testPutDocumentsStatsLogging() throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.putDocuments(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                new DocumentsParcel(Collections.emptyList()), mUserHandle, BINDER_CALL_START_TIME,
+                AppSearchAttributionSource.createAttributionSource(mContext),
+                DATABASE_NAME,
+                new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
+                mUserHandle,
+                BINDER_CALL_START_TIME,
                 callback);
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
@@ -446,12 +442,12 @@ public class AppSearchManagerServiceTest {
 
     @Test
     public void testSearchSuggestionStatsLogging() throws Exception {
-        Bundle searchSuggestionSpecBundle = new Bundle();
-        searchSuggestionSpecBundle.putInt("maximumResultCount", 1);
+        SearchSuggestionSpec searchSuggestionSpec =
+            new SearchSuggestionSpec.Builder(/*maximumResultCount=*/1).build();
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.searchSuggestion(
                 AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpecBundle,
+                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
                 mUserHandle, BINDER_CALL_START_TIME, callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
@@ -544,7 +540,8 @@ public class AppSearchManagerServiceTest {
                 mAppSearchManagerServiceStub.registerObserverCallback(
                         AppSearchAttributionSource.createAttributionSource(mContext),
                         mContext.getPackageName(),
-                        /* observerSpecBundle= */ new Bundle(), mUserHandle, BINDER_CALL_START_TIME,
+                        new ObserverSpec.Builder().build(),
+                        mUserHandle, BINDER_CALL_START_TIME,
                         new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
@@ -1134,8 +1131,11 @@ public class AppSearchManagerServiceTest {
     private void verifyPutDocumentsResult(int resultCode) throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.putDocuments(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                new DocumentsParcel(Collections.emptyList()), mUserHandle, BINDER_CALL_START_TIME,
+                AppSearchAttributionSource.createAttributionSource(mContext),
+                DATABASE_NAME,
+                new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
+                mUserHandle,
+                BINDER_CALL_START_TIME,
                 callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_PUT_DOCUMENTS, callback.get());
     }
@@ -1232,12 +1232,12 @@ public class AppSearchManagerServiceTest {
     }
 
     private void verifySearchSuggestionResult(int resultCode) throws Exception {
-        Bundle searchSuggestionSpecBundle = new Bundle();
-        searchSuggestionSpecBundle.putInt("maximumResultCount", 1);
+        SearchSuggestionSpec searchSuggestionSpec =
+            new SearchSuggestionSpec.Builder(/*maximumResultCount=*/1).build();
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.searchSuggestion(
                 AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpecBundle,
+                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
                 mUserHandle, BINDER_CALL_START_TIME, callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_SEARCH_SUGGESTION, callback.get());
     }
@@ -1313,7 +1313,9 @@ public class AppSearchManagerServiceTest {
                 mAppSearchManagerServiceStub.registerObserverCallback(
                         AppSearchAttributionSource.createAttributionSource(mContext),
                         mContext.getPackageName(),
-                        /* observerSpecBundle= */ new Bundle(), mUserHandle, BINDER_CALL_START_TIME,
+                        new ObserverSpec.Builder().build(),
+                        mUserHandle,
+                        BINDER_CALL_START_TIME,
                         new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,

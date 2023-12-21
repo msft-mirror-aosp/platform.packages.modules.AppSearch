@@ -296,8 +296,8 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(executor);
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
-        DocumentsParcel documentsParcel =
-                new DocumentsParcel(request.getGenericDocuments());
+        DocumentsParcel documentsParcel = new DocumentsParcel(
+            request.getGenericDocuments(), request.getTakenActionGenericDocuments());
         try {
             mService.putDocuments(mCallerAttributionSource, mDatabaseName, documentsParcel,
                     mUserHandle,
@@ -556,7 +556,7 @@ public final class AppSearchSession implements Closeable {
                     mCallerAttributionSource,
                     mDatabaseName,
                     suggestionQueryExpression,
-                    searchSuggestionSpec.getBundle(),
+                    searchSuggestionSpec,
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {

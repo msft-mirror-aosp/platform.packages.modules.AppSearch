@@ -16,11 +16,13 @@
 
 package android.app.appsearch;
 
+import android.annotation.FlaggedApi;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
+import android.app.appsearch.flags.Flags;
 import android.os.Bundle;
 import android.util.ArrayMap;
 import android.util.ArraySet;
@@ -42,6 +44,7 @@ public final class GetSchemaResponse {
             "schemasNotDisplayedBySystem";
     private static final String SCHEMAS_VISIBLE_TO_PACKAGES_FIELD = "schemasVisibleToPackages";
     private static final String SCHEMAS_VISIBLE_TO_PERMISSION_FIELD = "schemasVisibleToPermissions";
+    private static final String PUBLICLY_VISIBLE_SCHEMAS_FIELD = "publiclyVisibleSchemas";
     private static final String ALL_REQUIRED_PERMISSION_FIELD = "allRequiredPermission";
     /**
      * This Set contains all schemas that are not displayed by the system. All values in the set are
@@ -55,6 +58,8 @@ public final class GetSchemaResponse {
      * object will be created when you first time fetch it.
      */
     @Nullable private Map<String, Set<PackageIdentifier>> mSchemasVisibleToPackages;
+
+    @Nullable private Map<String, PackageIdentifier> mPubliclyVisibleSchemas;
 
     /**
      * This map contains all schemas and Android Permissions combinations that are required to
@@ -209,6 +214,32 @@ public final class GetSchemaResponse {
         return mSchemasVisibleToPermissions;
     }
 
+    /**
+     * Returns a mapping of publicly visible schemas to the {@link PackageIdentifier} specifying the
+     * package the schemas are from.
+     *
+     * <p>If this is unsupported or no schemas have been set as publicly visible, an empty set will
+     * be returned.
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA)
+    @NonNull
+    public Map<String, PackageIdentifier> getPubliclyVisibleSchemas() {
+        if (mPubliclyVisibleSchemas == null) {
+            Map<String, PackageIdentifier> copy = new ArrayMap<>();
+            // This could be null, which is fine, we return an empty map.
+            Bundle publiclyVisibleSchemaBundle = mBundle.getBundle(PUBLICLY_VISIBLE_SCHEMAS_FIELD);
+            if (publiclyVisibleSchemaBundle != null) {
+                for (String key : publiclyVisibleSchemaBundle.keySet()) {
+                    copy.put(
+                            key, new PackageIdentifier(publiclyVisibleSchemaBundle.getBundle(key)));
+                }
+            }
+
+            mPubliclyVisibleSchemas = Collections.unmodifiableMap(copy);
+        }
+        return mPubliclyVisibleSchemas;
+    }
+
     private void checkGetVisibilitySettingSupported() {
         if (!mBundle.containsKey(SCHEMAS_VISIBLE_TO_PACKAGES_FIELD)) {
             throw new UnsupportedOperationException(
@@ -229,6 +260,7 @@ public final class GetSchemaResponse {
 
         private Bundle mSchemasVisibleToPackages;
         private Bundle mSchemasVisibleToPermissions;
+        private Bundle mPubliclyVisibleSchemas;
         private boolean mBuilt = false;
 
         /** Create a {@link Builder} object} */
@@ -375,6 +407,28 @@ public final class GetSchemaResponse {
         }
 
         /**
+         * Specify that the schema should be publicly available, to packages which already have
+         * visibility to {@code packageIdentifier}.
+         *
+         * @param schema the schema to make publicly accessible.
+         * @param packageIdentifier the package from which the document schema is from.
+         * @see SetSchemaRequest.Builder#setPubliclyVisibleSchema
+         */
+        // Merged list available from getPubliclyVisibleSchemas
+        @SuppressLint("MissingGetterMatchingBuilder")
+        @FlaggedApi(Flags.FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA)
+        @NonNull
+        public Builder setPubliclyVisibleSchema(
+                @NonNull String schema, @NonNull PackageIdentifier packageIdentifier) {
+            Objects.requireNonNull(schema);
+            Objects.requireNonNull(packageIdentifier);
+            resetIfBuilt();
+
+            mPubliclyVisibleSchemas.putParcelable(schema, packageIdentifier.getBundle());
+            return this;
+        }
+
+        /**
          * Method to set visibility setting. If this is called with false, {@link
          * #getRequiredPermissionsForSchemaTypeVisibility()}, {@link
          * #getSchemaTypesNotDisplayedBySystem()}}, and {@link #getSchemaTypesVisibleToPackages()}
@@ -393,10 +447,12 @@ public final class GetSchemaResponse {
                 mSchemasNotDisplayedBySystem = new ArrayList<>();
                 mSchemasVisibleToPackages = new Bundle();
                 mSchemasVisibleToPermissions = new Bundle();
+                mPubliclyVisibleSchemas = new Bundle();
             } else {
                 mSchemasNotDisplayedBySystem = null;
                 mSchemasVisibleToPackages = null;
                 mSchemasVisibleToPermissions = null;
+                mPubliclyVisibleSchemas = null;
             }
             return this;
         }
@@ -413,6 +469,9 @@ public final class GetSchemaResponse {
                         SCHEMAS_NOT_DISPLAYED_BY_SYSTEM_FIELD, mSchemasNotDisplayedBySystem);
                 bundle.putBundle(SCHEMAS_VISIBLE_TO_PACKAGES_FIELD, mSchemasVisibleToPackages);
                 bundle.putBundle(SCHEMAS_VISIBLE_TO_PERMISSION_FIELD, mSchemasVisibleToPermissions);
+                // Even if visibility is not supported, putting an empty map is the correct
+                // behavior, i.e. no schemas are publicly visible.
+                bundle.putBundle(PUBLICLY_VISIBLE_SCHEMAS_FIELD, mPubliclyVisibleSchemas);
             }
             mBuilt = true;
             return new GetSchemaResponse(bundle);
@@ -430,6 +489,9 @@ public final class GetSchemaResponse {
                     Bundle copyVisibleToPermissions = new Bundle();
                     copyVisibleToPermissions.putAll(mSchemasVisibleToPermissions);
                     mSchemasVisibleToPermissions = copyVisibleToPermissions;
+                    Bundle copyPubliclyVisibleSchemas = new Bundle();
+                    copyPubliclyVisibleSchemas.putAll(mPubliclyVisibleSchemas);
+                    mPubliclyVisibleSchemas = copyPubliclyVisibleSchemas;
                 }
                 mBuilt = false;
             }

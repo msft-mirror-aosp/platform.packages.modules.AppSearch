@@ -24,7 +24,9 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
+import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.VisibilityDocument;
 import android.content.AttributionSource;
 import android.os.ParcelFileDescriptor;
@@ -309,7 +311,7 @@ interface IAppSearchManager {
      * @param callerAttributionSource The permission identity of the package to suggest over.
      * @param databaseName The databaseName this suggest is for.
      * @param suggestionQueryExpression the non empty query string to search suggestions
-     * @param searchSuggestionSpecBundle SearchSuggestionSpec bundle
+     * @param searchSuggestionSpec SearchSuggestionSpec describing what to suggest
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      * @param callback {@link AppSearchResult}&lt;List&lt;{@link SearchSuggestionResult}&gt; of
@@ -319,7 +321,7 @@ interface IAppSearchManager {
             in AppSearchAttributionSource callerAttributionSource,
             in String databaseName,
             in String suggestionQueryExpression,
-            in Bundle searchSuggestionSpecBundle,
+            in SearchSuggestionSpec searchSuggestionSpec,
             in UserHandle userHandle,
             in long binderCallStartTimeMillis,
             in IAppSearchResultCallback callback);
@@ -446,7 +448,7 @@ interface IAppSearchManager {
      * @param callerAttributionSource The permission identity of the package which is registering
      *     an observer.
      * @param targetPackageName Package whose changes to monitor
-     * @param observerSpecBundle Bundle of ObserverSpec showing what types of changes to listen for
+     * @param observerSpecBundle ObserverSpec showing what types of changes to listen for
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      * @param observerProxy Callback to trigger when a schema or document changes
@@ -455,7 +457,7 @@ interface IAppSearchManager {
     AppSearchResultParcel registerObserverCallback(
         in AppSearchAttributionSource callerAttributionSource,
         in String targetPackageName,
-        in Bundle observerSpecBundle,
+        in ObserverSpec observerSpec,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
         in IAppSearchObserverProxy observerProxy);
