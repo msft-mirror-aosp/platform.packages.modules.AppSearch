@@ -40,7 +40,8 @@ public final class Flags {
     // The name of the each static variable should be "FLAG_" + capitalized value of the flag.
 
     /** Enable SafeParcelable related features. */
-    public static final String FLAG_ENABLE_SAFE_PARCELABLE = FLAG_PREFIX + "enable_safe_parcelable";
+    public static final String FLAG_ENABLE_SAFE_PARCELABLE_2 =
+            FLAG_PREFIX + "enable_safe_parcelable_2";
 
     /** Enable the "hasProperty" function in list filter query expressions. */
     public static final String FLAG_ENABLE_LIST_FILTER_HAS_PROPERTY_FUNCTION =
@@ -53,6 +54,24 @@ public final class Flags {
     /** Enable GenericDocument to take another GenericDocument to copy construct. */
     public static final String FLAG_ENABLE_GENERIC_DOCUMENT_COPY_CONSTRUCTOR =
             FLAG_PREFIX + "enable_generic_document_copy_constructor";
+
+    /**
+     * Enable the {@link android.app.appsearch.SearchSpec.Builder#addFilterProperties} and {@link
+     * android.app.appsearch.SearchSuggestionSpec.Builder#addFilterProperties}.
+     */
+    public static final String FLAG_ENABLE_SEARCH_SPEC_FILTER_PROPERTIES =
+            FLAG_PREFIX + "enable_search_spec_filter_properties";
+    /** Enable the {@link android.app.appsearch.SearchSpec.Builder#setSearchSourceLogTag} method. */
+    public static final String FLAG_ENABLE_SEARCH_SPEC_SET_SEARCH_SOURCE_LOG_TAG =
+            FLAG_PREFIX + "enable_search_spec_set_search_source_log_tag";
+
+    /** Enable addTakenActions API in PutDocumentsRequest. */
+    public static final String FLAG_ENABLE_PUT_DOCUMENTS_REQUEST_ADD_TAKEN_ACTIONS =
+            FLAG_PREFIX + "enable_put_documents_request_add_taken_actions";
+
+    /** Enable setPubliclyVisibleSchema in SetSchemaRequest. */
+    public static final String FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA =
+            FLAG_PREFIX + "enable_set_publicly_visible_schema";
 
     // Whether the features should be enabled.
     //
@@ -75,6 +94,32 @@ public final class Flags {
 
     /** Whether Generic Document Copy Constructing should be enabled. */
     public static boolean enableGenericDocumentCopyConstructor() {
+        return true;
+    }
+
+    /**
+     * Whether the {@link android.app.appsearch.SearchSpec.Builder#addFilterProperties} and {@link
+     * android.app.appsearch.SearchSuggestionSpec.Builder#addFilterProperties} should be enabled.
+     */
+    public static boolean enableSearchSpecFilterProperties() {
+        return true;
+    }
+
+    /**
+     * Whether the {@link android.app.appsearch.SearchSpec.Builder#setSearchSourceLogTag} should be
+     * enabled.
+     */
+    public static boolean enableSearchSpecSetSearchSourceLogTag() {
+        return true;
+    }
+
+    /** Whether addTakenActions API in PutDocumentsRequest should be enabled. */
+    public static boolean enablePutDocumentsRequestAddTakenActions() {
+        return true;
+    }
+
+    /** Whether setPubliclyVisibleSchema in SetSchemaRequest.Builder should be enabled. */
+    public static boolean enableSetPubliclyVisibleSchema() {
         return true;
     }
 }

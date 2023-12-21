@@ -29,7 +29,7 @@ import android.os.Parcelable;
 @SafeParcelable.Class(creator = "StorageInfoCreator")
 public final class StorageInfo extends AbstractSafeParcelable {
 
-    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE)
+    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)
     @NonNull
     public static final Parcelable.Creator<StorageInfo> CREATOR = new StorageInfoCreator();
 
@@ -115,7 +115,7 @@ public final class StorageInfo extends AbstractSafeParcelable {
         }
     }
 
-    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE)
+    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         StorageInfoCreator.writeToParcel(this, dest, flags);
