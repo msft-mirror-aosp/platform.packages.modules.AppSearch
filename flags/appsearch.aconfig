@@ -27,3 +27,19 @@ flag {
     bug: "171882200"
     is_fixed_read_only: true
 }
+
+flag {
+    name: "enable_list_filter_has_property_function"
+    namespace: "appsearch"
+    description: "Enable the hasProperty function in list filter query expressions."
+    bug: "309826655"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_put_documents_request_add_taken_actions"
+    namespace: "appsearch"
+    description: "Enable addTakenActions API in PutDocumentsRequest."
+    bug: "314026345"
+    is_fixed_read_only: true
+}
