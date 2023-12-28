@@ -19,6 +19,8 @@ package android.app.appsearch.aidl;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresApi;
+import android.app.appsearch.safeparcel.AbstractSafeParcelable;
+import android.app.appsearch.safeparcel.SafeParcelable;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.os.Binder;
@@ -44,12 +46,45 @@ import java.util.Objects;
  *
  * @hide
  */
-// TODO(b/275629842): Update the class to use SafeParcelable instead of Parcelable.
-public final class AppSearchAttributionSource implements Parcelable {
+@SafeParcelable.Class(creator = "AppSearchAttributionSourceCreator")
+public final class AppSearchAttributionSource extends AbstractSafeParcelable {
+    @NonNull
+    public static final AppSearchAttributionSourceCreator CREATOR =
+        new AppSearchAttributionSourceCreator();
 
+    @NonNull
     private final Compat mCompat;
-    @Nullable private final String mCallingPackageName;
+
+    @Nullable
+    @Field(id = 1, getter = "getAttributionSource")
+    private final AttributionSource mAttributionSource;
+    @Nullable
+    @Field(id = 2, getter = "getPackageName")
+    private final String mCallingPackageName;
+    @Field(id = 3, getter = "getUid")
     private final int mCallingUid;
+
+    /**
+     * Constructs an instance of AppSearchAttributionSource for AbstractSafeParcelable.
+     * @param attributionSource The attribution source that is accessing permission
+     *      protected data.
+     * @param callingPackageName The package that is accessing the permission protected data.
+     * @param callingUid The UID that is accessing the permission protected data.
+     */
+    @Constructor
+    AppSearchAttributionSource(
+        @Param(id = 1) @Nullable AttributionSource attributionSource,
+        @Param(id = 2) @Nullable String callingPackageName,
+        @Param(id = 3) int callingUid) {
+        mAttributionSource = attributionSource;
+        mCallingPackageName = callingPackageName;
+        mCallingUid = callingUid;
+        if (VERSION.SDK_INT >= Build.VERSION_CODES.S && mAttributionSource != null) {
+            mCompat = new Api31Impl(mAttributionSource);
+        } else {
+            mCompat = new Api19Impl(mCallingPackageName, mCallingUid);
+        }
+    }
 
     /**
      * Constructs an instance of AppSearchAttributionSource.
@@ -58,43 +93,28 @@ public final class AppSearchAttributionSource implements Parcelable {
      */
     private AppSearchAttributionSource(@NonNull Compat compat) {
         mCompat = Objects.requireNonNull(compat);
+        mAttributionSource = mCompat.getAttributionSource();
         mCallingPackageName = mCompat.getPackageName();
         mCallingUid = mCompat.getUid();
     }
 
+    /**
+     * Constructs an instance of AppSearchAttributionSource for testing.
+     * @param callingPackageName The package that is accessing the permission protected data.
+     * @param callingUid The UID that is accessing the permission protected data.
+     */
     @VisibleForTesting
     public AppSearchAttributionSource(@Nullable String callingPackageName, int callingUid) {
         mCallingPackageName = callingPackageName;
         mCallingUid = callingUid;
 
         if (VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            AttributionSource attributionSource =
-                new AttributionSource.Builder(mCallingUid)
-                        .setPackageName(mCallingPackageName).build();
-            mCompat = new Api31Impl(attributionSource);
+             mAttributionSource = new AttributionSource.Builder(mCallingUid)
+                    .setPackageName(mCallingPackageName).build();
+            mCompat = new Api31Impl(mAttributionSource);
         } else {
+            mAttributionSource = null;
             mCompat = new Api19Impl(mCallingPackageName, mCallingUid);
-        }
-    }
-
-    private AppSearchAttributionSource(@NonNull Parcel in) {
-        if (VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Deserializing attributionSource calls enforceCallingUidAndPid similar to
-            // AttributionSource.
-            AttributionSource attributionSource =
-                in.readParcelable(AttributionSource.class.getClassLoader());
-            mCompat = new Api31Impl(attributionSource);
-            mCallingPackageName = mCompat.getPackageName();
-            mCallingUid = mCompat.getUid();
-        } else {
-            mCallingPackageName = in.readString();
-            mCallingUid = in.readInt();
-            Api19Impl impl = new Api19Impl(mCallingPackageName, mCallingUid);
-            // Enforce calling pid and uid must be called here on R and below similar to how
-            // AttributionSource is implemented.
-            impl.enforceCallingUid();
-            impl.enforceCallingPid();
-            mCompat = impl;
         }
     }
 
@@ -165,7 +185,7 @@ public final class AppSearchAttributionSource implements Parcelable {
     public int hashCode() {
         if (VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             AttributionSource attributionSource = Objects.requireNonNull(
-                    mCompat.getAttributionSource());
+                mCompat.getAttributionSource());
             return attributionSource.hashCode();
         }
 
@@ -181,43 +201,20 @@ public final class AppSearchAttributionSource implements Parcelable {
         AppSearchAttributionSource that = (AppSearchAttributionSource) o;
         if (VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             AttributionSource thisAttributionSource = Objects.requireNonNull(
-                    mCompat.getAttributionSource());
+                mCompat.getAttributionSource());
             AttributionSource thatAttributionSource = Objects.requireNonNull(
-                    that.getAttributionSource());
+                that.getAttributionSource());
             return thisAttributionSource.equals(thatAttributionSource);
         }
 
         return (Objects.equals(mCompat.getPackageName(), that.getPackageName())
-                && (mCompat.getUid() == that.getUid()));
-    }
-
-    @Override
-    public int describeContents() {
-        return 0;
+            && (mCompat.getUid() == that.getUid()));
     }
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        if (VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            dest.writeParcelable(mCompat.getAttributionSource(), flags);
-        } else {
-            dest.writeString(mCompat.getPackageName());
-            dest.writeInt(mCompat.getUid());
-        }
+        AppSearchAttributionSourceCreator.writeToParcel(this, dest, flags);
     }
-
-    public static final Creator<AppSearchAttributionSource> CREATOR =
-        new Creator<>() {
-            @Override
-            public AppSearchAttributionSource createFromParcel(Parcel in) {
-                return new AppSearchAttributionSource(in);
-            }
-
-            @Override
-            public AppSearchAttributionSource[] newArray(int size) {
-                return new AppSearchAttributionSource[size];
-            }
-        };
 
     /** Compat class for AttributionSource to provide implementation for lower API levels. */
     private interface Compat {
