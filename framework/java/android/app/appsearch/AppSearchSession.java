@@ -165,7 +165,7 @@ public final class AppSearchSession implements Closeable {
             }
         }
 
-        // Extract a List<VisibilityDocument> from the request
+        // Extract a List<VisibilityConfig> from the request
         List<VisibilityConfig> visibilityConfigs = VisibilityConfig.toVisibilityConfigs(request);
         // No need to trigger migration if user never set migrator
         if (request.getMigrators().isEmpty()) {

@@ -50,6 +50,7 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
+import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 
@@ -62,6 +63,8 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.Mockito;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class VisibilityCheckerImplTest {
@@ -611,6 +614,125 @@ public class VisibilityCheckerImplTest {
         } finally {
             mUiAutomation.dropShellPermissionIdentity();
         }
+    }
+
+    @Test
+    public void testPublicVisibility_mockPackageManager() throws Exception {
+        byte[] mockSignature = new byte[32];
+
+        PackageManager mockPackageManager = getMockPackageManager(mContext.getUser());
+        // Let's pretend package A is visible to package B & C, package B is visible to package C.
+        when(mockPackageManager.canPackageQuery("A", "A")).thenReturn(true);
+        when(mockPackageManager.canPackageQuery("A", "B")).thenReturn(false);
+        when(mockPackageManager.canPackageQuery("A", "C")).thenReturn(false);
+        when(mockPackageManager.canPackageQuery("B", "A")).thenReturn(true);
+        when(mockPackageManager.canPackageQuery("B", "B")).thenReturn(true);
+        when(mockPackageManager.canPackageQuery("B", "C")).thenReturn(false);
+        when(mockPackageManager.canPackageQuery("C", "A")).thenReturn(true);
+        when(mockPackageManager.canPackageQuery("C", "B")).thenReturn(true);
+        when(mockPackageManager.canPackageQuery("C", "C")).thenReturn(true);
+
+        // Mock package certificates
+        when(mockPackageManager.hasSigningCertificate(
+                "A", mockSignature, PackageManager.CERT_INPUT_SHA256)).thenReturn(true);
+        when(mockPackageManager.hasSigningCertificate(
+                "B", mockSignature, PackageManager.CERT_INPUT_SHA256)).thenReturn(true);
+        when(mockPackageManager.hasSigningCertificate(
+                "C", mockSignature, PackageManager.CERT_INPUT_SHA256)).thenReturn(true);
+
+        // The Android package will own the schemas, but they will be visible from other packages.
+        String prefix = PrefixUtil.createPrefix("android", "database");
+        String[] packageNames = {"A", "B", "C"};
+        List<VisibilityConfig> VisibilityConfigs = new ArrayList<>(packageNames.length);
+
+        for (String packageName : packageNames) {
+            // android, database, schemaX
+            String schemaName = prefix + "Schema" + packageName;
+
+            VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(/*id=*/schemaName)
+                    .setPubliclyVisibleTargetPackage(
+                            new PackageIdentifier(packageName, mockSignature)).build();
+            VisibilityConfigs.add(visibilityConfig);
+        }
+        mVisibilityStore.setVisibility(VisibilityConfigs);
+
+        FrameworkCallerAccess callerAccessA =
+                new FrameworkCallerAccess(new AppSearchAttributionSource("A", 1),
+                        /*callerHasSystemAccess=*/ false);
+        FrameworkCallerAccess callerAccessB =
+                new FrameworkCallerAccess(new AppSearchAttributionSource("B", 2),
+                        /*callerHasSystemAccess=*/ false);
+        FrameworkCallerAccess callerAccessC =
+                new FrameworkCallerAccess(new AppSearchAttributionSource("C", 3),
+                        /*callerHasSystemAccess=*/ false);
+
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessA, "android", "android$database/SchemaA", mVisibilityStore)).isTrue();
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessA, "android", "android$database/SchemaB", mVisibilityStore)).isFalse();
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessA, "android", "android$database/SchemaC", mVisibilityStore)).isFalse();
+
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessB, "android", "android$database/SchemaA", mVisibilityStore)).isTrue();
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessB, "android", "android$database/SchemaB", mVisibilityStore)).isTrue();
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessB, "android", "android$database/SchemaC", mVisibilityStore)).isFalse();
+
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessC, "android", "android$database/SchemaA", mVisibilityStore)).isTrue();
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessC, "android", "android$database/SchemaB", mVisibilityStore)).isTrue();
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessC, "android", "android$database/SchemaC", mVisibilityStore)).isTrue();
+    }
+
+    @Test
+    public void testPublicVisibility_mockPackageManager_cantFindPackage() throws Exception {
+        // Test to ensure public visibility returns false if the PackageManager check throws an
+        // exception.
+        PackageManager mockPackageManager = getMockPackageManager(mContext.getUser());
+        byte[] mockSignature = new byte[32];
+
+        // Mock package certificates
+        when(mockPackageManager.hasSigningCertificate(
+                "A", mockSignature, PackageManager.CERT_INPUT_SHA256)).thenReturn(true);
+        when(mockPackageManager.hasSigningCertificate(
+                "B", mockSignature, PackageManager.CERT_INPUT_SHA256)).thenReturn(true);
+
+        when(mockPackageManager.canPackageQuery("A", "B"))
+                .thenThrow(new PackageManager.NameNotFoundException());
+        when(mockPackageManager.canPackageQuery("B", "A"))
+                .thenThrow(new PackageManager.NameNotFoundException());
+
+        // The Android package will own the schemas, but they will be visible from other packages.
+        String prefix = PrefixUtil.createPrefix("android", "database");
+        String[] packageNames = {"A", "B"};
+        List<VisibilityConfig> VisibilityConfigs = new ArrayList<>(packageNames.length);
+
+        for (String packageName : packageNames) {
+            // android, database, schemaX
+            String schemaName = prefix + "Schema" + packageName;
+
+            VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(/*id=*/schemaName)
+                    .setPubliclyVisibleTargetPackage(
+                            new PackageIdentifier(packageName, mockSignature)).build();
+            VisibilityConfigs.add(visibilityConfig);
+        }
+        mVisibilityStore.setVisibility(VisibilityConfigs);
+
+        FrameworkCallerAccess callerAccessA =
+                new FrameworkCallerAccess(new AppSearchAttributionSource("A", 1),
+                        /*callerHasSystemAccess=*/ false);
+        FrameworkCallerAccess callerAccessB =
+                new FrameworkCallerAccess(new AppSearchAttributionSource("B", 2),
+                        /*callerHasSystemAccess=*/ false);
+
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessA, "android", "android$database/SchemaB", mVisibilityStore)).isFalse();
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                callerAccessB, "android", "android$database/SchemaA", mVisibilityStore)).isFalse();
     }
 
     @NonNull
