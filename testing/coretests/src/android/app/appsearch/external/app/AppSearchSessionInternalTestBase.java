@@ -1504,7 +1504,9 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .addGenericDocuments(personDoc, artistDoc, emailDoc)
                                 .build()));
         GenericDocument artistDocWithParent =
-                artistDoc.toBuilder().setParentTypes(Collections.singletonList("Person")).build();
+                new GenericDocument.Builder<>(artistDoc)
+                        .setParentTypes(Collections.singletonList("Person"))
+                        .build();
 
         // Query for the documents
         SearchResultsShim searchResults =
@@ -1717,9 +1719,13 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .addGenericDocuments(artistDoc, messageDoc)
                                 .build()));
         GenericDocument expectedArtistDoc =
-                artistDoc.toBuilder().setParentTypes(Collections.singletonList("Person")).build();
+                new GenericDocument.Builder<>(artistDoc)
+                        .setParentTypes(Collections.singletonList("Person"))
+                        .build();
         GenericDocument expectedMessageDoc =
-                messageDoc.toBuilder().setPropertyDocument("sender", expectedArtistDoc).build();
+                new GenericDocument.Builder<>(messageDoc)
+                        .setPropertyDocument("sender", expectedArtistDoc)
+                        .build();
 
         // Query for the documents
         SearchResultsShim searchResults =
@@ -1781,13 +1787,17 @@ public abstract class AppSearchSessionInternalTestBase {
                                 .build()));
 
         GenericDocument expectedDocA =
-                docA.toBuilder()
+                new GenericDocument.Builder<>(docA)
                         .setParentTypes(new ArrayList<>(Arrays.asList("C", "B", "D")))
                         .build();
         GenericDocument expectedDocB =
-                docB.toBuilder().setParentTypes(Collections.singletonList("D")).build();
+                new GenericDocument.Builder<>(docB)
+                        .setParentTypes(Collections.singletonList("D"))
+                        .build();
         GenericDocument expectedDocC =
-                docC.toBuilder().setParentTypes(new ArrayList<>(Arrays.asList("B", "D"))).build();
+                new GenericDocument.Builder<>(docC)
+                        .setParentTypes(new ArrayList<>(Arrays.asList("B", "D")))
+                        .build();
         // Query for the documents
         SearchResultsShim searchResults = mDb1.search("", new SearchSpec.Builder().build());
         List<GenericDocument> documents = convertSearchResultsToDocuments(searchResults);
