@@ -20,7 +20,7 @@ android_test {
     name: "AppSearchCoreTests",
     srcs: ["src/**/*.java"],
     static_libs: [
-        "AppSearchTestUtils",
+        "CtsAppSearchTestUtils",
         "androidx.test.ext.junit",
         "androidx.test.rules",
         "junit",
