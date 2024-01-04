@@ -273,6 +273,16 @@ public final class JoinSpec {
             mChildPropertyExpression = childPropertyExpression;
         }
 
+        /** @hide */
+        public Builder(@NonNull JoinSpec joinSpec) {
+            Objects.requireNonNull(joinSpec);
+            mNestedQuery = joinSpec.getNestedQuery();
+            mNestedSearchSpec = joinSpec.getNestedSearchSpec();
+            mChildPropertyExpression = joinSpec.getChildPropertyExpression();
+            mMaxJoinedResultCount = joinSpec.getMaxJoinedResultCount();
+            mAggregationScoringStrategy = joinSpec.getAggregationScoringStrategy();
+        }
+
         /**
          * Sets the query and the SearchSpec for the documents being joined. This will score and
          * rank the joined documents as well as filter the joined documents.
