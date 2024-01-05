@@ -21,9 +21,10 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
 import android.app.appsearch.AppSearchSchema;
+import android.app.appsearch.GenericDocument;
 import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.PackageIdentifier;
-import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.exceptions.AppSearchException;
 
 import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
@@ -101,52 +102,54 @@ public class VisibilityStoreTest {
     @Test
     public void testSetAndGetVisibility() throws Exception {
         String prefix = PrefixUtil.createPrefix("packageName", "databaseName");
-        VisibilityDocument visibilityDocument =
-                new VisibilityDocument.Builder(prefix + "Email")
+        VisibilityConfig visibilityConfig =
+                new VisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
-        mVisibilityStore.setVisibility(ImmutableList.of(visibilityDocument));
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
-        assertThat(mVisibilityStore.getVisibility(prefix + "Email")).isEqualTo(visibilityDocument);
-        // Verify the VisibilityDocument is saved to AppSearchImpl.
-        VisibilityDocument actualDocument =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefix + "Email",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
-        assertThat(actualDocument).isEqualTo(visibilityDocument);
+        assertThat(mVisibilityStore.getVisibility(prefix + "Email")).isEqualTo(visibilityConfig);
+        // Verify the VisibilityConfig is saved to AppSearchImpl.
+        GenericDocument actualDocument =
+                mAppSearchImpl.getDocument(
+                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                        VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                        /*id=*/ prefix + "Email",
+                        /*typePropertyPaths=*/ Collections.emptyMap());
+        // Ignore the creation timestamp
+        actualDocument =
+                new GenericDocument.Builder<>(actualDocument).setCreationTimestampMillis(0).build();
+
+        assertThat(actualDocument).isEqualTo(visibilityConfig.createVisibilityDocument());
     }
 
     @Test
     public void testRemoveVisibility() throws Exception {
-        VisibilityDocument visibilityDocument =
-                new VisibilityDocument.Builder("Email")
+        VisibilityConfig visibilityConfig =
+                new VisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
-        mVisibilityStore.setVisibility(ImmutableList.of(visibilityDocument));
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
-        assertThat(mVisibilityStore.getVisibility("Email")).isEqualTo(visibilityDocument);
-        // Verify the VisibilityDocument is saved to AppSearchImpl.
-        VisibilityDocument actualDocument =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ "Email",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
-        assertThat(actualDocument).isEqualTo(visibilityDocument);
+        assertThat(mVisibilityStore.getVisibility("Email")).isEqualTo(visibilityConfig);
+        // Verify the VisibilityConfig is saved to AppSearchImpl.
+        VisibilityConfig actualConfig =
+                VisibilityConfig.createVisibilityConfig(
+                        mAppSearchImpl.getDocument(
+                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                /*id=*/ "Email",
+                                /*typePropertyPaths=*/ Collections.emptyMap()),
+                        null);
+        assertThat(actualConfig).isEqualTo(visibilityConfig);
 
-        mVisibilityStore.removeVisibility(ImmutableSet.of(visibilityDocument.getId()));
+        mVisibilityStore.removeVisibility(ImmutableSet.of(visibilityConfig.getSchemaType()));
         assertThat(mVisibilityStore.getVisibility("Email")).isNull();
-        // Verify the VisibilityDocument is removed from AppSearchImpl.
+        // Verify the VisibilityConfig is removed from AppSearchImpl.
         AppSearchException e =
                 assertThrows(
                         AppSearchException.class,
@@ -154,7 +157,7 @@ public class VisibilityStoreTest {
                                 mAppSearchImpl.getDocument(
                                         VisibilityStore.VISIBILITY_PACKAGE_NAME,
                                         VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
+                                        VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
                                         /*id=*/ "Email",
                                         /*typePropertyPaths=*/ Collections.emptyMap()));
         assertThat(e).hasMessageThat().contains("Document (VS#Pkg$VS#Db/, Email) not found.");
@@ -165,7 +168,8 @@ public class VisibilityStoreTest {
         // Create a broken schema which could be recovered to the latest schema in a compatible
         // change. Since we won't set force override to true to recover the broken case.
         AppSearchSchema brokenSchema =
-                new AppSearchSchema.Builder(VisibilityDocument.SCHEMA_TYPE).build();
+                new AppSearchSchema.Builder(VisibilityConfig.VISIBILITY_DOCUMENT_SCHEMA_TYPE)
+                        .build();
 
         // Index a broken schema into AppSearch, use the latest version to make it broken.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -173,9 +177,9 @@ public class VisibilityStoreTest {
                         VisibilityStore.VISIBILITY_PACKAGE_NAME,
                         VisibilityStore.VISIBILITY_DATABASE_NAME,
                         Collections.singletonList(brokenSchema),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
-                        /*version=*/ VisibilityDocument.SCHEMA_VERSION_LATEST,
+                        /*version=*/ VisibilityConfig.SCHEMA_VERSION_LATEST,
                         /*setSchemaStatsBuilder=*/ null);
         assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         // Create VisibilityStore should recover the broken schema
@@ -183,13 +187,13 @@ public class VisibilityStoreTest {
 
         // We should be able to set and get Visibility settings.
         String prefix = PrefixUtil.createPrefix("packageName", "databaseName");
-        VisibilityDocument visibilityDocument =
-                new VisibilityDocument.Builder(prefix + "Email")
+        VisibilityConfig visibilityConfig =
+                new VisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
-        mVisibilityStore.setVisibility(ImmutableList.of(visibilityDocument));
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
-        assertThat(mVisibilityStore.getVisibility(prefix + "Email")).isEqualTo(visibilityDocument);
+        assertThat(mVisibilityStore.getVisibility(prefix + "Email")).isEqualTo(visibilityConfig);
     }
 }

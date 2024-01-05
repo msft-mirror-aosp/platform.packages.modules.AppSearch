@@ -27,8 +27,6 @@ import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
-import android.content.AttributionSource;
-import android.os.Bundle;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -119,12 +117,12 @@ public class SearchResults implements Closeable {
                 if (mDatabaseName == null) {
                     // Global query, there's no one package-database combination to check.
                     mService.globalQuery(mAttributionSource, mQueryExpression,
-                            mSearchSpec.getBundle(), mUserHandle, binderCallStartTimeMillis,
+                            mSearchSpec, mUserHandle, binderCallStartTimeMillis,
                             wrapCallback(executor, callback));
                 } else {
                     // Normal local query, pass in specified database.
                     mService.query(mAttributionSource, mDatabaseName, mQueryExpression,
-                            mSearchSpec.getBundle(), mUserHandle,
+                            mSearchSpec, mUserHandle,
                             binderCallStartTimeMillis,
                             wrapCallback(executor, callback));
                 }
@@ -172,12 +170,12 @@ public class SearchResults implements Closeable {
     }
 
     private void invokeCallback(
-            @NonNull AppSearchResult<Bundle> searchResultPageResult,
+            @NonNull AppSearchResult<SearchResultPage> searchResultPageResult,
             @NonNull Consumer<AppSearchResult<List<SearchResult>>> callback) {
         if (searchResultPageResult.isSuccess()) {
             try {
-                SearchResultPage searchResultPage = new SearchResultPage
-                        (Objects.requireNonNull(searchResultPageResult.getResultValue()));
+                SearchResultPage searchResultPage = Objects.requireNonNull(
+                        searchResultPageResult.getResultValue());
                 mNextPageToken = searchResultPage.getNextPageToken();
                 callback.accept(AppSearchResult.newSuccessfulResult(
                         searchResultPage.getResults()));

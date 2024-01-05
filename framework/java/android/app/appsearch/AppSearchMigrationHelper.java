@@ -23,21 +23,20 @@ import static android.os.ParcelFileDescriptor.MODE_WRITE_ONLY;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.WorkerThread;
+import android.app.appsearch.SetSchemaResponse.MigrationFailure;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.stats.SchemaMigrationStats;
-import android.content.AttributionSource;
-import android.os.Bundle;
 import android.os.Parcel;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.util.ArraySet;
-
 import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -114,7 +113,7 @@ public class AppSearchMigrationHelper implements Closeable {
                     new SearchSpec.Builder()
                             .addFilterSchemas(schemaType)
                             .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
-                            .build().getBundle(),
+                            .build(),
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
@@ -165,7 +164,7 @@ public class AppSearchMigrationHelper implements Closeable {
         try (ParcelFileDescriptor fileDescriptor =
                      ParcelFileDescriptor.open(mMigratedFile, MODE_READ_ONLY)) {
             CountDownLatch latch = new CountDownLatch(1);
-            AtomicReference<AppSearchResult<List<Bundle>>> resultReference =
+            AtomicReference<AppSearchResult<List<MigrationFailure>>> resultReference =
                     new AtomicReference<>();
             mService.putDocumentsFromFile(mCallerAttributionSource, mDatabaseName, fileDescriptor,
                     mUserHandle,
@@ -180,15 +179,13 @@ public class AppSearchMigrationHelper implements Closeable {
                         }
                     });
             latch.await();
-            AppSearchResult<List<Bundle>> result = resultReference.get();
+            AppSearchResult<List<MigrationFailure>> result = resultReference.get();
             if (!result.isSuccess()) {
                 return AppSearchResult.newFailedResult(result);
             }
-            List<Bundle> migratedFailureBundles = Objects.requireNonNull(result.getResultValue());
-            for (int i = 0; i < migratedFailureBundles.size(); i++) {
-                responseBuilder.addMigrationFailure(
-                        new SetSchemaResponse.MigrationFailure(migratedFailureBundles.get(i)));
-            }
+            List<MigrationFailure> migrationFailures =
+                Objects.requireNonNull(result.getResultValue());
+            responseBuilder.addMigrationFailures(migrationFailures);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         } catch (InterruptedException | IOException | RuntimeException e) {
@@ -242,7 +239,7 @@ public class AppSearchMigrationHelper implements Closeable {
                                     + newDocument.getSchemaType()
                                     + ". But the schema types doesn't exist in the request");
                 }
-                writeBundleToOutputStream(outputStream, newDocument.getBundle());
+                writeDocumentToOutputStream(outputStream, newDocument);
             }
         }
         if (schemaMigrationStatsBuilder != null) {
@@ -252,7 +249,7 @@ public class AppSearchMigrationHelper implements Closeable {
     }
 
     /**
-     * Reads the {@link Bundle} of a {@link GenericDocument} from given {@link DataInputStream}.
+     * Reads a {@link GenericDocument} from given {@link DataInputStream}.
      *
      * @param inputStream The inputStream to read from
      *
@@ -273,22 +270,25 @@ public class AppSearchMigrationHelper implements Closeable {
         try {
             parcel.unmarshall(serializedMessage, 0, serializedMessage.length);
             parcel.setDataPosition(0);
-            Bundle bundle = parcel.readBundle();
-            return new GenericDocument(bundle);
+            GenericDocumentParcel genericDocumentParcel =
+                parcel.readParcelable(
+                    GenericDocumentParcel.class.getClassLoader(), GenericDocumentParcel.class);
+            return new GenericDocument(genericDocumentParcel);
         } finally {
             parcel.recycle();
         }
     }
 
     /**
-     * Serializes a {@link Bundle} and writes into the given {@link DataOutputStream}.
+     * Serializes a {@link GenericDocument} and writes into the given {@link DataOutputStream}.
      */
-    public static void writeBundleToOutputStream(
-            @NonNull DataOutputStream outputStream, @NonNull Bundle bundle)
+    public static void writeDocumentToOutputStream(
+            @NonNull DataOutputStream outputStream, @NonNull GenericDocument document)
             throws IOException {
+        GenericDocumentParcel documentParcel = document.getDocumentParcel();
         Parcel parcel = Parcel.obtain();
         try {
-            parcel.writeBundle(bundle);
+            parcel.writeParcelable(documentParcel, /*parcelableFlags=*/ 0);
             byte[] serializedMessage = parcel.marshall();
             outputStream.writeInt(serializedMessage.length);
             outputStream.write(serializedMessage);

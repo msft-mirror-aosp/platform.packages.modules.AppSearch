@@ -27,7 +27,7 @@ import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.ArrayMap;
-import com.android.internal.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -298,7 +298,6 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
          * Creates a new {@link GenericDocumentParcel.Builder} from the given {@link
          * GenericDocumentParcel}.
          */
-        @VisibleForTesting
         public Builder(@NonNull GenericDocumentParcel documentSafeParcel) {
             Objects.requireNonNull(documentSafeParcel);
 
