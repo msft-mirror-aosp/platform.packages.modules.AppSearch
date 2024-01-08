@@ -16,6 +16,7 @@
 
 package android.app.appsearch;
 
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.content.AttributionSource;
@@ -93,8 +94,8 @@ public class GlobalSearchSessionUnitTest {
         String invalidPackageName = "not_this_package";
 
         service.getDocuments(
-                new AttributionSource.Builder(android.os.Process.myUid())
-                        .setPackageName(invalidPackageName).build(),
+                new AppSearchAttributionSource(invalidPackageName,
+                        android.os.Process.myUid()),
                 /*targetPackageName=*/mContext.getPackageName(),
                 /*databaseName*/"testDb",
                 /*namespace=*/"namespace",

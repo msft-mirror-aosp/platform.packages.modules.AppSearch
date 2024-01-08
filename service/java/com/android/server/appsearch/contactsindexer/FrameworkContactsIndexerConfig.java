@@ -36,6 +36,8 @@ public class FrameworkContactsIndexerConfig implements ContactsIndexerConfig {
     static final String KEY_CONTACTS_DELTA_UPDATE_LIMIT = "contacts_indexer_delta_update_limit";
     public static final String KEY_CONTACTS_INDEX_FIRST_MIDDLE_AND_LAST_NAMES =
             "contacts_index_first_middle_and_last_names";
+    static final String KEY_CONTACTS_KEEP_UPDATING_ON_ERROR =
+            "contacts_keep_updating_on_error";
 
     @Override
     public boolean isContactsIndexerEnabled() {
@@ -79,5 +81,12 @@ public class FrameworkContactsIndexerConfig implements ContactsIndexerConfig {
         return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_APPSEARCH,
                 KEY_CONTACTS_INDEX_FIRST_MIDDLE_AND_LAST_NAMES,
                 DEFAULT_CONTACTS_INDEX_FIRST_MIDDLE_AND_LAST_NAMES);
+    }
+
+    @Override
+    public boolean shouldKeepUpdatingOnError() {
+        return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_CONTACTS_KEEP_UPDATING_ON_ERROR,
+                DEFAULT_CONTACTS_KEEP_UPDATING_ON_ERROR);
     }
 }

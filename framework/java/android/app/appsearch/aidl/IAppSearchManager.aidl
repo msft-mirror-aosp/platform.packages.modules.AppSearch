@@ -18,11 +18,14 @@ package android.app.appsearch.aidl;
 import android.os.Bundle;
 import android.os.UserHandle;
 
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.stats.SchemaMigrationStats;
+import android.app.appsearch.VisibilityDocument;
 import android.content.AttributionSource;
 import android.os.ParcelFileDescriptor;
 
@@ -38,7 +41,7 @@ interface IAppSearchManager {
      *     {@link AppSearchResult}&lt;{@link Void}&gt;.
      */
     void initialize(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
         in IAppSearchResultCallback callback);
@@ -49,7 +52,7 @@ interface IAppSearchManager {
      * @param callerAttributionSource The permission identity of the package that owns this schema.
      * @param databaseName  The name of the database where this schema lives.
      * @param schemaBundles List of {@link AppSearchSchema} bundles.
-     * @param visibilityBundles List of {@link VisibilityDocument} bundles.
+     * @param visibilityDocs List of {@link VisibilityDocument} docs.
      * @param forceOverride Whether to apply the new schema even if it is incompatible. All
      *     incompatible documents will be deleted.
      * @param schemaVersion  The overall schema version number of the request.
@@ -62,10 +65,10 @@ interface IAppSearchManager {
      *     {@link SetSchemaResponse} bundle.
      */
     void setSchema(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in List<Bundle> schemaBundles,
-        in List<Bundle> visibilityBundles,
+        in List<VisibilityDocument> visibilityDocs,
         boolean forceOverride,
         in int schemaVersion,
         in UserHandle userHandle,
@@ -85,7 +88,7 @@ interface IAppSearchManager {
      *     {@link AppSearchResult}&lt;{@link Bundle}&gt; where the bundle is a GetSchemaResponse.
      */
     void getSchema(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String targetPackageName,
         in String databaseName,
         in UserHandle userHandle,
@@ -103,7 +106,7 @@ interface IAppSearchManager {
      *     {@link AppSearchResult}&lt;{@link List}&lt;{@link String}&gt;&gt;.
      */
     void getNamespaces(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
@@ -126,7 +129,7 @@ interface IAppSearchManager {
      *     where the keys are document IDs, and the values are {@code null}.
      */
     void putDocuments(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in DocumentsParcel documentsParcel,
         in UserHandle userHandle,
@@ -154,7 +157,7 @@ interface IAppSearchManager {
      *     where the keys are document IDs, and the values are Document bundles.
      */
     void getDocuments(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String targetPackageName,
         in String databaseName,
         in String namespace,
@@ -177,7 +180,7 @@ interface IAppSearchManager {
      *         operation.
      */
     void query(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in String queryExpression,
         in Bundle searchSpecBundle,
@@ -198,7 +201,7 @@ interface IAppSearchManager {
      *         operation.
      */
     void globalQuery(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String queryExpression,
         in Bundle searchSpecBundle,
         in UserHandle userHandle,
@@ -221,7 +224,7 @@ interface IAppSearchManager {
      *                  operation.
      */
     void getNextPage(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in long nextPageToken,
         in int joinType,
@@ -240,7 +243,7 @@ interface IAppSearchManager {
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      */
     void invalidateNextPageToken(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in long nextPageToken,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis);
@@ -261,7 +264,7 @@ interface IAppSearchManager {
     *        {@link AppSearchResult}&lt;{@code Void}&gt;.
     */
     void writeQueryResultsToFile(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in ParcelFileDescriptor fileDescriptor,
         in String queryExpression,
@@ -282,7 +285,7 @@ interface IAppSearchManager {
     * @param databaseName  The name of the database where this document lives.
     * @param fileDescriptor The ParcelFileDescriptor where documents should be read from.
     * @param userHandle Handle of the calling user.
-    * @param schemaMigrationStatsBundle the Bundle contains SchemaMigrationStats information.
+    * @param schemaMigrationStats the Parcelable contains SchemaMigrationStats information.
     * @param totalLatencyStartTimeMillis start timestamp to calculate total migration latency in
     *     Millis
     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
@@ -291,11 +294,11 @@ interface IAppSearchManager {
     *     MigrationFailure bundles.
     */
     void putDocumentsFromFile(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in ParcelFileDescriptor fileDescriptor,
         in UserHandle userHandle,
-        in Bundle schemaMigrationStatsBundle,
+        in SchemaMigrationStats schemaMigrationStats,
         in long totalLatencyStartTimeMillis,
         in long binderCallStartTimeMillis,
         in IAppSearchResultCallback callback);
@@ -313,7 +316,7 @@ interface IAppSearchManager {
      *   operation. List contains SearchSuggestionResult bundles.
      */
     void searchSuggestion(
-            in AttributionSource callerAttributionSource,
+            in AppSearchAttributionSource callerAttributionSource,
             in String databaseName,
             in String suggestionQueryExpression,
             in Bundle searchSuggestionSpecBundle,
@@ -347,7 +350,7 @@ interface IAppSearchManager {
      *     {@link AppSearchResult}&lt;{@link Void}&gt;.
      */
     void reportUsage(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String targetPackageName,
         in String databaseName,
         in String namespace,
@@ -376,7 +379,7 @@ interface IAppSearchManager {
      *     failure where the {@code throwable} is {@code null}.
      */
     void removeByDocumentId(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in String namespace,
         in List<String> ids,
@@ -397,7 +400,7 @@ interface IAppSearchManager {
      *     {@link AppSearchResult}&lt;{@link Void}&gt;.
      */
     void removeByQuery(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in String queryExpression,
         in Bundle searchSpecBundle,
@@ -418,7 +421,7 @@ interface IAppSearchManager {
      *     {@link StorageInfo}.
      */
     void getStorageInfo(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
@@ -432,7 +435,7 @@ interface IAppSearchManager {
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      */
     void persistToDisk(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis);
 
@@ -450,7 +453,7 @@ interface IAppSearchManager {
      * @return the success or failure of this operation
      */
     AppSearchResultParcel registerObserverCallback(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String targetPackageName,
         in Bundle observerSpecBundle,
         in UserHandle userHandle,
@@ -468,7 +471,7 @@ interface IAppSearchManager {
      * @return the success or failure of this operation
      */
     AppSearchResultParcel unregisterObserverCallback(
-        in AttributionSource callerAttributionSource,
+        in AppSearchAttributionSource callerAttributionSource,
         in String observedPackage,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
