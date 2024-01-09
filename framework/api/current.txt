@@ -197,13 +197,17 @@ package android.app.appsearch {
     ctor public GenericDocument.Builder(@NonNull String, @NonNull String, @NonNull String);
     ctor @FlaggedApi("com.android.appsearch.flags.enable_generic_document_copy_constructor") public GenericDocument.Builder(@NonNull android.app.appsearch.GenericDocument);
     method @NonNull public android.app.appsearch.GenericDocument build();
+    method @FlaggedApi("com.android.appsearch.flags.enable_generic_document_builder_hidden_methods") @NonNull public BuilderType clearProperty(@NonNull String);
     method @NonNull public BuilderType setCreationTimestampMillis(long);
+    method @FlaggedApi("com.android.appsearch.flags.enable_generic_document_builder_hidden_methods") @NonNull public BuilderType setId(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_generic_document_builder_hidden_methods") @NonNull public BuilderType setNamespace(@NonNull String);
     method @NonNull public BuilderType setPropertyBoolean(@NonNull String, @NonNull boolean...);
     method @NonNull public BuilderType setPropertyBytes(@NonNull String, @NonNull byte[]...);
     method @NonNull public BuilderType setPropertyDocument(@NonNull String, @NonNull android.app.appsearch.GenericDocument...);
     method @NonNull public BuilderType setPropertyDouble(@NonNull String, @NonNull double...);
     method @NonNull public BuilderType setPropertyLong(@NonNull String, @NonNull long...);
     method @NonNull public BuilderType setPropertyString(@NonNull String, @NonNull java.lang.String...);
+    method @FlaggedApi("com.android.appsearch.flags.enable_generic_document_builder_hidden_methods") @NonNull public BuilderType setSchemaType(@NonNull String);
     method @NonNull public BuilderType setScore(@IntRange(from=0, to=java.lang.Integer.MAX_VALUE) int);
     method @NonNull public BuilderType setTtlMillis(long);
   }

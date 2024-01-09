@@ -66,4 +66,11 @@ public class FlagsTest {
                 .isEqualTo(
                         "com.android.appsearch.flags.enable_put_documents_request_add_taken_actions");
     }
+
+    @Test
+    public void testFlagValue_enableGenericDocumentBuilderHiddenMethods() {
+        assertThat(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS)
+                .isEqualTo(
+                        "com.android.appsearch.flags.enable_generic_document_builder_hidden_methods");
+    }
 }

@@ -27,7 +27,6 @@ import static org.mockito.ArgumentMatchers.any;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
-import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.AppSearchSessionShim;
 import android.app.appsearch.BatchResultCallback;
@@ -52,8 +51,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -135,10 +132,7 @@ public class AppSearchHelperTest {
         AppSearchResult<GetSchemaResponse> result = responseFuture.get();
         assertThat(result.isSuccess()).isTrue();
         GetSchemaResponse response = result.getResultValue();
-        assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).hasSize(2);
-        assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).containsKey(
-                ContactPoint.SCHEMA_TYPE);
-        assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).containsEntry(
+        assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).containsExactly(
                 Person.SCHEMA_TYPE,
                 ImmutableSet.of(ImmutableSet.of(SetSchemaRequest.READ_CONTACTS)));
     }
