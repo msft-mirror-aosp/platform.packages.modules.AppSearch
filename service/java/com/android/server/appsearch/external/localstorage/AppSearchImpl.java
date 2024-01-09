@@ -16,7 +16,6 @@
 
 package com.android.server.appsearch.external.localstorage;
 
-import static android.app.appsearch.AppSearchResult.RESULT_INTERNAL_ERROR;
 import static android.app.appsearch.AppSearchResult.RESULT_SECURITY_ERROR;
 import static android.app.appsearch.InternalSetSchemaResponse.newFailedSetSchemaResponse;
 import static android.app.appsearch.InternalSetSchemaResponse.newSuccessfulSetSchemaResponse;
@@ -45,12 +44,11 @@ import android.app.appsearch.SearchSuggestionResult;
 import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.SetSchemaResponse;
 import android.app.appsearch.StorageInfo;
-import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverCallback;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.util.LogUtil;
-import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.ArrayMap;
 import android.util.ArraySet;
@@ -471,9 +469,9 @@ public final class AppSearchImpl implements Closeable {
      * @param packageName The package name that owns the schemas.
      * @param databaseName The name of the database where this schema lives.
      * @param schemas Schemas to set for this app.
-     * @param visibilityDocuments {@link VisibilityDocument}s that contain all visibility setting
+     * @param visibilityConfigs {@link VisibilityConfig}s that contain all visibility setting
      *     information for those schemas has user custom settings. Other schemas in the list that
-     *     don't has a {@link VisibilityDocument} will be treated as having the default visibility,
+     *     don't has a {@link VisibilityConfig} will be treated as having the default visibility,
      *     which is accessible by the system and no other packages.
      * @param forceOverride Whether to force-apply the schema even if it is incompatible. Documents
      *     which do not comply with the new schema will be deleted.
@@ -493,7 +491,7 @@ public final class AppSearchImpl implements Closeable {
             @NonNull String packageName,
             @NonNull String databaseName,
             @NonNull List<AppSearchSchema> schemas,
-            @NonNull List<VisibilityDocument> visibilityDocuments,
+            @NonNull List<VisibilityConfig> visibilityConfigs,
             boolean forceOverride,
             int version,
             @Nullable SetSchemaStats.Builder setSchemaStatsBuilder)
@@ -513,7 +511,7 @@ public final class AppSearchImpl implements Closeable {
                         packageName,
                         databaseName,
                         schemas,
-                        visibilityDocuments,
+                        visibilityConfigs,
                         forceOverride,
                         version,
                         setSchemaStatsBuilder);
@@ -522,7 +520,7 @@ public final class AppSearchImpl implements Closeable {
                         packageName,
                         databaseName,
                         schemas,
-                        visibilityDocuments,
+                        visibilityConfigs,
                         forceOverride,
                         version,
                         setSchemaStatsBuilder);
@@ -544,7 +542,7 @@ public final class AppSearchImpl implements Closeable {
             @NonNull String packageName,
             @NonNull String databaseName,
             @NonNull List<AppSearchSchema> schemas,
-            @NonNull List<VisibilityDocument> visibilityDocuments,
+            @NonNull List<VisibilityConfig> visibilityConfigs,
             boolean forceOverride,
             int version,
             @Nullable SetSchemaStats.Builder setSchemaStatsBuilder)
@@ -598,7 +596,7 @@ public final class AppSearchImpl implements Closeable {
                         packageName,
                         databaseName,
                         schemas,
-                        visibilityDocuments,
+                        visibilityConfigs,
                         forceOverride,
                         version,
                         setSchemaStatsBuilder);
@@ -729,7 +727,7 @@ public final class AppSearchImpl implements Closeable {
             @NonNull String packageName,
             @NonNull String databaseName,
             @NonNull List<AppSearchSchema> schemas,
-            @NonNull List<VisibilityDocument> visibilityDocuments,
+            @NonNull List<VisibilityConfig> visibilityConfigs,
             boolean forceOverride,
             int version,
             @Nullable SetSchemaStats.Builder setSchemaStatsBuilder)
@@ -815,33 +813,36 @@ public final class AppSearchImpl implements Closeable {
         // store before we have already created it.
         if (mVisibilityStoreLocked != null) {
             // Add prefix to all visibility documents.
-            List<VisibilityDocument> prefixedVisibilityDocuments =
-                    new ArrayList<>(visibilityDocuments.size());
             // Find out which Visibility document is deleted or changed to all-default settings.
             // We need to remove them from Visibility Store.
             Set<String> deprecatedVisibilityDocuments =
                     new ArraySet<>(rewrittenSchemaResults.mRewrittenPrefixedTypes.keySet());
-            for (int i = 0; i < visibilityDocuments.size(); i++) {
-                VisibilityDocument unPrefixedDocument = visibilityDocuments.get(i);
-                // The VisibilityDocument is controlled by the client and it's untrusted but we
+            List<VisibilityConfig> prefixedVisibilityConfigs =
+                    new ArrayList<>(visibilityConfigs.size());
+            for (int i = 0; i < visibilityConfigs.size(); i++) {
+                VisibilityConfig visibilityConfig = visibilityConfigs.get(i);
+                // The VisibilityConfig is controlled by the client and it's untrusted but we
                 // make it safe by appending a prefix.
                 // We must control the package-database prefix. Therefore even if the client
                 // fake the id, they can only mess their own app. That's totally allowed and
                 // they can do this via the public API too.
-                String prefixedSchemaType = prefix + unPrefixedDocument.getId();
-                prefixedVisibilityDocuments.add(
-                        new VisibilityDocument.Builder(unPrefixedDocument)
-                                .setId(prefixedSchemaType)
+                // TODO(b/275592563): Move prefixing into VisibilityConfig.createVisibilityDocument
+                //  and createVisibilityOverlay
+                String schemaType = visibilityConfig.getSchemaType();
+                String prefixedSchemaType = prefix + schemaType;
+                prefixedVisibilityConfigs.add(
+                        new VisibilityConfig.Builder(visibilityConfig)
+                                .setSchemaType(prefixedSchemaType)
                                 .build());
                 // This schema has visibility settings. We should keep it from the removal list.
-                deprecatedVisibilityDocuments.remove(prefixedSchemaType);
+                deprecatedVisibilityDocuments.remove(visibilityConfig.getSchemaType());
             }
             // Now deprecatedVisibilityDocuments contains those existing schemas that has
             // all-default visibility settings, add deleted schemas. That's all we need to
             // remove.
             deprecatedVisibilityDocuments.addAll(rewrittenSchemaResults.mDeletedPrefixedTypes);
             mVisibilityStoreLocked.removeVisibility(deprecatedVisibilityDocuments);
-            mVisibilityStoreLocked.setVisibility(prefixedVisibilityDocuments);
+            mVisibilityStoreLocked.setVisibility(prefixedVisibilityConfigs);
         }
         long saveVisibilitySettingEndTimeMillis = SystemClock.elapsedRealtime();
         if (setSchemaStatsBuilder != null) {
@@ -920,33 +921,37 @@ public final class AppSearchImpl implements Closeable {
                 // schema. Avoid call visibility store before we have already created it.
                 if (mVisibilityStoreLocked != null) {
                     String typeName = typeConfig.getSchemaType().substring(typePrefix.length());
-                    VisibilityDocument visibilityDocument =
+                    VisibilityConfig visibilityConfig =
                             mVisibilityStoreLocked.getVisibility(prefixedSchemaType);
-                    if (visibilityDocument != null) {
-                        if (visibilityDocument.isNotDisplayedBySystem()) {
+                    if (visibilityConfig != null) {
+                        if (visibilityConfig.isNotDisplayedBySystem()) {
                             responseBuilder.addSchemaTypeNotDisplayedBySystem(typeName);
                         }
-                        String[] packageNames = visibilityDocument.getPackageNames();
-                        byte[][] sha256Certs = visibilityDocument.getSha256Certs();
-                        if (packageNames.length != sha256Certs.length) {
-                            throw new AppSearchException(
-                                    RESULT_INTERNAL_ERROR,
-                                    "The length of package names and sha256Crets are different!");
-                        }
-                        if (packageNames.length != 0) {
-                            Set<PackageIdentifier> packageIdentifier = new ArraySet<>();
-                            for (int j = 0; j < packageNames.length; j++) {
-                                packageIdentifier.add(
-                                        new PackageIdentifier(packageNames[j], sha256Certs[j]));
-                            }
+                        List<PackageIdentifier> packageIdentifiers =
+                                visibilityConfig.getVisibleToPackages();
+                        if (!packageIdentifiers.isEmpty()) {
                             responseBuilder.setSchemaTypeVisibleToPackages(
-                                    typeName, packageIdentifier);
+                                    typeName, new ArraySet<>(packageIdentifiers));
                         }
                         Set<Set<Integer>> visibleToPermissions =
-                                visibilityDocument.getVisibleToPermissions();
+                                visibilityConfig.getVisibleToPermissions();
                         if (visibleToPermissions != null) {
+                            Set<Set<Integer>> visibleToPermissionsSet =
+                                    new ArraySet<>(visibleToPermissions.size());
+                            for (Set<Integer> permissionList : visibleToPermissions) {
+                                visibleToPermissionsSet.add(new ArraySet<>(permissionList));
+                            }
+
                             responseBuilder.setRequiredPermissionsForSchemaTypeVisibility(
-                                    typeName, visibleToPermissions);
+                                    typeName, visibleToPermissionsSet);
+                        }
+
+                        // Check for Visibility properties from the overlay
+                        PackageIdentifier publiclyVisibleFromPackage =
+                                visibilityConfig.getPubliclyVisibleTargetPackage();
+                        if (publiclyVisibleFromPackage != null) {
+                            responseBuilder.setPubliclyVisibleSchema(
+                                    typeName, publiclyVisibleFromPackage);
                         }
                     }
                 }
@@ -1375,7 +1380,7 @@ public final class AppSearchImpl implements Closeable {
                 if (sStatsBuilder != null && logger != null) {
                     sStatsBuilder.setStatusCode(AppSearchResult.RESULT_SECURITY_ERROR);
                 }
-                return new SearchResultPage(Bundle.EMPTY);
+                return new SearchResultPage();
             }
 
             String prefix = createPrefix(packageName, databaseName);
@@ -1390,7 +1395,7 @@ public final class AppSearchImpl implements Closeable {
             if (searchSpecToProtoConverter.hasNothingToSearch()) {
                 // there is nothing to search over given their search filters, so we can return an
                 // empty SearchResult and skip sending request to Icing.
-                return new SearchResultPage(Bundle.EMPTY);
+                return new SearchResultPage();
             }
 
             SearchResultPage searchResultPage =
@@ -1502,7 +1507,7 @@ public final class AppSearchImpl implements Closeable {
             if (searchSpecToProtoConverter.hasNothingToSearch()) {
                 // there is nothing to search over given their search filters, so we can return an
                 // empty SearchResult and skip sending request to Icing.
-                return new SearchResultPage(Bundle.EMPTY);
+                return new SearchResultPage();
             }
             if (sStatsBuilder != null) {
                 sStatsBuilder.setAclCheckLatencyMillis(

@@ -18,7 +18,7 @@ package android.app.appsearch;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import android.os.Bundle;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.os.Parcel;
 
 import org.junit.Test;
@@ -45,7 +45,7 @@ public class GenericDocumentInternalTest {
 
         // Serialize the document
         Parcel inParcel = Parcel.obtain();
-        inParcel.writeBundle(inDoc.getBundle());
+        inParcel.writeParcelable(inDoc.getDocumentParcel(), /*parcelableFlags=*/ 0);
         byte[] data = inParcel.marshall();
         inParcel.recycle();
 
@@ -53,11 +53,13 @@ public class GenericDocumentInternalTest {
         Parcel outParcel = Parcel.obtain();
         outParcel.unmarshall(data, 0, data.length);
         outParcel.setDataPosition(0);
-        Bundle outBundle = outParcel.readBundle();
+        @SuppressWarnings("deprecation")
+        GenericDocumentParcel documentParcel =
+                outParcel.readParcelable(GenericDocumentParcel.class.getClassLoader());
         outParcel.recycle();
 
         // Compare results
-        GenericDocument outDoc = new GenericDocument(outBundle);
+        GenericDocument outDoc = new GenericDocument(documentParcel);
         assertThat(inDoc).isEqualTo(outDoc);
         assertThat(outDoc.getPropertyString("propString")).isEqualTo("Hello");
         assertThat(outDoc.getPropertyBytesArray("propBytes")).isEqualTo(new byte[][] {{1, 2}});
@@ -85,7 +87,7 @@ public class GenericDocumentInternalTest {
 
         // Serialize the document
         Parcel inParcel = Parcel.obtain();
-        inParcel.writeBundle(inDoc.getBundle());
+        inParcel.writeParcelable(inDoc.getDocumentParcel(), /*parcelableFlags=*/ 0);
         byte[] data = inParcel.marshall();
         inParcel.recycle();
 
@@ -93,11 +95,13 @@ public class GenericDocumentInternalTest {
         Parcel outParcel = Parcel.obtain();
         outParcel.unmarshall(data, 0, data.length);
         outParcel.setDataPosition(0);
-        Bundle outBundle = outParcel.readBundle();
+        @SuppressWarnings("deprecation")
+        GenericDocumentParcel documentParcel =
+                outParcel.readParcelable(GenericDocumentParcel.class.getClassLoader());
         outParcel.recycle();
 
         // Compare results
-        GenericDocument outDoc = new GenericDocument(outBundle);
+        GenericDocument outDoc = new GenericDocument(documentParcel);
         assertThat(inDoc).isEqualTo(outDoc);
         assertThat(outDoc.getParentTypes()).isEqualTo(Arrays.asList("Class1", "Class2"));
         assertThat(outDoc.getPropertyString("propString")).isEqualTo("Hello");

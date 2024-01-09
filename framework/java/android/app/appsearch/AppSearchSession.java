@@ -31,8 +31,6 @@ import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.SchemaMigrationUtil;
 import android.os.Build;
-import android.os.Bundle;
-import android.os.Parcelable;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -157,33 +155,31 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(callbackExecutor);
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
-        List<Bundle> schemaBundles = new ArrayList<>(request.getSchemas().size());
-        for (AppSearchSchema schema : request.getSchemas()) {
-            if (!schema.getParentTypes().isEmpty()
+        List<AppSearchSchema> schemaList = new ArrayList<>(request.getSchemas());
+        for (int i = 0; i < schemaList.size(); i++) {
+            if (!schemaList.get(i).getParentTypes().isEmpty()
                     && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 throw new UnsupportedOperationException(
                         "SCHEMA_ADD_PARENT_TYPE is not available on this AppSearch "
                                 + "implementation.");
             }
-            schemaBundles.add(schema.getBundle());
         }
 
-        // Extract a List<VisibilityDocument> from the request
-        List<VisibilityDocument> visibilityDocuments = VisibilityDocument
-                .toVisibilityDocuments(request);
+        // Extract a List<VisibilityConfig> from the request
+        List<VisibilityConfig> visibilityConfigs = VisibilityConfig.toVisibilityConfigs(request);
         // No need to trigger migration if user never set migrator
         if (request.getMigrators().isEmpty()) {
             setSchemaNoMigrations(
                     request,
-                    schemaBundles,
-                    visibilityDocuments,
+                    schemaList,
+                    visibilityConfigs,
                     callbackExecutor,
                     callback);
         } else {
             setSchemaWithMigrations(
                     request,
-                    schemaBundles,
-                    visibilityDocuments,
+                    schemaList,
+                    visibilityConfigs,
                     workExecutor,
                     callbackExecutor,
                     callback);
@@ -216,10 +212,11 @@ public final class AppSearchSession implements Closeable {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
                             safeExecute(executor, callback, () -> {
-                                AppSearchResult<Bundle> result = resultParcel.getResult();
+                                AppSearchResult<GetSchemaResponse> result =
+                                        resultParcel.getResult();
                                 if (result.isSuccess()) {
-                                    GetSchemaResponse response = new GetSchemaResponse(
-                                        Objects.requireNonNull(result.getResultValue()));
+                                    GetSchemaResponse response =
+                                            Objects.requireNonNull(result.getResultValue());
                                     callback.accept(AppSearchResult.newSuccessfulResult(response));
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
@@ -738,7 +735,7 @@ public final class AppSearchSession implements Closeable {
                     mCallerAttributionSource,
                     mDatabaseName,
                     queryExpression,
-                    searchSpec.getBundle(),
+                    searchSpec,
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                     new IAppSearchResultCallback.Stub() {
@@ -823,16 +820,16 @@ public final class AppSearchSession implements Closeable {
      */
     private void setSchemaNoMigrations(
             @NonNull SetSchemaRequest request,
-            @NonNull List<Bundle> schemaBundles,
-            @NonNull List<VisibilityDocument> visibilityDocs,
+            @NonNull List<AppSearchSchema> schemas,
+            @NonNull List<VisibilityConfig> visibilityConfigs,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
         try {
             mService.setSchema(
                     mCallerAttributionSource,
                     mDatabaseName,
-                    schemaBundles,
-                    visibilityDocs,
+                    schemas,
+                    visibilityConfigs,
                     request.isForceOverride(),
                     request.getVersion(),
                     mUserHandle,
@@ -842,12 +839,12 @@ public final class AppSearchSession implements Closeable {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
                             safeExecute(executor, callback, () -> {
-                                AppSearchResult<Bundle> result = resultParcel.getResult();
+                                AppSearchResult<InternalSetSchemaResponse> result =
+                                        resultParcel.getResult();
                                 if (result.isSuccess()) {
                                     try {
                                         InternalSetSchemaResponse internalSetSchemaResponse =
-                                                new InternalSetSchemaResponse(
-                                                        result.getResultValue());
+                                                result.getResultValue();
                                         if (!internalSetSchemaResponse.isSuccess()) {
                                             // check is the set schema call failed because
                                             // incompatible changes. That's the only case we
@@ -884,8 +881,8 @@ public final class AppSearchSession implements Closeable {
      */
     private void setSchemaWithMigrations(
             @NonNull SetSchemaRequest request,
-            @NonNull List<Bundle> schemaBundles,
-            @NonNull List<VisibilityDocument> visibilityDocs,
+            @NonNull List<AppSearchSchema> schemas,
+            @NonNull List<VisibilityConfig> visibilityConfigs,
             @NonNull Executor workExecutor,
             @NonNull @CallbackExecutor Executor callbackExecutor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
@@ -929,7 +926,7 @@ public final class AppSearchSession implements Closeable {
 
                 // No need to trigger migration if no migrator is active.
                 if (activeMigrators.isEmpty()) {
-                    setSchemaNoMigrations(request, schemaBundles, visibilityDocs,
+                    setSchemaNoMigrations(request, schemas, visibilityConfigs,
                             callbackExecutor, callback);
                     return;
                 }
@@ -938,14 +935,14 @@ public final class AppSearchSession implements Closeable {
                 // incompatible/deleted types.
                 long firstSetSchemaLatencyStartMillis = SystemClock.elapsedRealtime();
                 CountDownLatch setSchemaLatch = new CountDownLatch(1);
-                AtomicReference<AppSearchResult<Bundle>> setSchemaResultRef =
+                AtomicReference<AppSearchResult<InternalSetSchemaResponse>> setSchemaResultRef =
                         new AtomicReference<>();
 
                 mService.setSchema(
                         mCallerAttributionSource,
                         mDatabaseName,
-                        schemaBundles,
-                        visibilityDocs,
+                        schemas,
+                        visibilityConfigs,
                         /*forceOverride=*/ false,
                         request.getVersion(),
                         mUserHandle,
@@ -959,7 +956,8 @@ public final class AppSearchSession implements Closeable {
                             }
                         });
                 setSchemaLatch.await();
-                AppSearchResult<Bundle> setSchemaResult = setSchemaResultRef.get();
+                AppSearchResult<InternalSetSchemaResponse> setSchemaResult =
+                        setSchemaResultRef.get();
                 if (!setSchemaResult.isSuccess()) {
                     // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                     safeExecute(
@@ -970,7 +968,7 @@ public final class AppSearchSession implements Closeable {
                     return;
                 }
                 InternalSetSchemaResponse internalSetSchemaResponse1 =
-                        new InternalSetSchemaResponse(setSchemaResult.getResultValue());
+                        setSchemaResult.getResultValue();
                 long firstSetSchemaLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                 // 3. If forceOverride is false, check that all incompatible types will be migrated.
@@ -1000,14 +998,14 @@ public final class AppSearchSession implements Closeable {
                         internalSetSchemaResponse = internalSetSchemaResponse1;
                     } else {
                         CountDownLatch setSchema2Latch = new CountDownLatch(1);
-                        AtomicReference<AppSearchResult<Bundle>> setSchema2ResultRef =
-                                new AtomicReference<>();
+                        AtomicReference<AppSearchResult<InternalSetSchemaResponse>>
+                                setSchema2ResultRef = new AtomicReference<>();
                         // only trigger second setSchema() call if the first one is fail.
                         mService.setSchema(
                                 mCallerAttributionSource,
                                 mDatabaseName,
-                                schemaBundles,
-                                visibilityDocs,
+                                schemas,
+                                visibilityConfigs,
                                 /*forceOverride=*/ true,
                                 request.getVersion(),
                                 mUserHandle,
@@ -1021,7 +1019,8 @@ public final class AppSearchSession implements Closeable {
                                     }
                                 });
                         setSchema2Latch.await();
-                        AppSearchResult<Bundle> setSchema2Result = setSchema2ResultRef.get();
+                        AppSearchResult<InternalSetSchemaResponse> setSchema2Result =
+                                setSchema2ResultRef.get();
                         if (!setSchema2Result.isSuccess()) {
                             // we failed to set the schema in second time with forceOverride = true,
                             // which is an impossible case. Since we only swallow the incompatible
@@ -1037,7 +1036,7 @@ public final class AppSearchSession implements Closeable {
                             return;
                         }
                         InternalSetSchemaResponse internalSetSchemaResponse2 =
-                                new InternalSetSchemaResponse(setSchema2Result.getResultValue());
+                                setSchema2Result.getResultValue();
                         if (!internalSetSchemaResponse2.isSuccess()) {
                             // Impossible case, we just set forceOverride to be true, we should
                             // never fail in incompatible changes. And all other cases should failed
@@ -1074,9 +1073,8 @@ public final class AppSearchSession implements Closeable {
                             .setSecondSetSchemaLatencyMillis(
                                     (int)(secondSetSchemaLatencyEndTimeMillis
                                             - secondSetSchemaLatencyStartMillis));
-                    SetSchemaResponse.Builder responseBuilder = internalSetSchemaResponse
-                            .getSetSchemaResponse()
-                            .toBuilder()
+                    SetSchemaResponse.Builder responseBuilder = new SetSchemaResponse.Builder(
+                            internalSetSchemaResponse.getSetSchemaResponse())
                             .addMigratedTypes(activeMigrators.keySet());
 
                     // 6. Put all the migrated documents into the index, now that the new schema is
