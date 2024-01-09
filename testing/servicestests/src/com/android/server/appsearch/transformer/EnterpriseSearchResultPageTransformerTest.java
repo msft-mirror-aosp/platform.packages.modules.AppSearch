@@ -16,16 +16,15 @@
 
 package com.android.server.appsearch.transformer;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.SearchResult;
 import android.app.appsearch.SearchResultPage;
-import android.os.Bundle;
-
-import org.junit.Test;
-
-import static com.google.common.truth.Truth.assertThat;
 
 import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
+
+import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.List;
@@ -121,7 +120,7 @@ public class EnterpriseSearchResultPageTransformerTest {
     @Test
     public void testTransformSearchResultPage_emptyPageSucceeds() {
         // There was a bug previously when handling empty SearchResultPage
-        SearchResultPage searchResultPage = new SearchResultPage(Bundle.EMPTY);
+        SearchResultPage searchResultPage = new SearchResultPage();
         assertThat(EnterpriseSearchResultPageTransformer.transformSearchResultPage(
                 searchResultPage)).isEqualTo(searchResultPage);
     }

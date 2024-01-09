@@ -20,7 +20,7 @@ import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
-import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.util.ArraySet;
 
@@ -66,7 +66,7 @@ public class VisibilityStoreMigrationHelperFromV1 {
                                 appSearchImpl.getDocument(
                                         VisibilityStore.VISIBILITY_PACKAGE_NAME,
                                         VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
+                                        VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
                                         allPrefixedSchemaTypes.get(i),
                                         /*typePropertyPaths=*/ Collections.emptyMap())));
             } catch (AppSearchException e) {
@@ -90,9 +90,9 @@ public class VisibilityStoreMigrationHelperFromV1 {
      * @param visibilityDocumentV1s The deprecated Visibility Document we found.
      */
     @NonNull
-    static List<VisibilityDocument> toVisibilityDocumentsV2(
+    static List<VisibilityConfig> toVisibilityDocumentsV2(
             @NonNull List<VisibilityDocumentV1> visibilityDocumentV1s) {
-        List<VisibilityDocument> latestVisibilityDocuments =
+        List<VisibilityConfig> latestVisibilityDocuments =
                 new ArrayList<>(visibilityDocumentV1s.size());
         for (int i = 0; i < visibilityDocumentV1s.size(); i++) {
             VisibilityDocumentV1 visibilityDocumentV1 = visibilityDocumentV1s.get(i);
@@ -127,8 +127,8 @@ public class VisibilityStoreMigrationHelperFromV1 {
                     packageIdentifiers.add(new PackageIdentifier(packageNames[j], sha256Certs[j]));
                 }
             }
-            VisibilityDocument.Builder latestVisibilityDocumentBuilder =
-                    new VisibilityDocument.Builder(visibilityDocumentV1.getId())
+            VisibilityConfig.Builder latestVisibilityDocumentBuilder =
+                    new VisibilityConfig.Builder(visibilityDocumentV1.getId())
                             .setNotDisplayedBySystem(visibilityDocumentV1.isNotDisplayedBySystem())
                             .addVisibleToPackages(packageIdentifiers);
             if (!visibleToPermissions.isEmpty()) {

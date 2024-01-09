@@ -19,6 +19,7 @@ package android.app.appsearch.aidl;
 import android.annotation.NonNull;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.ParcelableUtil;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.os.Parcel;
 import android.os.Parcelable;
 import java.util.ArrayList;
@@ -65,8 +66,10 @@ public final class DocumentsParcel implements Parcelable {
             List<GenericDocument> documentList = new ArrayList<>(size);
             for (int i = 0; i < size; i++) {
                 // Read document's bundle and convert them.
-                documentList.add(new GenericDocument(
-                        unmarshallParcel.readBundle(getClass().getClassLoader())));
+                GenericDocumentParcel genericDocumentParcel =
+                    unmarshallParcel.readParcelable(
+                        getClass().getClassLoader(), GenericDocumentParcel.class);
+                documentList.add(new GenericDocument(genericDocumentParcel));
             }
             return documentList;
         } finally {
@@ -113,7 +116,7 @@ public final class DocumentsParcel implements Parcelable {
             data.writeInt(documents.size());
             // Save all document's bundle to the temporary Parcel object.
             for (int i = 0; i < documents.size(); i++) {
-                data.writeBundle(documents.get(i).getBundle());
+                data.writeParcelable(documents.get(i).getDocumentParcel(), /*parcelableFlags=*/0);
             }
             bytes = data.marshall();
         } finally {

@@ -26,10 +26,10 @@ import static android.permission.PermissionManager.PERMISSION_GRANTED;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
-import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
-import android.content.AttributionSource;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.UserHandle;
@@ -41,6 +41,7 @@ import com.android.server.appsearch.external.localstorage.visibilitystore.Visibi
 import com.android.server.appsearch.util.PackageManagerUtil;
 import com.android.server.appsearch.util.PackageUtil;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -73,26 +74,26 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         }
 
         FrameworkCallerAccess frameworkCallerAccess = (FrameworkCallerAccess) callerAccess;
-        VisibilityDocument visibilityDocument = visibilityStore.getVisibility(prefixedSchema);
-        if (visibilityDocument == null) {
+        VisibilityConfig visibilityConfig = visibilityStore.getVisibility(prefixedSchema);
+        if (visibilityConfig == null) {
             // The target schema doesn't exist yet. We will treat it as default setting and the only
             // accessible case is that the caller has system access.
             return frameworkCallerAccess.doesCallerHaveSystemAccess();
         }
 
         if (frameworkCallerAccess.doesCallerHaveSystemAccess() &&
-                !visibilityDocument.isNotDisplayedBySystem()) {
+                !visibilityConfig.isNotDisplayedBySystem()) {
             return true;
         }
 
-        if (isSchemaVisibleToPackages(visibilityDocument,
+        if (isSchemaVisibleToPackages(visibilityConfig,
                 frameworkCallerAccess.getCallingAttributionSource().getUid())) {
             // The caller is in the allow list and has access to the given schema.
             return true;
         }
 
         // Checker whether the caller has all required for the given schema.
-        return isSchemaVisibleToPermission(visibilityDocument,
+        return isSchemaVisibleToPermission(visibilityConfig,
                 frameworkCallerAccess.getCallingAttributionSource());
     }
 
@@ -105,15 +106,12 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
      * certificate was once used to sign the package, the package will still be granted access. This
      * does not handle packages that have been signed by multiple certificates.
      */
-    private boolean isSchemaVisibleToPackages(@NonNull VisibilityDocument visibilityDocument,
+    private boolean isSchemaVisibleToPackages(@NonNull VisibilityConfig visibilityConfig,
             int callerUid) {
-        String[] packageNames = visibilityDocument.getPackageNames();
-        byte[][] sha256Certs = visibilityDocument.getSha256Certs();
-        if (packageNames.length != sha256Certs.length) {
-            // We always set them in pair, So this must has something wrong.
-            throw new IllegalArgumentException("Package names and sha 256 certs doesn't match!");
-        }
-        for (int i = 0; i < packageNames.length; i++) {
+        List<PackageIdentifier> visibleToPackages = visibilityConfig.getVisibleToPackages();
+        for (int i = 0; i < visibleToPackages.size(); i++) {
+            PackageIdentifier visibleToPackage = visibleToPackages.get(i);
+
             // TODO(b/169883602): Consider caching the UIDs of packages. Looking this up in the
             // package manager could be costly. We would also need to update the cache on
             // package-removals.
@@ -123,7 +121,8 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
             // make calls to us. So just check if the appId portion of the uid is the same. This is
             // essentially UserHandle.isSameApp, but that's not a system API for us to use.
             int callerAppId = UserHandle.getAppId(callerUid);
-            int packageUid = PackageUtil.getPackageUid(mUserContext, packageNames[i]);
+            int packageUid = PackageUtil.getPackageUid(
+                    mUserContext, visibleToPackage.getPackageName());
             int userAppId = UserHandle.getAppId(packageUid);
             if (callerAppId != userAppId) {
                 continue;
@@ -132,8 +131,8 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
             // Check that the package also has the matching certificate
             if (PackageManagerUtil.hasSigningCertificate(
                     mUserContext,
-                    packageNames[i],
-                    sha256Certs[i])) {
+                    visibleToPackage.getPackageName(),
+                    visibleToPackage.getSha256Certificate())) {
                 // The caller has the right package name and right certificate!
                 return true;
             }
@@ -145,9 +144,9 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
     /**
      * Returns whether the caller holds required permissions for the given schema.
      */
-    private boolean isSchemaVisibleToPermission(@NonNull VisibilityDocument visibilityDocument,
+    private boolean isSchemaVisibleToPermission(@NonNull VisibilityConfig visibilityConfig,
             @Nullable AppSearchAttributionSource callerAttributionSource) {
-        Set<Set<Integer>> visibleToPermissions = visibilityDocument.getVisibleToPermissions();
+        Set<Set<Integer>> visibleToPermissions = visibilityConfig.getVisibleToPermissions();
         if (visibleToPermissions == null || visibleToPermissions.isEmpty()
                 || callerAttributionSource == null) {
             // Provider doesn't set any permissions or there is no caller attribution source,

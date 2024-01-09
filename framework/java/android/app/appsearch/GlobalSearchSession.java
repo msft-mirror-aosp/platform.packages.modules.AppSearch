@@ -30,8 +30,6 @@ import android.app.appsearch.observer.DocumentChangeInfo;
 import android.app.appsearch.observer.ObserverCallback;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.observer.SchemaChangeInfo;
-import android.content.AttributionSource;
-import android.os.Bundle;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -294,10 +292,11 @@ public class GlobalSearchSession implements Closeable {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
                             safeExecute(executor, callback, () -> {
-                                AppSearchResult<Bundle> result = resultParcel.getResult();
+                                AppSearchResult<GetSchemaResponse> result =
+                                        resultParcel.getResult();
                                 if (result.isSuccess()) {
-                                    GetSchemaResponse response = new GetSchemaResponse(
-                                            Objects.requireNonNull(result.getResultValue()));
+                                    GetSchemaResponse response =
+                                            Objects.requireNonNull(result.getResultValue());
                                     callback.accept(AppSearchResult.newSuccessfulResult(response));
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));

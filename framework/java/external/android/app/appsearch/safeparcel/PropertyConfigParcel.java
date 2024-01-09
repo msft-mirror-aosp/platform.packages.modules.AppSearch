@@ -69,9 +69,11 @@ public final class PropertyConfigParcel extends AbstractSafeParcelable {
     @Field(id = 8, getter = "getJoinableConfigParcel")
     private final JoinableConfigParcel mJoinableConfigParcel;
 
+    @Nullable private Integer mHashCode;
+
     /** Constructor for {@link PropertyConfigParcel}. */
     @Constructor
-    public PropertyConfigParcel(
+    PropertyConfigParcel(
             @Param(id = 1) @NonNull String name,
             @Param(id = 2) @DataType int dataType,
             @Param(id = 3) @Cardinality int cardinality,
@@ -88,6 +90,104 @@ public final class PropertyConfigParcel extends AbstractSafeParcelable {
         mDocumentIndexingConfigParcel = documentIndexingConfigParcel;
         mIntegerIndexingConfigParcel = integerIndexingConfigParcel;
         mJoinableConfigParcel = joinableConfigParcel;
+    }
+
+    /** Creates a {@link PropertyConfigParcel} for String. */
+    @NonNull
+    public static PropertyConfigParcel createForString(
+            @NonNull String propertyName,
+            @Cardinality int cardinality,
+            @NonNull StringIndexingConfigParcel stringIndexingConfigParcel,
+            @NonNull JoinableConfigParcel joinableConfigParcel) {
+        return new PropertyConfigParcel(
+                Objects.requireNonNull(propertyName),
+                AppSearchSchema.PropertyConfig.DATA_TYPE_STRING,
+                cardinality,
+                /*schemaType=*/ null,
+                Objects.requireNonNull(stringIndexingConfigParcel),
+                /*documentIndexingConfigParcel=*/ null,
+                /*integerIndexingConfigParcel=*/ null,
+                Objects.requireNonNull(joinableConfigParcel));
+    }
+
+    /** Creates a {@link PropertyConfigParcel} for Long. */
+    @NonNull
+    public static PropertyConfigParcel createForLong(
+            @NonNull String propertyName,
+            @Cardinality int cardinality,
+            @AppSearchSchema.LongPropertyConfig.IndexingType int indexingType) {
+        return new PropertyConfigParcel(
+                Objects.requireNonNull(propertyName),
+                AppSearchSchema.PropertyConfig.DATA_TYPE_LONG,
+                cardinality,
+                /*schemaType=*/ null,
+                /*stringIndexingConfigParcel=*/ null,
+                /*documentIndexingConfigParcel=*/ null,
+                new IntegerIndexingConfigParcel(indexingType),
+                /*joinableConfigParcel=*/ null);
+    }
+
+    /** Creates a {@link PropertyConfigParcel} for Double. */
+    @NonNull
+    public static PropertyConfigParcel createForDouble(
+            @NonNull String propertyName, @Cardinality int cardinality) {
+        return new PropertyConfigParcel(
+                Objects.requireNonNull(propertyName),
+                AppSearchSchema.PropertyConfig.DATA_TYPE_DOUBLE,
+                cardinality,
+                /*schemaType=*/ null,
+                /*stringIndexingConfigParcel=*/ null,
+                /*documentIndexingConfigParcel=*/ null,
+                /*integerIndexingConfigParcel=*/ null,
+                /*joinableConfigParcel=*/ null);
+    }
+
+    /** Creates a {@link PropertyConfigParcel} for Boolean. */
+    @NonNull
+    public static PropertyConfigParcel createForBoolean(
+            @NonNull String propertyName, @Cardinality int cardinality) {
+        return new PropertyConfigParcel(
+                Objects.requireNonNull(propertyName),
+                AppSearchSchema.PropertyConfig.DATA_TYPE_BOOLEAN,
+                cardinality,
+                /*schemaType=*/ null,
+                /*stringIndexingConfigParcel=*/ null,
+                /*documentIndexingConfigParcel=*/ null,
+                /*integerIndexingConfigParcel=*/ null,
+                /*joinableConfigParcel=*/ null);
+    }
+
+    /** Creates a {@link PropertyConfigParcel} for Bytes. */
+    @NonNull
+    public static PropertyConfigParcel createForBytes(
+            @NonNull String propertyName, @Cardinality int cardinality) {
+        return new PropertyConfigParcel(
+                Objects.requireNonNull(propertyName),
+                AppSearchSchema.PropertyConfig.DATA_TYPE_BYTES,
+                cardinality,
+                /*schemaType=*/ null,
+                /*stringIndexingConfigParcel=*/ null,
+                /*documentIndexingConfigParcel=*/ null,
+                /*integerIndexingConfigParcel=*/ null,
+                /*joinableConfigParcel=*/ null);
+    }
+
+    /** Creates a {@link PropertyConfigParcel} for Document. */
+    @NonNull
+    public static PropertyConfigParcel createForDocument(
+            @NonNull String propertyName,
+            @Cardinality int cardinality,
+            @NonNull String schemaType,
+            @NonNull DocumentIndexingConfigParcel documentIndexingConfigParcel) {
+        return new PropertyConfigParcel(
+                Objects.requireNonNull(propertyName),
+                AppSearchSchema.PropertyConfig.DATA_TYPE_DOCUMENT,
+                cardinality,
+                Objects.requireNonNull(schemaType),
+                /*stringIndexingConfigParcel=*/ null,
+                Objects.requireNonNull(documentIndexingConfigParcel),
+                /*integerIndexingConfigParcel=*/ null,
+                /*joinableConfigParcel=*/ null);
     }
 
     /** Gets name for the property. */
@@ -138,6 +238,72 @@ public final class PropertyConfigParcel extends AbstractSafeParcelable {
         return mJoinableConfigParcel;
     }
 
+    @Override
+    public void writeToParcel(@NonNull Parcel dest, int flags) {
+        PropertyConfigParcelCreator.writeToParcel(this, dest, flags);
+    }
+
+    @Override
+    public boolean equals(@Nullable Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof PropertyConfigParcel)) {
+            return false;
+        }
+        PropertyConfigParcel otherProperty = (PropertyConfigParcel) other;
+        return Objects.equals(mName, otherProperty.mName)
+                && Objects.equals(mDataType, otherProperty.mDataType)
+                && Objects.equals(mCardinality, otherProperty.mCardinality)
+                && Objects.equals(mSchemaType, otherProperty.mSchemaType)
+                && Objects.equals(
+                        mStringIndexingConfigParcel, otherProperty.mStringIndexingConfigParcel)
+                && Objects.equals(
+                        mDocumentIndexingConfigParcel, otherProperty.mDocumentIndexingConfigParcel)
+                && Objects.equals(
+                        mIntegerIndexingConfigParcel, otherProperty.mIntegerIndexingConfigParcel)
+                && Objects.equals(mJoinableConfigParcel, otherProperty.mJoinableConfigParcel);
+    }
+
+    @Override
+    public int hashCode() {
+        if (mHashCode == null) {
+            mHashCode =
+                    Objects.hash(
+                            mName,
+                            mDataType,
+                            mCardinality,
+                            mSchemaType,
+                            mStringIndexingConfigParcel,
+                            mDocumentIndexingConfigParcel,
+                            mIntegerIndexingConfigParcel,
+                            mJoinableConfigParcel);
+        }
+        return mHashCode;
+    }
+
+    @Override
+    @NonNull
+    public String toString() {
+        return "{name: "
+                + mName
+                + ", dataType: "
+                + mDataType
+                + ", cardinality: "
+                + mCardinality
+                + ", schemaType: "
+                + mSchemaType
+                + ", stringIndexingConfigParcel: "
+                + mStringIndexingConfigParcel
+                + ", documentIndexingConfigParcel: "
+                + mDocumentIndexingConfigParcel
+                + ", integerIndexingConfigParcel: "
+                + mIntegerIndexingConfigParcel
+                + ", joinableConfigParcel: "
+                + mJoinableConfigParcel
+                + "}";
+    }
+
     /** Class to hold join configuration for a String type. */
     @SafeParcelable.Class(creator = "JoinableConfigParcelCreator")
     public static class JoinableConfigParcel extends AbstractSafeParcelable {
@@ -174,6 +340,34 @@ public final class PropertyConfigParcel extends AbstractSafeParcelable {
         @Override
         public void writeToParcel(@NonNull Parcel dest, int flags) {
             JoinableConfigParcelCreator.writeToParcel(this, dest, flags);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mJoinableValueType, mDeletionPropagation);
+        }
+
+        @Override
+        public boolean equals(@Nullable Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof JoinableConfigParcel)) {
+                return false;
+            }
+            JoinableConfigParcel otherObject = (JoinableConfigParcel) other;
+            return Objects.equals(mJoinableValueType, otherObject.mJoinableValueType)
+                    && Objects.equals(mDeletionPropagation, otherObject.mDeletionPropagation);
+        }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return "{joinableValueType: "
+                    + mJoinableValueType
+                    + ", deletePropagation "
+                    + mDeletionPropagation
+                    + "}";
         }
     }
 
@@ -217,6 +411,30 @@ public final class PropertyConfigParcel extends AbstractSafeParcelable {
         public void writeToParcel(@NonNull Parcel dest, int flags) {
             StringIndexingConfigParcelCreator.writeToParcel(this, dest, flags);
         }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mIndexingType, mTokenizerType);
+        }
+
+        @Override
+        public boolean equals(@Nullable Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof StringIndexingConfigParcel)) {
+                return false;
+            }
+            StringIndexingConfigParcel otherObject = (StringIndexingConfigParcel) other;
+            return Objects.equals(mIndexingType, otherObject.mIndexingType)
+                    && Objects.equals(mTokenizerType, otherObject.mTokenizerType);
+        }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return "{indexingType: " + mIndexingType + ", tokenizerType " + mTokenizerType + "}";
+        }
     }
 
     /** Class to hold configuration for integer property type. */
@@ -246,6 +464,29 @@ public final class PropertyConfigParcel extends AbstractSafeParcelable {
         @Override
         public void writeToParcel(@NonNull Parcel dest, int flags) {
             IntegerIndexingConfigParcelCreator.writeToParcel(this, dest, flags);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mIndexingType);
+        }
+
+        @Override
+        public boolean equals(@Nullable Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof IntegerIndexingConfigParcel)) {
+                return false;
+            }
+            IntegerIndexingConfigParcel otherObject = (IntegerIndexingConfigParcel) other;
+            return Objects.equals(mIndexingType, otherObject.mIndexingType);
+        }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return "{indexingType: " + mIndexingType + "}";
         }
     }
 
@@ -287,10 +528,35 @@ public final class PropertyConfigParcel extends AbstractSafeParcelable {
         public void writeToParcel(@NonNull Parcel dest, int flags) {
             DocumentIndexingConfigParcelCreator.writeToParcel(this, dest, flags);
         }
-    }
 
-    @Override
-    public void writeToParcel(@NonNull Parcel dest, int flags) {
-        PropertyConfigParcelCreator.writeToParcel(this, dest, flags);
+        @Override
+        public int hashCode() {
+            return Objects.hash(mIndexNestedProperties, mIndexableNestedPropertiesList);
+        }
+
+        @Override
+        public boolean equals(@Nullable Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof DocumentIndexingConfigParcel)) {
+                return false;
+            }
+            DocumentIndexingConfigParcel otherObject = (DocumentIndexingConfigParcel) other;
+            return Objects.equals(mIndexNestedProperties, otherObject.mIndexNestedProperties)
+                    && Objects.equals(
+                            mIndexableNestedPropertiesList,
+                            otherObject.mIndexableNestedPropertiesList);
+        }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return "{indexNestedProperties: "
+                    + mIndexNestedProperties
+                    + ", indexableNestedPropertiesList: "
+                    + mIndexableNestedPropertiesList
+                    + "}";
+        }
     }
 }

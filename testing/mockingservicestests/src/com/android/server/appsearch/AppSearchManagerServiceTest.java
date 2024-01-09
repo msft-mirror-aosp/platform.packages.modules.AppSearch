@@ -18,13 +18,16 @@ package com.android.server.appsearch;
 import static android.Manifest.permission.READ_GLOBAL_APP_SEARCH_DATA;
 import static android.system.OsConstants.O_RDONLY;
 import static android.system.OsConstants.O_WRONLY;
+
 import static com.android.internal.util.ConcurrentUtils.DIRECT_EXECUTOR;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_DENYLIST;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_API_COSTS;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_ENABLED;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
+
 import static com.google.common.truth.Truth.assertThat;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -45,6 +48,7 @@ import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
@@ -63,7 +67,6 @@ import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
@@ -71,8 +74,10 @@ import android.os.ServiceManager;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.provider.DeviceConfig;
+
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
+
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
 import com.android.modules.utils.testing.ExtendedMockitoRule;
@@ -84,13 +89,11 @@ import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.stats.PlatformLogger;
 import com.android.server.usage.StorageStatsManagerLocal;
-import com.google.common.util.concurrent.SettableFuture;
-import java.io.File;
-import java.io.FileDescriptor;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
+
 import libcore.io.IoBridge;
+
+import com.google.common.util.concurrent.SettableFuture;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -98,11 +101,17 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.ArgumentCaptor;
 
+import java.io.File;
+import java.io.FileDescriptor;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+
 public class AppSearchManagerServiceTest {
     private static final String DATABASE_NAME = "databaseName";
     private static final String NAMESPACE = "namespace";
     private static final String ID = "ID";
-    private static final Bundle SEARCH_SPEC_BUNDLE = new Bundle();
+    private static final SearchSpec EMPTY_SEARCH_SPEC = new SearchSpec.Builder().build();
     // Mostly guarantees the logged estimated binder latency is positive and doesn't overflow
     private static final long BINDER_CALL_START_TIME = SystemClock.elapsedRealtime() - 1;
     // TODO(b/279047435): use actual AppSearchResult.RESULT_DENIED constant after it's unhidden
@@ -332,7 +341,7 @@ public class AppSearchManagerServiceTest {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.query(
                 AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", /* searchSpecBundle= */ new Bundle(), mUserHandle,
+                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
                 BINDER_CALL_START_TIME, callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME, CallStats.CALL_TYPE_SEARCH);
@@ -344,7 +353,7 @@ public class AppSearchManagerServiceTest {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.globalQuery(
                 AppSearchAttributionSource.createAttributionSource(mContext),
-                /* queryExpression= */ "", /* searchSpecBundle= */ new Bundle(), mUserHandle,
+                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
                 BINDER_CALL_START_TIME, callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_GLOBAL_SEARCH);
@@ -410,7 +419,7 @@ public class AppSearchManagerServiceTest {
         mAppSearchManagerServiceStub.writeQueryResultsToFile(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 DATABASE_NAME, new ParcelFileDescriptor(fd), /* queryExpression= */ "",
-                /* searchSpecBundle= */ new Bundle(), mUserHandle, BINDER_CALL_START_TIME,
+                EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
                 callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
@@ -508,7 +517,7 @@ public class AppSearchManagerServiceTest {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.removeByQuery(
                 AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", /* searchSpecBundle= */ new Bundle(), mUserHandle,
+                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
                 BINDER_CALL_START_TIME, callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
@@ -1165,7 +1174,7 @@ public class AppSearchManagerServiceTest {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.query(
                 AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", SEARCH_SPEC_BUNDLE, mUserHandle, BINDER_CALL_START_TIME,
+                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
                 callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_SEARCH, callback.get());
     }
@@ -1174,7 +1183,7 @@ public class AppSearchManagerServiceTest {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.globalQuery(
                 AppSearchAttributionSource.createAttributionSource(mContext),
-                /* queryExpression= */ "", SEARCH_SPEC_BUNDLE, mUserHandle, BINDER_CALL_START_TIME,
+                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
                 callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_SEARCH, callback.get());
     }
@@ -1214,7 +1223,7 @@ public class AppSearchManagerServiceTest {
         mAppSearchManagerServiceStub.writeQueryResultsToFile(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 DATABASE_NAME, new ParcelFileDescriptor(fd), /* queryExpression= */ "",
-                SEARCH_SPEC_BUNDLE, mUserHandle, BINDER_CALL_START_TIME, callback);
+                EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME, callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE,
                 callback.get());
     }
@@ -1287,7 +1296,7 @@ public class AppSearchManagerServiceTest {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.removeByQuery(
                 AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", SEARCH_SPEC_BUNDLE, mUserHandle, BINDER_CALL_START_TIME,
+                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
                 callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH,
                 callback.get());
