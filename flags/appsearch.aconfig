@@ -43,3 +43,19 @@ flag {
     bug: "314026345"
     is_fixed_read_only: true
 }
+
+flag {
+    name: "enable_set_publicly_visible_schema"
+    namespace: "appsearch"
+    description: "Enable setPubliclyVisibleSchema API in SetSchemaRequest."
+    bug: "275592563"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_generic_document_builder_hidden_methods"
+    namespace: "appsearch"
+    description: "Enable GenericDocument.Builder to use previously hidden methods."
+    bug: "318408639"
+    is_fixed_read_only: true
+}
