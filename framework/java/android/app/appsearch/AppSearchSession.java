@@ -28,6 +28,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.SchemaMigrationUtil;
 import android.os.Build;
@@ -294,7 +295,8 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         DocumentsParcel documentsParcel = new DocumentsParcel(
-            request.getGenericDocuments(), request.getTakenActionGenericDocuments());
+                toGenericDocumentParcels(request.getGenericDocuments()),
+                toGenericDocumentParcels(request.getTakenActionGenericDocuments()));
         try {
             mService.putDocuments(mCallerAttributionSource, mDatabaseName, documentsParcel,
                     mUserHandle,
@@ -1097,5 +1099,15 @@ public final class AppSearchSession implements Closeable {
                         () -> callback.accept(AppSearchResult.throwableToFailedResult(e)));
             }
         });
+    }
+
+    @NonNull
+    private static List<GenericDocumentParcel> toGenericDocumentParcels(
+            List<GenericDocument> docs) {
+        List<GenericDocumentParcel> docParcels = new ArrayList<>(docs.size());
+        for (int i = 0; i < docs.size(); ++i) {
+            docParcels.add(docs.get(i).getDocumentParcel());
+        }
+        return docParcels;
     }
 }

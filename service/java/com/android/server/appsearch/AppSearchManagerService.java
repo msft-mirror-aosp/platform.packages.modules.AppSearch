@@ -657,7 +657,7 @@ public class AppSearchManagerService extends SystemService {
             }
             if (checkCallDenied(callingPackageName, databaseName, CallStats.CALL_TYPE_PUT_DOCUMENTS,
                     callback, targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
-                    /* numOperations= */ documentsParcel.getDocuments().size())) {
+                    /* numOperations= */ documentsParcel.getTotalDocumentCount())) {
                 return;
             }
             boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
@@ -670,13 +670,14 @@ public class AppSearchManagerService extends SystemService {
                     AppSearchBatchResult.Builder<String, Void> resultBuilder =
                             new AppSearchBatchResult.Builder<>();
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-                    List<GenericDocument> documents = documentsParcel.getDocuments();
-                    List<GenericDocument> takenActionDocuments =
-                            documentsParcel.getTakenActionGenericDocuments();
+                    List<GenericDocumentParcel> documentParcels =
+                            documentsParcel.getDocumentParcels();
+                    List<GenericDocumentParcel> takenActionDocumentParcels =
+                            documentsParcel.getTakenActionGenericDocumentParcels();
 
                     // Write GenericDocuments
-                    for (int i = 0; i < documents.size(); i++) {
-                        GenericDocument document = documents.get(i);
+                    for (int i = 0; i < documentParcels.size(); i++) {
+                        GenericDocument document = new GenericDocument(documentParcels.get(i));
                         try {
                             instance.getAppSearchImpl().putDocument(
                                     callingPackageName,
@@ -699,8 +700,9 @@ public class AppSearchManagerService extends SystemService {
                     }
 
                     // Write TakenActions
-                    for (int i = 0; i < takenActionDocuments.size(); i++) {
-                        GenericDocument document = takenActionDocuments.get(i);
+                    for (int i = 0; i < takenActionDocumentParcels.size(); i++) {
+                        GenericDocument document =
+                                new GenericDocument(takenActionDocumentParcels.get(i));
                         try {
                             instance.getAppSearchImpl().putDocument(
                                     callingPackageName,
@@ -735,7 +737,7 @@ public class AppSearchManagerService extends SystemService {
                     checkForOptimize(
                             targetUser,
                             instance,
-                            /* mutateBatchSize= */ documents.size() + takenActionDocuments.size());
+                            /* mutateBatchSize= */ documentsParcel.getTotalDocumentCount());
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -768,7 +770,7 @@ public class AppSearchManagerService extends SystemService {
                 logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
                         CallStats.CALL_TYPE_PUT_DOCUMENTS, targetUser, binderCallStartTimeMillis,
                         totalLatencyStartTimeMillis, /* numOperations= */
-                        documentsParcel.getDocuments().size(), RESULT_RATE_LIMITED);
+                        documentsParcel.getTotalDocumentCount(), RESULT_RATE_LIMITED);
             }
         }
 
