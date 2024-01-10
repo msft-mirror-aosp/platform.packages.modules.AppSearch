@@ -73,6 +73,13 @@ public final class Flags {
     public static final String FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA =
             FLAG_PREFIX + "enable_set_publicly_visible_schema";
 
+    /**
+     * Enable {@link android.app.appsearch.GenericDocument.Builder} to use previously hidden
+     * methods.
+     */
+    public static final String FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS =
+            FLAG_PREFIX + "enable_generic_document_builder_hidden_methods";
+
     // Whether the features should be enabled.
     //
     // In Jetpack, those should always return true.
@@ -120,6 +127,16 @@ public final class Flags {
 
     /** Whether setPubliclyVisibleSchema in SetSchemaRequest.Builder should be enabled. */
     public static boolean enableSetPubliclyVisibleSchema() {
+        return true;
+    }
+
+    /**
+     * Whether {@link android.app.appsearch.GenericDocument.Builder#setNamespace(String)}, {@link
+     * android.app.appsearch.GenericDocument.Builder#setId(String)}, {@link
+     * android.app.appsearch.GenericDocument.Builder#setSchemaType(String)}, and {@link
+     * android.app.appsearch.GenericDocument.Builder#clearProperty(String)} should be enabled.
+     */
+    public static boolean enableGenericDocumentBuilderHiddenMethods() {
         return true;
     }
 }
