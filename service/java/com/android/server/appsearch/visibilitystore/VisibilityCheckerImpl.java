@@ -86,6 +86,11 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
             return true;
         }
 
+        if (isSchemaPubliclyVisibleFromPackage(visibilityConfig, frameworkCallerAccess)) {
+            // The calling package has visibility to the package providing the schema.
+            return true;
+        }
+
         if (isSchemaVisibleToPackages(visibilityConfig,
                 frameworkCallerAccess.getCallingAttributionSource().getUid())) {
             // The caller is in the allow list and has access to the given schema.
@@ -95,6 +100,38 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         // Checker whether the caller has all required for the given schema.
         return isSchemaVisibleToPermission(visibilityConfig,
                 frameworkCallerAccess.getCallingAttributionSource());
+    }
+
+    private boolean isSchemaPubliclyVisibleFromPackage(@NonNull VisibilityConfig visibilityConfig,
+            FrameworkCallerAccess frameworkCallerAccess) {
+        PackageIdentifier targetPackage = visibilityConfig.getPubliclyVisibleTargetPackage();
+        if (targetPackage == null) {
+            return false;
+        }
+
+        // Ensure the sha 256 certificate matches the certificate of the actual publicly visible
+        // target package.
+        if (!PackageManagerUtil.hasSigningCertificate(mUserContext,
+                targetPackage.getPackageName(), targetPackage.getSha256Certificate())) {
+            return false;
+        }
+
+        // We cannot use the package name of the schema itself because the schema could be in a
+        // separate package from the publicly visible target package. For instance, Apps Indexer
+        // could store a document representing a timer app in a schema in the android package, but
+        // the publicly visible target package for that schema could be the timer app package.
+        try {
+            // The call that opens up documents to "public" access
+            if (mUserContext.getPackageManager().canPackageQuery(
+                    frameworkCallerAccess.getCallingPackageName(),
+                    targetPackage.getPackageName())) {
+                return true;
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            // One or both of the packages doesn't exist. Either way, we don't have public
+            // visibility to the target package, so continue to return false.
+        }
+        return false;
     }
 
     /**
