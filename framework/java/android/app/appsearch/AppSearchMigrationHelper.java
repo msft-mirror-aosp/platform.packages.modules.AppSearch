@@ -271,8 +271,7 @@ public class AppSearchMigrationHelper implements Closeable {
             parcel.unmarshall(serializedMessage, 0, serializedMessage.length);
             parcel.setDataPosition(0);
             GenericDocumentParcel genericDocumentParcel =
-                parcel.readParcelable(
-                    GenericDocumentParcel.class.getClassLoader(), GenericDocumentParcel.class);
+                    parcel.readParcelable(GenericDocumentParcel.class.getClassLoader());
             return new GenericDocument(genericDocumentParcel);
         } finally {
             parcel.recycle();
