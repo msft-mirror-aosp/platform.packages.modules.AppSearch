@@ -24,15 +24,11 @@ import android.annotation.SuppressLint;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
-import android.app.appsearch.safeparcel.PackageIdentifierParcel;
 import android.app.appsearch.safeparcel.SafeParcelable;
-import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.ArrayMap;
 import android.util.ArraySet;
-
-import com.android.internal.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,12 +40,6 @@ import java.util.Set;
 /** The response class of {@link AppSearchSession#getSchema} */
 @SafeParcelable.Class(creator = "GetSchemaResponseCreator")
 public final class GetSchemaResponse extends AbstractSafeParcelable {
-    // This is still needed in order to retrieve the values for the Map of {@link android.Manifest
-    // .permission} combinations for the mSchemasVisibleToPermissions field.
-    //
-    // TODO(b/275629842): Replace the usage of bundle and this key in the
-    //  mSchemasVisibleToPermissions field.
-    private static final String ALL_REQUIRED_PERMISSION_FIELD = "allRequiredPermission";
 
     @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)
     @NonNull
@@ -62,23 +52,13 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
     @Field(id = 2)
     final List<AppSearchSchema> mSchemas;
 
+    /**
+     * List of VisibilityConfigs for the current schema. May be {@code null} if retrieving the
+     * visibility settings is not possible on the current backend.
+     */
     @Field(id = 3)
-    final List<String> mSchemasNotDisplayedBySystem;
-    // Maps are not supported by SafeParcelable fields, using Bundle instead. Here the key is
-    // schema type and value is a list of PackageIdentifiers representing packages that have
-    // access to that schema type.
-    @Field(id = 4)
-    final Bundle mSchemasVisibleToPackages;
-    // Maps are not supported by SafeParcelable fields, using Bundle instead. Here the key is
-    // schema type and value is the list of {@link android.Manifest.permission} combinations that
-    // the querier must hold to access that schema type.
-    @Field(id = 5)
-    final Bundle mSchemasVisibleToPermissions;
-    // Maps are not supported by SafeParcelable fields, using Bundle instead. Here each key is a
-    // publicly visible schema type and value is the {@link PackageIdentifier} specifying the
-    // package the schemas are from.
-    @Field(id = 6)
-    final Bundle mPubliclyVisibleSchemas;
+    @Nullable
+    final List<VisibilityConfig> mVisibilityConfigs;
 
     /**
      * This set contains all schemas most recently successfully provided to {@link
@@ -86,12 +66,14 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
      * fetch it.
      */
     @Nullable private Set<AppSearchSchema> mSchemasCached;
+
     /**
      * This Set contains all schemas that are not displayed by the system. All values in the set are
      * prefixed with the package-database prefix. We do lazy fetch, the object will be created when
      * you first time fetch it.
      */
     @Nullable private Set<String> mSchemasNotDisplayedBySystemCached;
+
     /**
      * This map contains all schemas and {@link PackageIdentifier} that has access to the schema.
      * All keys in the map are prefixed with the package-database prefix. We do lazy fetch, the
@@ -119,16 +101,10 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
     GetSchemaResponse(
             @Param(id = 1) int version,
             @Param(id = 2) @NonNull List<AppSearchSchema> schemas,
-            @Param(id = 3) List<String> schemasNotDisplayedBySystem,
-            @Param(id = 4) Bundle schemasVisibleToPackages,
-            @Param(id = 5) Bundle schemasVisibleToPermissions,
-            @Param(id = 6) Bundle publiclyVisibleSchemas) {
+            @Param(id = 3) @Nullable List<VisibilityConfig> visibilityConfigs) {
         mVersion = version;
         mSchemas = Objects.requireNonNull(schemas);
-        mSchemasNotDisplayedBySystem = schemasNotDisplayedBySystem;
-        mSchemasVisibleToPackages = schemasVisibleToPackages;
-        mSchemasVisibleToPermissions = schemasVisibleToPermissions;
-        mPubliclyVisibleSchemas = publiclyVisibleSchemas;
+        mVisibilityConfigs = visibilityConfigs;
     }
 
     /**
@@ -158,10 +134,15 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
      */
     @NonNull
     public Set<String> getSchemaTypesNotDisplayedBySystem() {
-        checkGetVisibilitySettingSupported();
+        List<VisibilityConfig> visibilityConfigs = getVisibilityConfigsOrThrow();
         if (mSchemasNotDisplayedBySystemCached == null) {
-            mSchemasNotDisplayedBySystemCached =
-                    Collections.unmodifiableSet(new ArraySet<>(mSchemasNotDisplayedBySystem));
+            Set<String> copy = new ArraySet<>();
+            for (int i = 0; i < visibilityConfigs.size(); i++) {
+                if (visibilityConfigs.get(i).isNotDisplayedBySystem()) {
+                    copy.add(visibilityConfigs.get(i).getSchemaType());
+                }
+            }
+            mSchemasNotDisplayedBySystemCached = Collections.unmodifiableSet(copy);
         }
         return mSchemasNotDisplayedBySystemCached;
     }
@@ -171,21 +152,18 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
      * type.
      */
     @NonNull
-    @SuppressWarnings("deprecation")
     public Map<String, Set<PackageIdentifier>> getSchemaTypesVisibleToPackages() {
-        checkGetVisibilitySettingSupported();
+        List<VisibilityConfig> visibilityConfigs = getVisibilityConfigsOrThrow();
         if (mSchemasVisibleToPackagesCached == null) {
-            Set<String> schemaTypes = mSchemasVisibleToPackages.keySet();
             Map<String, Set<PackageIdentifier>> copy = new ArrayMap<>();
-            for (String key : schemaTypes) {
-                List<PackageIdentifierParcel> packageIdentifierParcels =
-                        Objects.requireNonNull(
-                                mSchemasVisibleToPackages.getParcelableArrayList(key));
-                Set<PackageIdentifier> packageIdentifiers = new ArraySet<>();
-                for (int i = 0; i < packageIdentifierParcels.size(); i++) {
-                    packageIdentifiers.add(new PackageIdentifier(packageIdentifierParcels.get(i)));
+            for (int i = 0; i < visibilityConfigs.size(); i++) {
+                VisibilityConfig visibilityConfig = visibilityConfigs.get(i);
+                List<PackageIdentifier> visibleToPackages = visibilityConfig.getVisibleToPackages();
+                if (!visibleToPackages.isEmpty()) {
+                    copy.put(
+                            visibilityConfig.getSchemaType(),
+                            Collections.unmodifiableSet(new ArraySet<>(visibleToPackages)));
                 }
-                copy.put(key, packageIdentifiers);
             }
             mSchemasVisibleToPackagesCached = Collections.unmodifiableMap(copy);
         }
@@ -219,28 +197,18 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
      *     SetSchemaRequest#READ_ASSISTANT_APP_SEARCH_DATA}.
      */
     @NonNull
-    @SuppressWarnings("deprecation")
     public Map<String, Set<Set<Integer>>> getRequiredPermissionsForSchemaTypeVisibility() {
-        checkGetVisibilitySettingSupported();
+        List<VisibilityConfig> visibilityConfigs = getVisibilityConfigsOrThrow();
         if (mSchemasVisibleToPermissionsCached == null) {
-            Set<String> schemaTypes = mSchemasVisibleToPermissions.keySet();
-            Map<String, Set<Set<Integer>>> copy = new ArrayMap<>(schemaTypes.size());
-            for (String key : schemaTypes) {
-                ArrayList<Bundle> allRequiredPermissionsBundle =
-                        mSchemasVisibleToPermissions.getParcelableArrayList(key);
-                Set<Set<Integer>> visibleToPermissions = new ArraySet<>();
-                if (allRequiredPermissionsBundle != null) {
-                    // This should never be null
-                    for (int i = 0; i < allRequiredPermissionsBundle.size(); i++) {
-                        visibleToPermissions.add(
-                                new ArraySet<>(
-                                        allRequiredPermissionsBundle
-                                                .get(i)
-                                                .getIntegerArrayList(
-                                                        ALL_REQUIRED_PERMISSION_FIELD)));
-                    }
+            Map<String, Set<Set<Integer>>> copy = new ArrayMap<>();
+            for (int i = 0; i < visibilityConfigs.size(); i++) {
+                VisibilityConfig visibilityConfig = visibilityConfigs.get(i);
+                Set<Set<Integer>> visibleToPermissions = visibilityConfig.getVisibleToPermissions();
+                if (!visibleToPermissions.isEmpty()) {
+                    copy.put(
+                            visibilityConfig.getSchemaType(),
+                            Collections.unmodifiableSet(visibleToPermissions));
                 }
-                copy.put(key, visibleToPermissions);
             }
             mSchemasVisibleToPermissionsCached = Collections.unmodifiableMap(copy);
         }
@@ -256,31 +224,31 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
     @FlaggedApi(Flags.FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA)
     @NonNull
     public Map<String, PackageIdentifier> getPubliclyVisibleSchemas() {
-        checkGetVisibilitySettingSupported();
+        List<VisibilityConfig> visibilityConfigs = getVisibilityConfigsOrThrow();
         if (mPubliclyVisibleSchemasCached == null) {
-            // This could be null, which is fine, we return an empty map.s
-            if (mPubliclyVisibleSchemas == null) {
-                return Collections.emptyMap();
+            Map<String, PackageIdentifier> copy = new ArrayMap<>();
+            for (int i = 0; i < visibilityConfigs.size(); i++) {
+                VisibilityConfig visibilityConfig = visibilityConfigs.get(i);
+                PackageIdentifier publiclyVisibleTargetPackage =
+                        visibilityConfig.getPubliclyVisibleTargetPackage();
+                if (publiclyVisibleTargetPackage != null) {
+                    copy.put(visibilityConfig.getSchemaType(), publiclyVisibleTargetPackage);
+                }
             }
-            Set<String> schemaTypes = mPubliclyVisibleSchemas.keySet();
-            Map<String, PackageIdentifier> copy = new ArrayMap<>(schemaTypes.size());
-            for (String key : schemaTypes) {
-                @SuppressWarnings("deprecation")
-                PackageIdentifierParcel parcel = mPubliclyVisibleSchemas.getParcelable(key);
-                copy.put(key, new PackageIdentifier(Objects.requireNonNull(parcel)));
-            }
-
             mPubliclyVisibleSchemasCached = Collections.unmodifiableMap(copy);
         }
         return mPubliclyVisibleSchemasCached;
     }
 
-    private void checkGetVisibilitySettingSupported() {
-        if (mSchemasVisibleToPackages == null) {
+    @NonNull
+    private List<VisibilityConfig> getVisibilityConfigsOrThrow() {
+        List<VisibilityConfig> visibilityConfigs = mVisibilityConfigs;
+        if (visibilityConfigs == null) {
             throw new UnsupportedOperationException(
                     "Get visibility setting is not supported with "
                             + "this backend/Android API level combination.");
         }
+        return visibilityConfigs;
     }
 
     @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)
@@ -297,11 +265,8 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
          * Creates the object when we actually set them. If we never set visibility settings, we
          * should throw {@link UnsupportedOperationException} in the visibility getters.
          */
-        @Nullable private ArrayList<String> mSchemasNotDisplayedBySystem;
+        @Nullable private Map<String, VisibilityConfig.Builder> mVisibilityConfigBuilders;
 
-        private Bundle mSchemasVisibleToPackages;
-        private Bundle mSchemasVisibleToPermissions;
-        private Bundle mPubliclyVisibleSchemas;
         private boolean mBuilt = false;
 
         /** Create a {@link Builder} object} */
@@ -346,10 +311,9 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
         public Builder addSchemaTypeNotDisplayedBySystem(@NonNull String schemaType) {
             Objects.requireNonNull(schemaType);
             resetIfBuilt();
-            if (mSchemasNotDisplayedBySystem == null) {
-                mSchemasNotDisplayedBySystem = new ArrayList<>();
-            }
-            mSchemasNotDisplayedBySystem.add(schemaType);
+            VisibilityConfig.Builder visibilityConfigBuilder =
+                    getOrCreateVisibilityConfigBuilder(schemaType);
+            visibilityConfigBuilder.setNotDisplayedBySystem(true);
             return this;
         }
 
@@ -380,12 +344,9 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
             Objects.requireNonNull(schemaType);
             Objects.requireNonNull(packageIdentifiers);
             resetIfBuilt();
-            ArrayList<PackageIdentifierParcel> packageIdentifierParcels =
-                    new ArrayList<>(packageIdentifiers.size());
-            for (PackageIdentifier packageIdentifier : packageIdentifiers) {
-                packageIdentifierParcels.add(packageIdentifier.getPackageIdentifierParcel());
-            }
-            mSchemasVisibleToPackages.putParcelableArrayList(schemaType, packageIdentifierParcels);
+            VisibilityConfig.Builder visibilityConfigBuilder =
+                    getOrCreateVisibilityConfigBuilder(schemaType);
+            visibilityConfigBuilder.addVisibleToPackages(packageIdentifiers);
             return this;
         }
 
@@ -408,15 +369,15 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
          *   <li>A querier holds both PermissionA and PermissionC doesn't have access.
          * </ul>
          *
+         * @param schemaType The schema type to set visibility on.
+         * @param visibleToPermissions The Android permissions that will be required to access the
+         *     given schema.
          * @see android.Manifest.permission#READ_SMS
          * @see android.Manifest.permission#READ_CALENDAR
          * @see android.Manifest.permission#READ_CONTACTS
          * @see android.Manifest.permission#READ_EXTERNAL_STORAGE
          * @see android.Manifest.permission#READ_HOME_APP_SEARCH_DATA
          * @see android.Manifest.permission#READ_ASSISTANT_APP_SEARCH_DATA
-         * @param schemaType The schema type to set visibility on.
-         * @param visibleToPermissions The Android permissions that will be required to access the
-         *     given schema.
          */
         // Getter getRequiredPermissionsForSchemaTypeVisibility returns a map for all schemaTypes.
         @CanIgnoreReturnValue
@@ -429,22 +390,9 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
             Objects.requireNonNull(schemaType);
             Objects.requireNonNull(visibleToPermissions);
             resetIfBuilt();
-            ArrayList<Bundle> visibleToPermissionsBundle = new ArrayList<>();
-            for (Set<Integer> allRequiredPermissions : visibleToPermissions) {
-                for (int permission : allRequiredPermissions) {
-                    Preconditions.checkArgumentInRange(
-                            permission,
-                            SetSchemaRequest.READ_SMS,
-                            SetSchemaRequest.READ_ASSISTANT_APP_SEARCH_DATA,
-                            "permission");
-                }
-                Bundle allRequiredPermissionsBundle = new Bundle();
-                allRequiredPermissionsBundle.putIntegerArrayList(
-                        ALL_REQUIRED_PERMISSION_FIELD, new ArrayList<>(allRequiredPermissions));
-                visibleToPermissionsBundle.add(allRequiredPermissionsBundle);
-            }
-            mSchemasVisibleToPermissions.putParcelableArrayList(
-                    schemaType, visibleToPermissionsBundle);
+            VisibilityConfig.Builder visibilityConfigBuilder =
+                    getOrCreateVisibilityConfigBuilder(schemaType);
+            visibilityConfigBuilder.setVisibleToPermissions(visibleToPermissions);
             return this;
         }
 
@@ -452,7 +400,7 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
          * Specify that the schema should be publicly available, to packages which already have
          * visibility to {@code packageIdentifier}.
          *
-         * @param schema the schema to make publicly accessible.
+         * @param schemaType the schema to make publicly accessible.
          * @param packageIdentifier the package from which the document schema is from.
          * @see SetSchemaRequest.Builder#setPubliclyVisibleSchema
          */
@@ -461,13 +409,13 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
         @FlaggedApi(Flags.FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA)
         @NonNull
         public Builder setPubliclyVisibleSchema(
-                @NonNull String schema, @NonNull PackageIdentifier packageIdentifier) {
-            Objects.requireNonNull(schema);
+                @NonNull String schemaType, @NonNull PackageIdentifier packageIdentifier) {
+            Objects.requireNonNull(schemaType);
             Objects.requireNonNull(packageIdentifier);
             resetIfBuilt();
-
-            mPubliclyVisibleSchemas.putParcelable(
-                    schema, packageIdentifier.getPackageIdentifierParcel());
+            VisibilityConfig.Builder visibilityConfigBuilder =
+                    getOrCreateVisibilityConfigBuilder(schemaType);
+            visibilityConfigBuilder.setPubliclyVisibleTargetPackage(packageIdentifier);
             return this;
         }
 
@@ -487,15 +435,9 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
         @NonNull
         public Builder setVisibilitySettingSupported(boolean visibilitySettingSupported) {
             if (visibilitySettingSupported) {
-                mSchemasNotDisplayedBySystem = new ArrayList<>();
-                mSchemasVisibleToPackages = new Bundle();
-                mSchemasVisibleToPermissions = new Bundle();
-                mPubliclyVisibleSchemas = new Bundle();
+                mVisibilityConfigBuilders = new ArrayMap<>();
             } else {
-                mSchemasNotDisplayedBySystem = null;
-                mSchemasVisibleToPackages = null;
-                mSchemasVisibleToPermissions = null;
-                mPubliclyVisibleSchemas = null;
+                mVisibilityConfigBuilders = null;
             }
             return this;
         }
@@ -503,32 +445,33 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
         /** Builds a {@link GetSchemaResponse} object. */
         @NonNull
         public GetSchemaResponse build() {
+            List<VisibilityConfig> visibilityConfigs = null;
+            if (mVisibilityConfigBuilders != null) {
+                visibilityConfigs = new ArrayList<>();
+                for (VisibilityConfig.Builder visibilityConfigBuilder :
+                        mVisibilityConfigBuilders.values()) {
+                    visibilityConfigs.add(visibilityConfigBuilder.build());
+                }
+            }
             mBuilt = true;
-            return new GetSchemaResponse(
-                    mVersion,
-                    mSchemas,
-                    mSchemasNotDisplayedBySystem,
-                    mSchemasVisibleToPackages,
-                    mSchemasVisibleToPermissions,
-                    mPubliclyVisibleSchemas);
+            return new GetSchemaResponse(mVersion, mSchemas, visibilityConfigs);
+        }
+
+        @NonNull
+        private VisibilityConfig.Builder getOrCreateVisibilityConfigBuilder(
+                @NonNull String schemaType) {
+            VisibilityConfig.Builder builder = mVisibilityConfigBuilders.get(schemaType);
+            if (builder == null) {
+                builder = new VisibilityConfig.Builder(schemaType);
+                mVisibilityConfigBuilders.put(schemaType, builder);
+            }
+            return builder;
         }
 
         private void resetIfBuilt() {
             if (mBuilt) {
+                // No need to copy mVisibilityConfigBuilders -- it gets copied during build().
                 mSchemas = new ArrayList<>(mSchemas);
-                if (mPubliclyVisibleSchemas != null) {
-                    // Only reset the visibility fields if it was actually set.
-                    mSchemasNotDisplayedBySystem = new ArrayList<>(mSchemasNotDisplayedBySystem);
-                    Bundle copyVisibleToPackages = new Bundle();
-                    copyVisibleToPackages.putAll(mSchemasVisibleToPackages);
-                    mSchemasVisibleToPackages = copyVisibleToPackages;
-                    Bundle copyVisibleToPermissions = new Bundle();
-                    copyVisibleToPermissions.putAll(mSchemasVisibleToPermissions);
-                    mSchemasVisibleToPermissions = copyVisibleToPermissions;
-                    Bundle copyPubliclyVisibleSchemas = new Bundle();
-                    copyPubliclyVisibleSchemas.putAll(mPubliclyVisibleSchemas);
-                    mPubliclyVisibleSchemas = copyPubliclyVisibleSchemas;
-                }
                 mBuilt = false;
             }
         }
