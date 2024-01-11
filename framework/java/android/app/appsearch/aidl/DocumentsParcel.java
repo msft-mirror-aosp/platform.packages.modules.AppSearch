@@ -67,8 +67,7 @@ public final class DocumentsParcel implements Parcelable {
             for (int i = 0; i < size; i++) {
                 // Read document's bundle and convert them.
                 GenericDocumentParcel genericDocumentParcel =
-                    unmarshallParcel.readParcelable(
-                        getClass().getClassLoader(), GenericDocumentParcel.class);
+                        unmarshallParcel.readParcelable(getClass().getClassLoader());
                 documentList.add(new GenericDocument(genericDocumentParcel));
             }
             return documentList;
