@@ -50,7 +50,6 @@ import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
-import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 
@@ -72,6 +71,9 @@ public class VisibilityCheckerImplTest {
      * Always trigger optimize in this class. OptimizeStrategy will be tested in its own test class.
      */
     private static final OptimizeStrategy ALWAYS_OPTIMIZE = optimizeInfo -> true;
+    // These constants are hidden in SetSchemaRequest
+    private static final int ENTERPRISE_ACCESS = 7;
+    private static final int ENTERPRISE_CONTACTS_DEVICE_POLICY = 8;
 
     @Rule public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
     private final Map<UserHandle, PackageManager> mMockPackageManagers = new ArrayMap<>();
@@ -143,15 +145,15 @@ public class VisibilityCheckerImplTest {
                 ImmutableList.of(visibilityConfig1, visibilityConfig2));
 
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ true),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*isForEnterprise=*/ false),
                 "package",
                 "prefix/Schema1",
                 mVisibilityStore))
                 .isFalse();
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ true),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*isForEnterprise=*/ false),
                 "package",
                 "prefix/Schema2",
                 mVisibilityStore))
@@ -162,15 +164,15 @@ public class VisibilityCheckerImplTest {
         mVisibilityStore.setVisibility(
                 ImmutableList.of(visibilityConfig1, visibilityConfig2));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ true),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*isForEnterprise=*/ false),
                 "package",
                 "prefix/Schema1",
                 mVisibilityStore))
                 .isTrue();
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ true),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*isForEnterprise=*/ false),
                 "package",
                 "prefix/Schema2",
                 mVisibilityStore))
@@ -211,7 +213,7 @@ public class VisibilityCheckerImplTest {
                 .thenReturn(false);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
-                        /*callerHasSystemAccess=*/ false),
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false),
                 "package",
                 "prefix/SchemaFoo",
                 mVisibilityStore))
@@ -225,7 +227,7 @@ public class VisibilityCheckerImplTest {
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
-                        /*callerHasSystemAccess=*/ false),
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false),
                 "package",
                 "prefix/SchemaFoo",
                 mVisibilityStore))
@@ -239,7 +241,7 @@ public class VisibilityCheckerImplTest {
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
-                        /*callerHasSystemAccess=*/ false),
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false),
                 "package",
                 "prefix/SchemaFoo",
                 mVisibilityStore))
@@ -252,7 +254,7 @@ public class VisibilityCheckerImplTest {
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameBar, uidBar),
-                        /*callerHasSystemAccess=*/ false),
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false),
                 "package",
                 "prefix/SchemaBar",
                 mVisibilityStore))
@@ -264,18 +266,30 @@ public class VisibilityCheckerImplTest {
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig1, visibilityConfig2));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
-                        /*callerHasSystemAccess=*/ false),
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false),
                 "package",
                 "prefix/SchemaFoo",
                 mVisibilityStore))
                 .isFalse();
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameBar, uidBar),
-                        /*callerHasSystemAccess=*/ false),
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false),
                 "package",
                 "prefix/SchemaBar",
                 mVisibilityStore))
                 .isFalse();
+    }
+
+    @Test
+    public void testIsSchemaSearchableByCaller_noVisibilityConfig_defaultPlatformVisible() {
+        String prefix = PrefixUtil.createPrefix("package", "database");
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*isForEnterprise=*/ false),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isTrue();
     }
 
     @Test
@@ -298,8 +312,8 @@ public class VisibilityCheckerImplTest {
 
         // If we can't verify the Foo package that has access, assume it doesn't have access.
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ false),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*isForEnterprise=*/ false),
                 "package",
                 "prefix/SchemaFoo",
                 mVisibilityStore))
@@ -319,8 +333,8 @@ public class VisibilityCheckerImplTest {
 
         // is accessible for caller who has system access.
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ true),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*isForEnterprise=*/ false),
                 /*packageName=*/ "",
                 "$/Schema",
                 mVisibilityStore)).isTrue();
@@ -333,8 +347,8 @@ public class VisibilityCheckerImplTest {
                 .thenReturn(true);
         // is accessible for caller who in the allow package list.
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ false),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*isForEnterprise=*/ false),
                 /*packageName=*/ "",
                 "$/Schema",
                 mVisibilityStore)).isTrue();
@@ -347,12 +361,27 @@ public class VisibilityCheckerImplTest {
                 /*id=*/prefix + "Schema").build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ true),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*isForEnterprise=*/ false),
                 "package",
                 prefix + "Schema",
                 mVisibilityStore))
                 .isTrue();
+    }
+
+    @Test
+    public void testSetSchema_enterpriseNotPlatformVisible() throws Exception {
+        String prefix = PrefixUtil.createPrefix("package", "database");
+        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+                /*id=*/ prefix + "Schema").build();
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*shouldCheckEnterpriseAccess=*/ true),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isFalse();
     }
 
     @Test
@@ -364,8 +393,8 @@ public class VisibilityCheckerImplTest {
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ true),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ true,
+                        /*isForEnterprise=*/ false),
                 "package",
                 prefix + "Schema",
                 mVisibilityStore))
@@ -380,11 +409,11 @@ public class VisibilityCheckerImplTest {
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ false),
-                        "package",
-                        prefix + "Schema",
-                        mVisibilityStore))
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*isForEnterprise=*/ false),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
                 .isFalse();
     }
 
@@ -410,12 +439,42 @@ public class VisibilityCheckerImplTest {
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ false),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*isForEnterprise=*/ false),
                 "package",
                 prefix + "Schema",
                 mVisibilityStore))
                 .isTrue();
+    }
+
+    @Test
+    public void testSetSchema_enterpriseNotVisibleToPackages() throws Exception {
+        // Values for a "foo" client
+        String packageNameFoo = "packageFoo";
+        byte[] sha256CertFoo = new byte[] {10};
+
+        // Make sure foo package will pass package manager checks.
+        PackageManager mockPackageManager = getMockPackageManager(mContext.getUser());
+        when(mockPackageManager.getPackageUid(eq(packageNameFoo), /*flags=*/ anyInt()))
+                .thenReturn(mAttributionSource.getUid());
+        when(mockPackageManager.hasSigningCertificate(
+                packageNameFoo, sha256CertFoo, PackageManager.CERT_INPUT_SHA256))
+                .thenReturn(true);
+
+        String prefix = PrefixUtil.createPrefix("package", "database");
+
+        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+                /*id=*/ prefix + "Schema")
+                .addVisibleToPackage(new PackageIdentifier(packageNameFoo, sha256CertFoo)).build();
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
+
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*shouldCheckEnterpriseAccess=*/ true),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isFalse();
     }
 
     @Test
@@ -434,8 +493,72 @@ public class VisibilityCheckerImplTest {
         mUiAutomation.adoptShellPermissionIdentity(READ_SMS);
         try {
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
+                    "package",
+                    prefix + "Schema",
+                    mVisibilityStore))
+                    .isTrue();
+        } finally {
+            mUiAutomation.dropShellPermissionIdentity();
+        }
+        // Drop the READ_SMS permission, it becomes invisible.
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*isForEnterprise=*/ false),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isFalse();
+    }
+
+    @Test
+    public void testSetSchema_enterpriseNotVisibleToPermissions_withoutEnterpriseAccessPermission()
+            throws Exception {
+        String prefix = PrefixUtil.createPrefix("package", "database");
+
+        // Create a VDoc that require READ_SMS permission only.
+        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+                /*id=*/ prefix + "Schema")
+                .setVisibleToPermissions(ImmutableSet.of(
+                        ImmutableSet.of(SetSchemaRequest.READ_SMS)))
+                .build();
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
+
+        // Grant the READ_SMS permission, but won't be able to access.
+        mUiAutomation.adoptShellPermissionIdentity(READ_SMS);
+        try {
+            assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*shouldCheckEnterpriseAccess=*/ true),
+                    "package",
+                    prefix + "Schema",
+                    mVisibilityStore))
+                    .isFalse();
+        } finally {
+            mUiAutomation.dropShellPermissionIdentity();
+        }
+    }
+
+    @Test
+    public void testSetSchema_enterpriseVisibleToPermissions_withEnterpriseAccessPermission()
+            throws Exception {
+        String prefix = PrefixUtil.createPrefix("package", "database");
+
+        // Create a VDoc that requires READ_SMS and ENTERPRISE_ACCESS permission.
+        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+                /*id=*/ prefix + "Schema")
+                .setVisibleToPermissions(ImmutableSet.of(
+                        ImmutableSet.of(SetSchemaRequest.READ_SMS, ENTERPRISE_ACCESS)))
+                .build();
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
+
+        // Grant the READ_SMS permission, we should be able to access.
+        mUiAutomation.adoptShellPermissionIdentity(READ_SMS);
+        try {
+            assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*shouldCheckEnterpriseAccess=*/ true),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -446,11 +569,36 @@ public class VisibilityCheckerImplTest {
         // Drop the READ_SMS permission, it becomes invisible.
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ false),
+                        /*callerHasSystemAccess=*/ false,
+                        /*shouldCheckEnterpriseAccess=*/ true),
                 "package",
                 prefix + "Schema",
                 mVisibilityStore))
                 .isFalse();
+    }
+
+    @Test
+    public void testSetSchema_nonEnterpriseVisibleToPermissions_ignoresEnterprisePermissions()
+            throws Exception {
+        String prefix = PrefixUtil.createPrefix("package", "database");
+
+        // Create a VDoc that requires ENTERPRISE_ACCESS and ENTERPRISE_CONTACTS_DEVICE_POLICY
+        // permission.
+        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+                /*id=*/ prefix + "Schema")
+                .setVisibleToPermissions(ImmutableSet.of(
+                        ImmutableSet.of(ENTERPRISE_ACCESS, ENTERPRISE_CONTACTS_DEVICE_POLICY)))
+                .build();
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
+
+        // We should be able to access since there is effectively a freebie for non-enterprise
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*isForEnterprise=*/ false),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isTrue();
     }
 
     //TODO(b/202194495) add test for READ_HOME_APP_SEARCH_DATA and READ_ASSISTANT_APP_SEARCH_DATA
@@ -474,8 +622,8 @@ public class VisibilityCheckerImplTest {
         mUiAutomation.adoptShellPermissionIdentity(READ_SMS, READ_CALENDAR);
         try {
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -488,8 +636,8 @@ public class VisibilityCheckerImplTest {
         mUiAutomation.adoptShellPermissionIdentity(READ_SMS);
         try {
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -502,8 +650,8 @@ public class VisibilityCheckerImplTest {
         mUiAutomation.adoptShellPermissionIdentity(READ_SMS, READ_CALENDAR);
         try {
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -516,8 +664,8 @@ public class VisibilityCheckerImplTest {
         mUiAutomation.adoptShellPermissionIdentity(READ_CONTACTS);
         try {
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -530,8 +678,8 @@ public class VisibilityCheckerImplTest {
         mUiAutomation.adoptShellPermissionIdentity(READ_EXTERNAL_STORAGE);
         try {
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -542,8 +690,8 @@ public class VisibilityCheckerImplTest {
 
         // Drop permissions, it becomes invisible.
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(mAttributionSource,
-                        /*callerHasSystemAccess=*/ false),
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*isForEnterprise=*/ false),
                 "package",
                 prefix + "Schema",
                 mVisibilityStore))
@@ -564,8 +712,8 @@ public class VisibilityCheckerImplTest {
                 READ_EXTERNAL_STORAGE, READ_HOME_APP_SEARCH_DATA, READ_ASSISTANT_APP_SEARCH_DATA);
         try {
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -591,8 +739,8 @@ public class VisibilityCheckerImplTest {
         try {
             // Only has READ_SMS won't have access.
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -605,8 +753,8 @@ public class VisibilityCheckerImplTest {
         try {
             // has READ_SMS and READ_CALENDAR will have access.
             assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                    new FrameworkCallerAccess(mAttributionSource,
-                            /*callerHasSystemAccess=*/ false),
+                    new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                            /*isForEnterprise=*/ false),
                     "package",
                     prefix + "Schema",
                     mVisibilityStore))
@@ -658,13 +806,13 @@ public class VisibilityCheckerImplTest {
 
         FrameworkCallerAccess callerAccessA =
                 new FrameworkCallerAccess(new AppSearchAttributionSource("A", 1),
-                        /*callerHasSystemAccess=*/ false);
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false);
         FrameworkCallerAccess callerAccessB =
                 new FrameworkCallerAccess(new AppSearchAttributionSource("B", 2),
-                        /*callerHasSystemAccess=*/ false);
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false);
         FrameworkCallerAccess callerAccessC =
                 new FrameworkCallerAccess(new AppSearchAttributionSource("C", 3),
-                        /*callerHasSystemAccess=*/ false);
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false);
 
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 callerAccessA, "android", "android$database/SchemaA", mVisibilityStore)).isTrue();
@@ -724,10 +872,10 @@ public class VisibilityCheckerImplTest {
 
         FrameworkCallerAccess callerAccessA =
                 new FrameworkCallerAccess(new AppSearchAttributionSource("A", 1),
-                        /*callerHasSystemAccess=*/ false);
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false);
         FrameworkCallerAccess callerAccessB =
                 new FrameworkCallerAccess(new AppSearchAttributionSource("B", 2),
-                        /*callerHasSystemAccess=*/ false);
+                        /*callerHasSystemAccess=*/ false, /*isForEnterprise=*/ false);
 
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 callerAccessA, "android", "android$database/SchemaB", mVisibilityStore)).isFalse();
