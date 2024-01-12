@@ -196,6 +196,7 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
      *     SetSchemaRequest#READ_HOME_APP_SEARCH_DATA} and {@link
      *     SetSchemaRequest#READ_ASSISTANT_APP_SEARCH_DATA}.
      */
+    // TODO(b/237388235): add enterprise permissions to javadocs after they're unhidden
     @NonNull
     public Map<String, Set<Set<Integer>>> getRequiredPermissionsForSchemaTypeVisibility() {
         List<VisibilityConfig> visibilityConfigs = getVisibilityConfigsOrThrow();
@@ -355,7 +356,7 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
          * schema type.
          *
          * <p>The querier could read the {@link GenericDocument} objects under the {@code
-         * schemaType} if they holds ALL required permissions of ANY of the individual value sets.
+         * schemaType} if they hold ALL required permissions of ANY of the individual value sets.
          *
          * <p>For example, if the Map contains {@code {% verbatim %}{{permissionA, PermissionB},
          * {PermissionC, PermissionD}, {PermissionE}}{% endverbatim %}}.
@@ -379,6 +380,7 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
          * @see android.Manifest.permission#READ_HOME_APP_SEARCH_DATA
          * @see android.Manifest.permission#READ_ASSISTANT_APP_SEARCH_DATA
          */
+        // TODO(b/237388235): add enterprise permissions to javadocs after they're unhidden
         // Getter getRequiredPermissionsForSchemaTypeVisibility returns a map for all schemaTypes.
         @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")

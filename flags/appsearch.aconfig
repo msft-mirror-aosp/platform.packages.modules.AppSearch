@@ -59,3 +59,19 @@ flag {
     bug: "318408639"
     is_fixed_read_only: true
 }
+
+flag {
+    name: "enable_search_spec_filter_properties"
+    namespace: "appsearch"
+    description: "Enable addFilterProperties API in SearchSpec and SearchSuggestionSpec."
+    bug: "296088047"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_search_spec_set_search_source_log_tag"
+    namespace: "appsearch"
+    description: "Enable the setSearchSourceLogTag API in SearchSpec."
+    bug: "315370764"
+    is_fixed_read_only: true
+}
