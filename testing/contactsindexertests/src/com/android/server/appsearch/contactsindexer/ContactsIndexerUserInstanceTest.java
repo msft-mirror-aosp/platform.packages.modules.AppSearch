@@ -30,7 +30,6 @@ import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSessionShim;
 import android.app.appsearch.GlobalSearchSessionShim;
-import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.observer.DocumentChangeInfo;
 import android.app.appsearch.observer.ObserverCallback;
@@ -43,16 +42,11 @@ import android.app.job.JobScheduler;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.Context;
 import android.os.CancellationSignal;
 import android.os.PersistableBundle;
 import android.provider.ContactsContract;
-import android.test.ProviderTestCase2;
-import android.util.Log;
 
-import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
@@ -71,7 +65,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
@@ -84,13 +77,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.annotation.Nullable;
-
-// TODO(b/203605504) this is a junit3 test(ProviderTestCase2) but we run it with junit4 to use
-//  some utilities like temporary folder. Right now I can't make ProviderTestRule work so we
-//  stick to ProviderTestCase2 for now.
 @RunWith(AndroidJUnit4.class)
-public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeContactsProvider> {
+public class ContactsIndexerUserInstanceTest extends FakeContactsProviderTestBase {
     @Rule
     public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
 
@@ -100,17 +88,11 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             .build();
 
     private final ExecutorService mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
-    private ContextWrapper mContextWrapper;
     private File mContactsDir;
     private File mSettingsFile;
-    private SearchSpec mSpecForQueryAllContacts;
     private ContactsIndexerUserInstance mInstance;
     private ContactsUpdateStats mUpdateStats;
     private ContactsIndexerConfig mConfigForTest = new TestContactsIndexerConfig();
-
-    public ContactsIndexerUserInstanceTest() {
-        super(FakeContactsProvider.class, FakeContactsProvider.AUTHORITY);
-    }
 
     @Override
     @Before
@@ -120,15 +102,6 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         // Setup the file path to the persisted data
         mContactsDir = new File(mTemporaryFolder.newFolder(), "appsearch/contacts");
         mSettingsFile = new File(mContactsDir, ContactsIndexerSettings.SETTINGS_FILE_NAME);
-        mContextWrapper = new ContextWrapper(ApplicationProvider.getApplicationContext());
-        mContextWrapper.setContentResolver(getMockContentResolver());
-        mContext = mContextWrapper;
-        mSpecForQueryAllContacts = new SearchSpec.Builder().addFilterSchemas(
-                        Person.SCHEMA_TYPE).addProjection(Person.SCHEMA_TYPE,
-                        Arrays.asList(Person.PERSON_PROPERTY_NAME))
-                .setResultCountPerPage(100)
-                .build();
-
         mInstance = ContactsIndexerUserInstance.createInstance(mContext, mContactsDir,
                 mConfigForTest, mSingleThreadedExecutor);
         mUpdateStats = new ContactsUpdateStats();
@@ -153,7 +126,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             throws Exception {
         try {
             long dataQueryDelayMs = 5000;
-            getProvider().setDataQueryDelayMs(dataQueryDelayMs);
+            mFakeContactsProvider.setDataQueryDelayMs(dataQueryDelayMs);
             BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
             ThreadPoolExecutor singleThreadedExecutor =
                     new ThreadPoolExecutor(/*corePoolSize=*/1, /*maximumPoolSize=*/
@@ -192,7 +165,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             assertThat(singleThreadedExecutor.getTaskCount()).isEqualTo(
                     totalTaskAfterFirstDeltaUpdate);
         } finally {
-            getProvider().setDataQueryDelayMs(0);
+            mFakeContactsProvider.setDataQueryDelayMs(0);
         }
     }
 
@@ -201,7 +174,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             throws Exception {
         try {
             long dataQueryDelayMs = 5000;
-            getProvider().setDataQueryDelayMs(dataQueryDelayMs);
+            mFakeContactsProvider.setDataQueryDelayMs(dataQueryDelayMs);
             BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
             ThreadPoolExecutor singleThreadedExecutor =
                     new ThreadPoolExecutor(/*corePoolSize=*/1, /*maximumPoolSize=*/
@@ -239,7 +212,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             // the change notification.
             assertThat(singleThreadedExecutor.getActiveCount()).isEqualTo(1);
         } finally {
-            getProvider().setDataQueryDelayMs(0);
+            mFakeContactsProvider.setDataQueryDelayMs(0);
         }
     }
 
@@ -253,16 +226,16 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
             // Data directory shouldn't have been created synchronously in createInstance()
             return dataDir.exists();
         }).get();
-        assertFalse(isDataDirectoryCreatedSynchronously);
+        assertThat(isDataDirectoryCreatedSynchronously).isFalse();
         boolean isDataDirectoryCreatedAsynchronously = mSingleThreadedExecutor.submit(
                 dataDir::exists).get();
-        assertTrue(isDataDirectoryCreatedAsynchronously);
+        assertThat(isDataDirectoryCreatedAsynchronously).isTrue();
     }
 
     @Test
     public void testStart_initialRun_schedulesFullUpdateJob() throws Exception {
         JobScheduler mockJobScheduler = mock(JobScheduler.class);
-        mContextWrapper.setJobScheduler(mockJobScheduler);
+        mContext.setJobScheduler(mockJobScheduler);
         ContactsIndexerUserInstance instance = ContactsIndexerUserInstance.createInstance(
                 mContext,
                 mContactsDir, mConfigForTest, mSingleThreadedExecutor);
@@ -325,7 +298,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         // scenario where the scheduled full update job after the initial run is cancelled
         // due to some reason.
         JobScheduler mockJobScheduler = mock(JobScheduler.class);
-        mContextWrapper.setJobScheduler(mockJobScheduler);
+        mContext.setJobScheduler(mockJobScheduler);
         ContactsIndexerUserInstance instance = ContactsIndexerUserInstance.createInstance(
                 mContext, mContactsDir, mConfigForTest, mSingleThreadedExecutor);
 
@@ -390,7 +363,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         doReturn(mockJobInfo).when(mockJobScheduler).getPendingJob(
                 ContactsIndexerMaintenanceService.MIN_INDEXER_JOB_ID +
                         mContext.getUser().getIdentifier());
-        mContextWrapper.setJobScheduler(mockJobScheduler);
+        mContext.setJobScheduler(mockJobScheduler);
         ContactsIndexerUserInstance instance = ContactsIndexerUserInstance.createInstance(
                 mContext, mContactsDir, mConfigForTest, mSingleThreadedExecutor);
 
@@ -775,7 +748,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
                 mContext.getUser());
 
         JobScheduler mockJobScheduler = mock(JobScheduler.class);
-        mContextWrapper.setJobScheduler(mockJobScheduler);
+        mContext.setJobScheduler(mockJobScheduler);
 
         // manually add out of space error
         mUpdateStats.mUpdateStatuses.add(AppSearchResult.RESULT_OUT_OF_SPACE);
@@ -818,7 +791,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         // Since the current schema is compatible, this won't trigger any delta update and
         // schedule a full update job.
         JobScheduler mockJobScheduler = mock(JobScheduler.class);
-        mContextWrapper.setJobScheduler(mockJobScheduler);
+        mContext.setJobScheduler(mockJobScheduler);
         mInstance = ContactsIndexerUserInstance.createInstance(mContext, mContactsDir,
                 mConfigForTest, mSingleThreadedExecutor);
         try {
@@ -886,7 +859,7 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         // Since the current schema is incompatible, this will trigger two setSchemas, and run do
         // doCp2SyncFirstRun again.
         JobScheduler mockJobScheduler = mock(JobScheduler.class);
-        mContextWrapper.setJobScheduler(mockJobScheduler);
+        mContext.setJobScheduler(mockJobScheduler);
         mInstance = ContactsIndexerUserInstance.createInstance(mContext, mContactsDir,
                 mConfigForTest, mSingleThreadedExecutor);
         try {
@@ -1022,48 +995,6 @@ public class ContactsIndexerUserInstanceTest extends ProviderTestCase2<FakeConta
         }).get();
         // Wait for the task to complete on the executor, and wait for the stage to complete also.
         return future.get().get();
-    }
-
-    static final class ContextWrapper extends android.content.ContextWrapper {
-
-        @Nullable
-        ContentResolver mResolver;
-        @Nullable
-        JobScheduler mScheduler;
-
-        public ContextWrapper(Context base) {
-            super(base);
-        }
-
-        @Override
-        public Context getApplicationContext() {
-            return this;
-        }
-
-        @Override
-        public ContentResolver getContentResolver() {
-            if (mResolver != null) {
-                return mResolver;
-            }
-            return getBaseContext().getContentResolver();
-        }
-
-        @Override
-        @Nullable
-        public Object getSystemService(String name) {
-            if (mScheduler != null && Context.JOB_SCHEDULER_SERVICE.equals(name)) {
-                return mScheduler;
-            }
-            return getBaseContext().getSystemService(name);
-        }
-
-        public void setContentResolver(ContentResolver resolver) {
-            mResolver = resolver;
-        }
-
-        public void setJobScheduler(JobScheduler scheduler) {
-            mScheduler = scheduler;
-        }
     }
 
     private static class TestMockFixture implements StaticMockFixture {
