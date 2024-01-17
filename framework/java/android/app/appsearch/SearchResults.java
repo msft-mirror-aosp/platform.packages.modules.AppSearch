@@ -72,6 +72,8 @@ public class SearchResults implements Closeable {
 
     private final UserHandle mUserHandle;
 
+    private final boolean mIsForEnterprise;
+
     private long mNextPageToken;
 
     private boolean mIsFirstLoad = true;
@@ -84,13 +86,15 @@ public class SearchResults implements Closeable {
             @Nullable String databaseName,
             @NonNull String queryExpression,
             @NonNull SearchSpec searchSpec,
-            @NonNull UserHandle userHandle) {
+            @NonNull UserHandle userHandle,
+            boolean isForEnterprise) {
         mService = Objects.requireNonNull(service);
         mAttributionSource = Objects.requireNonNull(attributionSource);
         mDatabaseName = databaseName;
         mQueryExpression = Objects.requireNonNull(queryExpression);
         mSearchSpec = Objects.requireNonNull(searchSpec);
         mUserHandle = Objects.requireNonNull(userHandle);
+        mIsForEnterprise = isForEnterprise;
     }
 
     /**
@@ -118,12 +122,11 @@ public class SearchResults implements Closeable {
                     // Global query, there's no one package-database combination to check.
                     mService.globalQuery(mAttributionSource, mQueryExpression,
                             mSearchSpec, mUserHandle, binderCallStartTimeMillis,
-                            wrapCallback(executor, callback));
+                            mIsForEnterprise, wrapCallback(executor, callback));
                 } else {
                     // Normal local query, pass in specified database.
                     mService.query(mAttributionSource, mDatabaseName, mQueryExpression,
-                            mSearchSpec, mUserHandle,
-                            binderCallStartTimeMillis,
+                            mSearchSpec, mUserHandle, binderCallStartTimeMillis,
                             wrapCallback(executor, callback));
                 }
             } else {
@@ -135,7 +138,8 @@ public class SearchResults implements Closeable {
                     joinType = JOINABLE_VALUE_TYPE_QUALIFIED_ID;
                 }
                 mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken, joinType,
-                        mUserHandle, binderCallStartTimeMillis, wrapCallback(executor, callback));
+                        mUserHandle, binderCallStartTimeMillis, mIsForEnterprise,
+                        wrapCallback(executor, callback));
             }
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -147,7 +151,8 @@ public class SearchResults implements Closeable {
         if (!mIsClosed) {
             try {
                 mService.invalidateNextPageToken(mAttributionSource, mNextPageToken,
-                        mUserHandle, /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime());
+                        mUserHandle, /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                        mIsForEnterprise);
                 mIsClosed = true;
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to close the SearchResults", e);
