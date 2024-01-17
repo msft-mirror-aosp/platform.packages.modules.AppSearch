@@ -208,6 +208,7 @@ public final class AppSearchSession implements Closeable {
                     mDatabaseName,
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    /*isForEnterprise=*/ false,
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -358,6 +359,7 @@ public final class AppSearchSession implements Closeable {
                     request.getProjectionsInternal(),
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    /*isForEnterprise=*/ false,
                     SearchSessionUtil.createGetDocumentCallback(executor, callback));
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -475,7 +477,7 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(searchSpec);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         return new SearchResults(mService, mCallerAttributionSource, mDatabaseName, queryExpression,
-                searchSpec, mUserHandle);
+                searchSpec, mUserHandle, /*isForEnterprise=*/ false);
     }
 
     /**

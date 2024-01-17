@@ -83,6 +83,8 @@ import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
+import com.android.server.appsearch.transformer.EnterpriseSearchResultPageTransformer;
+import com.android.server.appsearch.transformer.EnterpriseSearchSpecTransformer;
 import com.android.server.appsearch.util.AdbDumpUtil;
 import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.ExceptionUtil;
@@ -155,7 +157,8 @@ public class AppSearchManagerService extends SystemService {
     public void onStart() {
         publishBinderService(Context.APP_SEARCH_SERVICE, new Stub());
         mPackageManager = getContext().getPackageManager();
-        mServiceImplHelper = new ServiceImplHelper(mContext, mExecutorManager);
+        mServiceImplHelper = new ServiceImplHelper(mContext, mExecutorManager,
+                mAppSearchEnvironment);
         mAppSearchUserInstanceManager = AppSearchUserInstanceManager.getInstance();
         registerReceivers();
         LocalManagerRegistry.getManager(StorageStatsManagerLocal.class)
@@ -478,6 +481,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull String databaseName,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                boolean isForEnterprise,
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(targetPackageName);
@@ -493,7 +497,15 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            boolean global = !callingPackageName.equals(targetPackageName);
+            // Get the enterprise user for enterprise calls
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(isForEnterprise, targetUser);
+            if (userToQuery == null) {
+                // Return an empty response if we tried to and couldn't get the enterprise user
+                invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(
+                        new GetSchemaResponse.Builder().build()));
+                return;
+            }
+            boolean global = isGlobalCall(callingPackageName, targetPackageName, isForEnterprise);
             // We deny based on the calling package and calling database names. If the calling
             // package does not match the target package, then the call is global and the target
             // database is not a calling database.
@@ -512,7 +524,7 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
-                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
 
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callingPackageName);
@@ -521,7 +533,7 @@ public class AppSearchManagerService extends SystemService {
                                     targetPackageName,
                                     databaseName,
                                     new FrameworkCallerAccess(callerAttributionSource,
-                                            callerHasSystemAccess, /*isForEnterprise=*/ false));
+                                            callerHasSystemAccess, isForEnterprise));
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback, AppSearchResult.newSuccessfulResult(response));
@@ -782,6 +794,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull Map<String, List<String>> typePropertyPaths,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                boolean isForEnterprise,
                 @NonNull IAppSearchBatchResultCallback callback) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(targetPackageName);
@@ -800,7 +813,18 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            boolean global = !callingPackageName.equals(targetPackageName);
+            // Get the enterprise user for enterprise calls
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(isForEnterprise, targetUser);
+            if (userToQuery == null) {
+                // Return an empty batch result if we tried to and couldn't get the enterprise user
+                invokeCallbackOnResult(callback,
+                        new AppSearchBatchResult.Builder<String, GenericDocumentParcel>().build());
+                return;
+            }
+            // TODO(b/319315074): consider removing local getDocument and just use globalGetDocument
+            //  instead; this would simplify the code and assure us that enterprise calls definitely
+            //  go through visibility checks
+            boolean global = isGlobalCall(callingPackageName, targetPackageName, isForEnterprise);
             // We deny based on the calling package and calling database names. If the calling
             // package does not match the target package, then the call is global and the target
             // database is not a calling database.
@@ -821,7 +845,7 @@ public class AppSearchManagerService extends SystemService {
                 try {
                     AppSearchBatchResult.Builder<String, GenericDocumentParcel> resultBuilder =
                             new AppSearchBatchResult.Builder<>();
-                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                     for (int i = 0; i < ids.size(); i++) {
                         String id = ids.get(i);
                         try {
@@ -830,6 +854,10 @@ public class AppSearchManagerService extends SystemService {
                                 boolean callerHasSystemAccess = instance.getVisibilityChecker()
                                         .doesCallerHaveSystemAccess(callerAttributionSource
                                                 .getPackageName());
+                                if (isForEnterprise) {
+                                    EnterpriseSearchSpecTransformer.transformPropertiesMap(
+                                            typePropertyPaths);
+                                }
                                 document = instance.getAppSearchImpl().globalGetDocument(
                                         targetPackageName,
                                         databaseName,
@@ -837,7 +865,12 @@ public class AppSearchManagerService extends SystemService {
                                         id,
                                         typePropertyPaths,
                                         new FrameworkCallerAccess(callerAttributionSource,
-                                                callerHasSystemAccess, /*isForEnterprise=*/ false));
+                                                callerHasSystemAccess, isForEnterprise));
+                                if (isForEnterprise) {
+                                    document =
+                                            EnterpriseSearchResultPageTransformer.transformDocument(
+                                                    targetPackageName, databaseName, document);
+                                }
                             } else {
                                 document = instance.getAppSearchImpl().getDocument(
                                         targetPackageName,
@@ -987,6 +1020,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull SearchSpec searchSpec,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                boolean isForEnterprise,
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(queryExpression);
@@ -1002,6 +1036,14 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            // Get the enterprise user for enterprise calls
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(isForEnterprise, targetUser);
+            if (userToQuery == null) {
+                // Return an empty result if we tried to and couldn't get the enterprise user
+                invokeCallbackOnResult(callback,
+                        AppSearchResult.newSuccessfulResult(new SearchResultPage()));
+                return;
+            }
             if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                     CallStats.CALL_TYPE_GLOBAL_SEARCH, callback, targetUser,
                     binderCallStartTimeMillis, totalLatencyStartTimeMillis,
@@ -1015,17 +1057,23 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
-                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-
+                    instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callingPackageName);
-
+                    SearchSpec querySearchSpec =
+                            isForEnterprise ? EnterpriseSearchSpecTransformer.transformSearchSpec(
+                                    searchSpec) : searchSpec;
                     SearchResultPage searchResultPage = instance.getAppSearchImpl().globalQuery(
                             queryExpression,
-                            searchSpec,
+                            querySearchSpec,
                             new FrameworkCallerAccess(callerAttributionSource,
-                                    callerHasSystemAccess, /*isForEnterprise=*/ false),
+                                    callerHasSystemAccess, isForEnterprise),
                             instance.getLogger());
+                    if (isForEnterprise) {
+                        searchResultPage =
+                                EnterpriseSearchResultPageTransformer.transformSearchResultPage(
+                                        searchResultPage);
+                    }
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
@@ -1072,6 +1120,7 @@ public class AppSearchManagerService extends SystemService {
                 @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinType,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                boolean isForEnterprise,
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(userHandle);
@@ -1085,7 +1134,16 @@ public class AppSearchManagerService extends SystemService {
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            boolean global = databaseName == null;
+            // Get the enterprise user for enterprise calls
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(isForEnterprise, targetUser);
+            if (userToQuery == null) {
+                // Return an empty result if we tried to and couldn't get the enterprise user
+                invokeCallbackOnResult(callback,
+                        AppSearchResult.newSuccessfulResult(new SearchResultPage()));
+                return;
+            }
+            // Enterprise session calls are considered global for CallStats logging
+            boolean global = databaseName == null || isForEnterprise;
             int callType = global ? CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE
                     : CallStats.CALL_TYPE_GET_NEXT_PAGE;
             if (checkCallDenied(callingPackageName, databaseName, callType, callback, targetUser,
@@ -1111,11 +1169,16 @@ public class AppSearchManagerService extends SystemService {
                             .setJoinType(joinType);
                 }
                 try {
-                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                     SearchResultPage searchResultPage =
                             instance.getAppSearchImpl().getNextPage(
                                     callingPackageName, nextPageToken,
                                     statsBuilder);
+                    if (isForEnterprise) {
+                        searchResultPage =
+                                EnterpriseSearchResultPageTransformer.transformSearchResultPage(
+                                        searchResultPage);
+                    }
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
@@ -1160,7 +1223,8 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull AppSearchAttributionSource callerAttributionSource,
                 long nextPageToken,
                 @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis) {
+                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                boolean isForEnterprise) {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(userHandle);
 
@@ -1168,6 +1232,13 @@ public class AppSearchManagerService extends SystemService {
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
                         callerAttributionSource, userHandle);
+                // Get the enterprise user for enterprise calls
+                UserHandle userToQuery = mServiceImplHelper.getUserToQuery(isForEnterprise,
+                        targetUser);
+                if (userToQuery == null) {
+                    // Return if we tried to and couldn't get the enterprise user
+                    return;
+                }
                 String callingPackageName =
                         Objects.requireNonNull(callerAttributionSource.getPackageName());
                 if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
@@ -1184,7 +1255,7 @@ public class AppSearchManagerService extends SystemService {
                     int operationSuccessCount = 0;
                     int operationFailureCount = 0;
                     try {
-                        instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                        instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                         instance.getAppSearchImpl().invalidateNextPageToken(
                                 callingPackageName, nextPageToken);
                         operationSuccessCount++;
@@ -2534,6 +2605,21 @@ public class AppSearchManagerService extends SystemService {
                 }
             }
         });
+    }
+
+    /**
+     * An API call is considered global if the calling package and target package names do not
+     * match.
+     * <p>
+     * Enterprise session calls do not necessarily have access to same-package data; therefore, even
+     * if the calling and target packages are the same, enterprise session calls must always be
+     * global to go through the proper visibility checks. (Enterprise session calls are also always
+     * considered global for CallStats logging.)
+     */
+    @BinderThread
+    private boolean isGlobalCall(@NonNull String callingPackageName,
+            @NonNull String targetPackageName, boolean isForEnterprise) {
+        return !callingPackageName.equals(targetPackageName) || isForEnterprise;
     }
 
     /**

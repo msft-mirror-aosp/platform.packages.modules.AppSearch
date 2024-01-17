@@ -88,6 +88,7 @@ interface IAppSearchManager {
      * @param databaseName  The name of the database to retrieve.
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Bundle}&gt; where the bundle is a GetSchemaResponse.
      */
@@ -97,6 +98,7 @@ interface IAppSearchManager {
         in String databaseName,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
+        in boolean isForEnterprise,
         in IAppSearchResultCallback callback);
 
     /**
@@ -153,6 +155,7 @@ interface IAppSearchManager {
      *     result.
      * @param userHandle Handle of the calling user.
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis.
+     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
      * @param callback
      *     If the call fails to start, {@link IAppSearchBatchResultCallback#onSystemError}
      *     will be called with the cause throwable. Otherwise,
@@ -169,6 +172,7 @@ interface IAppSearchManager {
         in Map<String, List<String>> typePropertyPaths,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
+        in boolean isForEnterprise,
         in IAppSearchBatchResultCallback callback);
 
     /**
@@ -201,6 +205,7 @@ interface IAppSearchManager {
      * @param searchSpec SearchSpec
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
      * @param callback {@link AppSearchResult}&lt;{@link SearchResultPage}&gt; of performing this
      *         operation.
      */
@@ -210,6 +215,7 @@ interface IAppSearchManager {
         in SearchSpec searchSpec,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
+        in boolean isForEnterprise,
         in IAppSearchResultCallback callback);
 
     /**
@@ -224,6 +230,7 @@ interface IAppSearchManager {
      * @param joinType the type of join performed. 0 if no join is performed
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
      * @param callback {@link AppSearchResult}&lt;{@link SearchResultPage}&gt; of performing this
      *                  operation.
      */
@@ -234,6 +241,7 @@ interface IAppSearchManager {
         in int joinType,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
+        in boolean isForEnterprise,
         in IAppSearchResultCallback callback);
 
     /**
@@ -245,12 +253,14 @@ interface IAppSearchManager {
      *                      Invalidated.
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
      */
     void invalidateNextPageToken(
         in AppSearchAttributionSource callerAttributionSource,
         in long nextPageToken,
         in UserHandle userHandle,
-        in long binderCallStartTimeMillis);
+        in long binderCallStartTimeMillis,
+        in boolean isForEnterprise);
 
     /**
     * Searches a document based on a given specifications.
