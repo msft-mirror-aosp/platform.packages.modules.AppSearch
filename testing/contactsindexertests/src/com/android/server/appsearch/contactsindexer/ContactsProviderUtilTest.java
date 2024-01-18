@@ -18,43 +18,18 @@ package com.android.server.appsearch.contactsindexer;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.Context;
 import android.provider.ContactsContract;
-import android.test.ProviderTestCase2;
 
-import org.junit.After;
-import org.junit.Before;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 
-// TODO(b/203605504) this is a junit3 test but we should use junit4. Right now I can't make
-//  ProviderTestRule work so we stick to ProviderTestCase2 for now.
-public class ContactsProviderUtilTest extends ProviderTestCase2<FakeContactsProvider> {
-    public ContactsProviderUtilTest() {
-        super(FakeContactsProvider.class, FakeContactsProvider.AUTHORITY);
-    }
-
-    @Override
-    @Before
-    public void setUp() throws Exception {
-        super.setUp();
-        mContext = mock(Context.class);
-        doReturn(getMockContentResolver()).when(mContext).getContentResolver();
-    }
-
-    @Override
-    @After
-    public void tearDown() throws Exception {
-        super.tearDown();
-    }
-
+public class ContactsProviderUtilTest extends FakeContactsProviderTestBase {
+    @Test
     public void testGetUpdatedContactIds_getAll() throws Exception {
         ContentResolver resolver = mContext.getContentResolver();
         ContentValues dummyValues = new ContentValues();
@@ -71,11 +46,12 @@ public class ContactsProviderUtilTest extends ProviderTestCase2<FakeContactsProv
                 /*sinceFilter=*/ 0, ContactsProviderUtil.UPDATE_LIMIT_NONE, ids, /*stats=*/ null);
 
         assertThat(lastUpdatedTime).isEqualTo(
-                getProvider().getMostRecentContactUpdateTimestampMillis());
+                mFakeContactsProvider.getMostRecentContactUpdateTimestampMillis());
         // TODO(b/228239000): make this assertion based on last-updated-ts instead of contact ID
         assertThat(ids).isEqualTo(expectedIds);
     }
 
+    @Test
     public void testGetUpdatedContactIds_getNone() {
         ContentResolver resolver = mContext.getContentResolver();
         ContentValues dummyValues = new ContentValues();
@@ -85,21 +61,23 @@ public class ContactsProviderUtilTest extends ProviderTestCase2<FakeContactsProv
 
         List<String> ids = new ArrayList<>();
         long lastUpdatedTime = ContactsProviderUtil.getUpdatedContactIds(mContext,
-                /*sinceFilter=*/ getProvider().getMostRecentContactUpdateTimestampMillis(),
+                /*sinceFilter=*/ mFakeContactsProvider.getMostRecentContactUpdateTimestampMillis(),
                 ContactsProviderUtil.UPDATE_LIMIT_NONE, ids, /*stats=*/ null);
 
         assertThat(lastUpdatedTime).isEqualTo(
-                getProvider().getMostRecentContactUpdateTimestampMillis());
+                mFakeContactsProvider.getMostRecentContactUpdateTimestampMillis());
         assertThat(ids).isEmpty();
     }
 
+    @Test
     public void testGetUpdatedContactIds() throws Exception {
         ContentResolver resolver = mContext.getContentResolver();
         ContentValues dummyValues = new ContentValues();
         for (int i = 0; i < 50; i++) {
             resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
         }
-        long firstUpdateTimestamp = getProvider().getMostRecentContactUpdateTimestampMillis();
+        long firstUpdateTimestamp =
+                mFakeContactsProvider.getMostRecentContactUpdateTimestampMillis();
         // Wait an additional 1ms here to avoid flaky tests. Otherwise, the first few contacts
         // inserted below might share the same timestamp as firstUpdateTimestamp, and when querying
         // CP2, we use "> timeFilter", and it caused test flakiness.
@@ -116,10 +94,11 @@ public class ContactsProviderUtilTest extends ProviderTestCase2<FakeContactsProv
                 ids, /*stats=*/ null);
 
         assertThat(lastUpdatedTime).isEqualTo(
-                getProvider().getMostRecentContactUpdateTimestampMillis());
+                mFakeContactsProvider.getMostRecentContactUpdateTimestampMillis());
         assertThat(ids).isEqualTo(expectedIds);
     }
 
+    @Test
     public void testGetDeletedContactIds_getAll() {
         ContentResolver resolver = mContext.getContentResolver();
         ContentValues dummyValues = new ContentValues();
@@ -138,10 +117,11 @@ public class ContactsProviderUtilTest extends ProviderTestCase2<FakeContactsProv
                 /*sinceFilter=*/ 0, ids, /*stats=*/ null);
 
         assertThat(lastDeleteTime).isEqualTo(
-                getProvider().getMostRecentDeletedContactTimestampMillis());
+                mFakeContactsProvider.getMostRecentDeletedContactTimestampMillis());
         assertThat(ids).isEqualTo(expectedIds);
     }
 
+    @Test
     public void testGetDeletedContactIds_getNone() {
         ContentResolver resolver = mContext.getContentResolver();
         ContentValues dummyValues = new ContentValues();
@@ -155,14 +135,15 @@ public class ContactsProviderUtilTest extends ProviderTestCase2<FakeContactsProv
 
         List<String> ids = new ArrayList<>();
         long lastDeleteTime = ContactsProviderUtil.getDeletedContactIds(mContext,
-                /*sinceFilter=*/ getProvider().getMostRecentDeletedContactTimestampMillis(),
+                /*sinceFilter=*/ mFakeContactsProvider.getMostRecentDeletedContactTimestampMillis(),
                 ids, /*stats=*/ null);
 
         assertThat(lastDeleteTime).isEqualTo(
-                getProvider().getMostRecentDeletedContactTimestampMillis());
+                mFakeContactsProvider.getMostRecentDeletedContactTimestampMillis());
         assertThat(ids).isEmpty();
     }
 
+    @Test
     public void testGetDeletedContactIds() {
         ContentResolver resolver = mContext.getContentResolver();
         ContentValues dummyValues = new ContentValues();
@@ -173,7 +154,8 @@ public class ContactsProviderUtilTest extends ProviderTestCase2<FakeContactsProv
             resolver.delete(ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, i),
                     /*extras=*/ null);
         }
-        long firstDeleteTimestamp = getProvider().getMostRecentDeletedContactTimestampMillis();
+        long firstDeleteTimestamp =
+                mFakeContactsProvider.getMostRecentDeletedContactTimestampMillis();
         List<String> expectedIds = new ArrayList<>();
         for (int i = 7; i < 50; i += 7) {
             resolver.delete(ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, i),
@@ -186,7 +168,7 @@ public class ContactsProviderUtilTest extends ProviderTestCase2<FakeContactsProv
                 /*sinceFilter=*/ firstDeleteTimestamp, ids, /*stats=*/ null);
 
         assertThat(lastDeleteTime).isEqualTo(
-                getProvider().getMostRecentDeletedContactTimestampMillis());
+                mFakeContactsProvider.getMostRecentDeletedContactTimestampMillis());
         assertThat(ids).isEqualTo(expectedIds);
     }
 }

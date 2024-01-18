@@ -82,6 +82,9 @@ java_sdk_library {
         "//packages/modules/AppSearch/service:__subpackages__",
         "//packages/modules/AppSearch/testing:__subpackages__",
     ],
+    aconfig_declarations: [
+        "appsearch_aconfig_flags",
+    ],
 }
 
 java_api_contribution {
