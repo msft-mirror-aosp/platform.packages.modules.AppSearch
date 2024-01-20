@@ -38,6 +38,7 @@ import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.testutil.AppSearchSessionShimImpl;
+import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;

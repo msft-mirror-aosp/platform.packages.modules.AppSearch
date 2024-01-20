@@ -75,3 +75,11 @@ flag {
     bug: "315370764"
     is_fixed_read_only: true
 }
+
+flag {
+    name: "enable_enterprise_global_search_session"
+    namespace: "appsearch"
+    description: "Enable personal profile to search over allowed enterprise profile data in AppSearch through enterprise global search session."
+    bug: "237388235"
+    is_fixed_read_only: true
+}

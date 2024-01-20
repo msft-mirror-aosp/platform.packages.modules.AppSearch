@@ -80,6 +80,10 @@ public final class Flags {
     public static final String FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS =
             FLAG_PREFIX + "enable_generic_document_builder_hidden_methods";
 
+    /** Enable {@link android.app.appsearch.EnterpriseGlobalSearchSession}. */
+    public static final String FLAG_ENABLE_ENTERPRISE_GLOBAL_SEARCH_SESSION =
+            FLAG_PREFIX + "enable_enterprise_global_search_session";
+
     // Whether the features should be enabled.
     //
     // In Jetpack, those should always return true.
@@ -137,6 +141,11 @@ public final class Flags {
      * android.app.appsearch.GenericDocument.Builder#clearProperty(String)} should be enabled.
      */
     public static boolean enableGenericDocumentBuilderHiddenMethods() {
+        return true;
+    }
+
+    /** Whether {@link android.app.appsearch.EnterpriseGlobalSearchSession} should be enabled. */
+    public static boolean enableEnterpriseGlobalSearchSession() {
         return true;
     }
 }
