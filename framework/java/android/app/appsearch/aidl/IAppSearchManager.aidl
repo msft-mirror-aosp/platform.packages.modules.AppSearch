@@ -34,6 +34,7 @@ import android.content.AttributionSource;
 import android.os.ParcelFileDescriptor;
 
 /** {@hide} */
+// Always add new functions in the end with the commented transaction id.
 interface IAppSearchManager {
     /**
      * Creates and initializes AppSearchImpl for the calling app.
@@ -48,7 +49,7 @@ interface IAppSearchManager {
         in AppSearchAttributionSource callerAttributionSource,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 0;
 
     /**
      * Updates the AppSearch schema for this database.
@@ -78,7 +79,7 @@ interface IAppSearchManager {
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
         in int schemaMigrationCallType,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 1;
 
     /**
      * Retrieves the AppSearch schema for this database.
@@ -99,7 +100,7 @@ interface IAppSearchManager {
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
         in boolean isForEnterprise,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 2;
 
     /**
      * Retrieves the set of all namespaces in the current database with at least one document.
@@ -116,7 +117,7 @@ interface IAppSearchManager {
         in String databaseName,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 3;
 
     /**
      * Inserts documents into the index.
@@ -140,7 +141,7 @@ interface IAppSearchManager {
         in DocumentsParcel documentsParcel,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchBatchResultCallback callback);
+        in IAppSearchBatchResultCallback callback) = 4;
 
     /**
      * Retrieves documents from the index.
@@ -173,7 +174,7 @@ interface IAppSearchManager {
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
         in boolean isForEnterprise,
-        in IAppSearchBatchResultCallback callback);
+        in IAppSearchBatchResultCallback callback) = 5;
 
     /**
      * Searches a document based on a given specifications.
@@ -194,7 +195,7 @@ interface IAppSearchManager {
         in SearchSpec searchSpec,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 6;
 
     /**
      * Executes a global query, i.e. over all permitted databases, against the AppSearch index and
@@ -216,7 +217,7 @@ interface IAppSearchManager {
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
         in boolean isForEnterprise,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 7;
 
     /**
      * Fetches the next page of results of a previously executed query. Results can be empty if
@@ -242,7 +243,7 @@ interface IAppSearchManager {
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
         in boolean isForEnterprise,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 8;
 
     /**
      * Invalidates the next-page token so that no more results of the related query can be returned.
@@ -260,7 +261,7 @@ interface IAppSearchManager {
         in long nextPageToken,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in boolean isForEnterprise);
+        in boolean isForEnterprise) = 9;
 
     /**
     * Searches a document based on a given specifications.
@@ -285,7 +286,7 @@ interface IAppSearchManager {
         in SearchSpec searchSpec,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 10;
 
     /**
     * Inserts documents from the given file into the index.
@@ -315,7 +316,7 @@ interface IAppSearchManager {
         in SchemaMigrationStats schemaMigrationStats,
         in long totalLatencyStartTimeMillis,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 11;
 
     /**
      * Retrieves suggested Strings that could be used as {@code queryExpression} in search API.
@@ -336,7 +337,7 @@ interface IAppSearchManager {
             in SearchSuggestionSpec searchSuggestionSpec,
             in UserHandle userHandle,
             in long binderCallStartTimeMillis,
-            in IAppSearchResultCallback callback);
+            in IAppSearchResultCallback callback) = 12;
 
     /**
      * Reports usage of a particular document by namespace and id.
@@ -373,7 +374,7 @@ interface IAppSearchManager {
         in boolean systemUsage,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 13;
 
     /**
      * Removes documents by ID.
@@ -399,7 +400,7 @@ interface IAppSearchManager {
         in List<String> ids,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchBatchResultCallback callback);
+        in IAppSearchBatchResultCallback callback) = 14;
 
     /**
      * Removes documents by given query.
@@ -420,7 +421,7 @@ interface IAppSearchManager {
         in SearchSpec searchSpec,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 15;
 
     /**
      * Gets the storage info.
@@ -439,7 +440,7 @@ interface IAppSearchManager {
         in String databaseName,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 16;
 
     /**
      * Persists all update/delete requests to the disk.
@@ -451,7 +452,7 @@ interface IAppSearchManager {
     void persistToDisk(
         in AppSearchAttributionSource callerAttributionSource,
         in UserHandle userHandle,
-        in long binderCallStartTimeMillis);
+        in long binderCallStartTimeMillis) = 17;
 
     /**
      * Adds an observer to monitor changes within the databases owned by {@code observedPackage} if
@@ -472,7 +473,7 @@ interface IAppSearchManager {
         in ObserverSpec observerSpec,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchObserverProxy observerProxy);
+        in IAppSearchObserverProxy observerProxy) = 18;
 
     /**
      * Removes previously registered {@link ObserverCallback} instances from the system.
@@ -489,5 +490,7 @@ interface IAppSearchManager {
         in String observedPackage,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchObserverProxy observerProxy);
+        in IAppSearchObserverProxy observerProxy) = 19;
+
+    // next function transaction ID = 20;
 }
