@@ -166,7 +166,8 @@ public final class AppSearchSession implements Closeable {
         }
 
         // Extract a List<VisibilityConfig> from the request
-        List<VisibilityConfig> visibilityConfigs = VisibilityConfig.toVisibilityConfigs(request);
+        List<InternalVisibilityConfig> visibilityConfigs =
+                InternalVisibilityConfig.toInternalVisibilityConfigs(request);
         // No need to trigger migration if user never set migrator
         if (request.getMigrators().isEmpty()) {
             setSchemaNoMigrations(
@@ -823,7 +824,7 @@ public final class AppSearchSession implements Closeable {
     private void setSchemaNoMigrations(
             @NonNull SetSchemaRequest request,
             @NonNull List<AppSearchSchema> schemas,
-            @NonNull List<VisibilityConfig> visibilityConfigs,
+            @NonNull List<InternalVisibilityConfig> visibilityConfigs,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
         try {
@@ -884,7 +885,7 @@ public final class AppSearchSession implements Closeable {
     private void setSchemaWithMigrations(
             @NonNull SetSchemaRequest request,
             @NonNull List<AppSearchSchema> schemas,
-            @NonNull List<VisibilityConfig> visibilityConfigs,
+            @NonNull List<InternalVisibilityConfig> visibilityConfigs,
             @NonNull Executor workExecutor,
             @NonNull @CallbackExecutor Executor callbackExecutor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {

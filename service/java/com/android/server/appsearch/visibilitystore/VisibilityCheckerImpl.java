@@ -27,6 +27,7 @@ import static android.permission.PermissionManager.PERMISSION_GRANTED;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.admin.DevicePolicyManager;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.VisibilityConfig;
@@ -78,22 +79,25 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         }
 
         FrameworkCallerAccess frameworkCallerAccess = (FrameworkCallerAccess) callerAccess;
-        VisibilityConfig visibilityConfig = visibilityStore.getVisibility(prefixedSchema);
+        InternalVisibilityConfig internalVisibilityConfig =
+                visibilityStore.getVisibility(prefixedSchema);
 
         // If caller requires enterprise access, the given schema is only visible if caller has all
         // required permissions.
         if (frameworkCallerAccess.isForEnterprise()) {
-            return visibilityConfig != null && isSchemaVisibleToPermission(visibilityConfig,
+            return internalVisibilityConfig != null && isSchemaVisibleToPermission(
+                    internalVisibilityConfig.getVisibilityConfig(),
                     frameworkCallerAccess.getCallingAttributionSource(),
                     /*checkEnterpriseAccess=*/ true);
         }
 
-        if (visibilityConfig == null) {
+        if (internalVisibilityConfig == null) {
             // The target schema doesn't exist yet. We will treat it as default setting and the only
             // accessible case is when the caller has system access.
             return frameworkCallerAccess.doesCallerHaveSystemAccess();
         }
 
+        VisibilityConfig visibilityConfig = internalVisibilityConfig.getVisibilityConfig();
         if (frameworkCallerAccess.doesCallerHaveSystemAccess() &&
                 !visibilityConfig.isNotDisplayedBySystem()) {
             return true;

@@ -38,6 +38,7 @@ import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SearchSuggestionResult;
@@ -45,7 +46,6 @@ import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.SetSchemaResponse;
 import android.app.appsearch.SetSchemaResponse.MigrationFailure;
 import android.app.appsearch.StorageInfo;
-import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
@@ -348,7 +348,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull List<AppSearchSchema> schemas,
-                @NonNull List<VisibilityConfig> visibilityConfigs,
+                @NonNull List<InternalVisibilityConfig> visibilityConfigs,
                 boolean forceOverride,
                 int schemaVersion,
                 @NonNull UserHandle userHandle,

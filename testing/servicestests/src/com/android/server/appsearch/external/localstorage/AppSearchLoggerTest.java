@@ -456,7 +456,7 @@ public class AppSearchLoggerTest {
         assertThat(iStats.getDocumentStoreDataStatus())
                 .isEqualTo(InitializeStatsProto.DocumentStoreDataStatus.NO_DATA_LOSS_VALUE);
         assertThat(iStats.getDocumentCount()).isEqualTo(2);
-        // +2 for VisibilitySchema, +1 for VisibilityOverlay
+        // Type1 + Type2 +2 for VisibilitySchema, +1 for VisibilityOverlay
         assertThat(iStats.getSchemaTypeCount()).isEqualTo(5);
         assertThat(iStats.hasReset()).isEqualTo(false);
         assertThat(iStats.getResetStatusCode()).isEqualTo(AppSearchResult.RESULT_OK);

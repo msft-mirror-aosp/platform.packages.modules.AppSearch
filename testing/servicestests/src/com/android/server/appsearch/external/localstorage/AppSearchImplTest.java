@@ -21,6 +21,7 @@ import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
 import static com.android.server.appsearch.external.localstorage.util.PrefixUtil.addPrefixToDocument;
 import static com.android.server.appsearch.external.localstorage.util.PrefixUtil.createPrefix;
 import static com.android.server.appsearch.external.localstorage.util.PrefixUtil.removePrefixesFromDocument;
+import static com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore.ANDROID_V_OVERLAY_DATABASE_NAME;
 import static com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore.VISIBILITY_DATABASE_NAME;
 import static com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore.VISIBILITY_PACKAGE_NAME;
 
@@ -33,6 +34,7 @@ import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.JoinSpec;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SearchResult;
@@ -42,7 +44,6 @@ import android.app.appsearch.SearchSuggestionResult;
 import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.SetSchemaResponse;
 import android.app.appsearch.StorageInfo;
-import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.DocumentChangeInfo;
 import android.app.appsearch.observer.ObserverSpec;
@@ -55,11 +56,15 @@ import android.util.ArraySet;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.FlakyTest;
 
+import com.android.server.appsearch.appsearch.proto.AndroidVOverlayProto;
+import com.android.server.appsearch.appsearch.proto.PackageIdentifierProto;
+import com.android.server.appsearch.appsearch.proto.VisibilityConfigProto;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
+import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityToDocumentConverter;
 import com.android.server.appsearch.icing.proto.DebugInfoProto;
 import com.android.server.appsearch.icing.proto.DebugInfoVerbosity;
 import com.android.server.appsearch.icing.proto.DocumentProto;
@@ -74,6 +79,7 @@ import com.android.server.appsearch.icing.proto.StatusProto;
 import com.android.server.appsearch.icing.proto.StorageInfoProto;
 import com.android.server.appsearch.icing.proto.StringIndexingConfig;
 import com.android.server.appsearch.icing.proto.TermMatchType;
+import com.android.server.appsearch.protobuf.ByteString;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -2537,8 +2543,8 @@ public class AppSearchImplTest {
         }
 
         // Create VisibilityConfig
-        VisibilityConfig visibilityConfig =
-                new VisibilityConfig.Builder("schema")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -2586,13 +2592,13 @@ public class AppSearchImplTest {
                 .containsExactlyElementsIn(expectedTypes);
 
         // Verify these two visibility documents are stored in AppSearch.
-        VisibilityConfig expectedVisibilityConfigA =
-                new VisibilityConfig.Builder("packageA$database/schema")
+        InternalVisibilityConfig expectedVisibilityConfigA =
+                new InternalVisibilityConfig.Builder("packageA$database/schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
-        VisibilityConfig expectedVisibilityConfigB =
-                new VisibilityConfig.Builder("packageB$database/schema")
+        InternalVisibilityConfig expectedVisibilityConfigB =
+                new InternalVisibilityConfig.Builder("packageB$database/schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -2715,7 +2721,7 @@ public class AppSearchImplTest {
                         "package2$database1/type3",
                         "VS#Pkg$VS#Db/VisibilityType", // plus the stored Visibility schema
                         "VS#Pkg$VS#Db/VisibilityPermissionType",
-                        "VS#Pkg$VS#Db/PublicAclOverlayType");
+                        "VS#Pkg$VS#AndroidVDb/AndroidVOverlayType");
     }
 
     @FlakyTest(bugId = 204186664)
@@ -4832,8 +4838,8 @@ public class AppSearchImplTest {
 
     @Test
     public void testSetVisibility() throws Exception {
-        VisibilityConfig visibilityConfig =
-                new VisibilityConfig.Builder("Email")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -4854,31 +4860,31 @@ public class AppSearchImplTest {
         String prefix = PrefixUtil.createPrefix("package", "database1");
 
         // assert the visibility document is saved.
-        VisibilityConfig expectedDocument =
-                new VisibilityConfig.Builder(prefix + "Email")
+        InternalVisibilityConfig expectedDocument =
+                new InternalVisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
-        // Verify the VisibilityConfig is saved to AppSearchImpl.
-        VisibilityConfig actualDocument =
-                VisibilityConfig.createVisibilityConfig(
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
                                 VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /*id=*/ prefix + "Email",
                                 /*typePropertyPaths=*/ Collections.emptyMap()),
-                        null);
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument).isEqualTo(expectedDocument);
     }
 
     @Test
     public void testSetVisibility_existingVisibilitySettingRetains() throws Exception {
         // Create Visibility Document for Email1
-        VisibilityConfig visibilityConfig1 =
-                new VisibilityConfig.Builder("Email1")
+        InternalVisibilityConfig visibilityConfig1 =
+                new InternalVisibilityConfig.Builder("Email1")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -4899,28 +4905,29 @@ public class AppSearchImplTest {
         String prefix1 = PrefixUtil.createPrefix("package1", "database");
 
         // assert the visibility document is saved.
-        VisibilityConfig expectedDocument1 =
-                new VisibilityConfig.Builder(prefix1 + "Email1")
+        InternalVisibilityConfig expectedDocument1 =
+                new InternalVisibilityConfig.Builder(prefix1 + "Email1")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix1 + "Email1"))
                 .isEqualTo(expectedDocument1);
-        // Verify the VisibilityConfig is saved to AppSearchImpl.
-        VisibilityConfig actualDocument1 =
-                VisibilityConfig.createVisibilityConfig(
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument1 =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
                                 VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /*id=*/ prefix1 + "Email1",
                                 /*typePropertyPaths=*/ Collections.emptyMap()),
-                        null);
+                        /*androidVOverlayDocument=*/ null);
+
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
 
         // Create Visibility Document for Email2
-        VisibilityConfig visibilityConfig2 =
-                new VisibilityConfig.Builder("Email2")
+        InternalVisibilityConfig visibilityConfig2 =
+                new InternalVisibilityConfig.Builder("Email2")
                         .setNotDisplayedBySystem(false)
                         .addVisibleToPackage(new PackageIdentifier("pkgFoo", new byte[32]))
                         .build();
@@ -4941,23 +4948,23 @@ public class AppSearchImplTest {
         String prefix2 = PrefixUtil.createPrefix("package2", "database");
 
         // assert the visibility document is saved.
-        VisibilityConfig expectedDocument2 =
-                new VisibilityConfig.Builder(prefix2 + "Email2")
+        InternalVisibilityConfig expectedDocument2 =
+                new InternalVisibilityConfig.Builder(prefix2 + "Email2")
                         .setNotDisplayedBySystem(false)
                         .addVisibleToPackage(new PackageIdentifier("pkgFoo", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix2 + "Email2"))
                 .isEqualTo(expectedDocument2);
-        // Verify the VisibilityConfig is saved to AppSearchImpl.
-        VisibilityConfig actualDocument2 =
-                VisibilityConfig.createVisibilityConfig(
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument2 =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
                                 VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /*id=*/ prefix2 + "Email2",
                                 /*typePropertyPaths=*/ Collections.emptyMap()),
-                        null);
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument2).isEqualTo(expectedDocument2);
 
         // Check the existing visibility document retains.
@@ -4965,22 +4972,22 @@ public class AppSearchImplTest {
                 .isEqualTo(expectedDocument1);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         actualDocument1 =
-                VisibilityConfig.createVisibilityConfig(
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
                                 VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /*id=*/ prefix1 + "Email1",
                                 /*typePropertyPaths=*/ Collections.emptyMap()),
-                        null);
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
     }
 
     @Test
     public void testSetVisibility_removeVisibilitySettings() throws Exception {
         // Create a non-all-default visibility document
-        VisibilityConfig visibilityConfig =
-                new VisibilityConfig.Builder("Email")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -5000,22 +5007,22 @@ public class AppSearchImplTest {
                         /* setSchemaStatsBuilder= */ null);
         assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         String prefix = PrefixUtil.createPrefix("package", "database1");
-        VisibilityConfig expectedDocument =
-                new VisibilityConfig.Builder(prefix + "Email")
+        InternalVisibilityConfig expectedDocument =
+                new InternalVisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
-        VisibilityConfig actualDocument =
-                VisibilityConfig.createVisibilityConfig(
+        InternalVisibilityConfig actualDocument =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
                                 VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /*id=*/ prefix + "Email",
                                 /*typePropertyPaths=*/ Collections.emptyMap()),
-                        null);
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // Set schema Email and its all-default visibility document to AppSearch database1
@@ -5031,7 +5038,7 @@ public class AppSearchImplTest {
         assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         // All-default visibility document won't be saved in AppSearch.
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email")).isNull();
-        // Verify the VisibilityConfig is removed from AppSearchImpl.
+        // Verify the InternalVisibilityConfig is removed from AppSearchImpl.
         AppSearchException e =
                 assertThrows(
                         AppSearchException.class,
@@ -5039,7 +5046,7 @@ public class AppSearchImplTest {
                                 mAppSearchImpl.getDocument(
                                         VISIBILITY_PACKAGE_NAME,
                                         VISIBILITY_DATABASE_NAME,
-                                        VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                         /*id=*/ prefix + "Email",
                                         /*typePropertyPaths=*/ Collections.emptyMap()));
         assertThat(e)
@@ -5050,8 +5057,8 @@ public class AppSearchImplTest {
     @Test
     public void testRemoveVisibility_noRemainingSettings() throws Exception {
         // Create a non-all-default visibility document
-        VisibilityConfig visibilityConfig =
-                new VisibilityConfig.Builder("Email")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -5069,23 +5076,23 @@ public class AppSearchImplTest {
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
         String prefix = PrefixUtil.createPrefix("package", "database1");
-        VisibilityConfig expectedDocument =
-                new VisibilityConfig.Builder(prefix + "Email")
+        InternalVisibilityConfig expectedDocument =
+                new InternalVisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
-        // Verify the VisibilityConfig is saved to AppSearchImpl.
-        VisibilityConfig actualDocument =
-                VisibilityConfig.createVisibilityConfig(
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
                                 VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /*id=*/ prefix + "Email",
                                 /*typePropertyPaths=*/ Collections.emptyMap()),
-                        null);
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // remove the schema and visibility setting from AppSearch
@@ -5117,7 +5124,7 @@ public class AppSearchImplTest {
                                 mAppSearchImpl.getDocument(
                                         VISIBILITY_PACKAGE_NAME,
                                         VISIBILITY_DATABASE_NAME,
-                                        VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                         /*id=*/ prefix + "Email",
                                         /*typePropertyPaths=*/ Collections.emptyMap()));
         assertThat(e)
@@ -5128,8 +5135,8 @@ public class AppSearchImplTest {
     @Test
     public void testCloseAndReopen_visibilityInfoRetains() throws Exception {
         // set Schema and visibility to AppSearch
-        VisibilityConfig visibilityConfig =
-                new VisibilityConfig.Builder("Email")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -5158,24 +5165,24 @@ public class AppSearchImplTest {
                         /*visibilityChecker=*/ null);
 
         String prefix = PrefixUtil.createPrefix("packageName", "databaseName");
-        VisibilityConfig expectedDocument =
-                new VisibilityConfig.Builder(prefix + "Email")
+        InternalVisibilityConfig expectedDocument =
+                new InternalVisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
 
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
-        // Verify the VisibilityConfig is saved to AppSearchImpl.
-        VisibilityConfig actualDocument =
-                VisibilityConfig.createVisibilityConfig(
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
                                 VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /*id=*/ prefix + "Email",
                                 /*typePropertyPaths=*/ Collections.emptyMap()),
-                        null);
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // remove schema and visibility document
@@ -5202,7 +5209,7 @@ public class AppSearchImplTest {
                         /*visibilityChecker=*/ null);
 
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email")).isNull();
-        // Verify the VisibilityConfig is removed from AppSearchImpl.
+        // Verify the InternalVisibilityConfig is removed from AppSearchImpl.
         AppSearchException e =
                 assertThrows(
                         AppSearchException.class,
@@ -5210,7 +5217,7 @@ public class AppSearchImplTest {
                                 mAppSearchImpl.getDocument(
                                         VISIBILITY_PACKAGE_NAME,
                                         VISIBILITY_DATABASE_NAME,
-                                        VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                         /*id=*/ prefix + "Email",
                                         /*typePropertyPaths=*/ Collections.emptyMap()));
         assertThat(e)
@@ -5244,7 +5251,7 @@ public class AppSearchImplTest {
                         "database",
                         schemas,
                         /*visibilityConfigs=*/ ImmutableList.of(
-                                new VisibilityConfig.Builder("Type")
+                                new InternalVisibilityConfig.Builder("Type")
                                         .setNotDisplayedBySystem(true)
                                         .build()),
                         /*forceOverride=*/ false,
@@ -5349,10 +5356,10 @@ public class AppSearchImplTest {
                         "database",
                         schemas,
                         /*visibilityConfigs=*/ ImmutableList.of(
-                                new VisibilityConfig.Builder("VisibleType")
+                                new InternalVisibilityConfig.Builder("VisibleType")
                                         .setNotDisplayedBySystem(true)
                                         .build(),
-                                new VisibilityConfig.Builder("PrivateType")
+                                new InternalVisibilityConfig.Builder("PrivateType")
                                         .setNotDisplayedBySystem(true)
                                         .build()),
                         /*forceOverride=*/ false,
@@ -5396,11 +5403,14 @@ public class AppSearchImplTest {
                         "C", ImmutableSet.of("A", "B", "C"));
         final VisibilityChecker publicAclMockChecker =
                 (callerAccess, packageName, prefixedSchema, visibilityStore) -> {
-                    VisibilityConfig param = visibilityStore.getVisibility(prefixedSchema);
+                    InternalVisibilityConfig param = visibilityStore.getVisibility(prefixedSchema);
 
                     return packageCanSee
                             .get(callerAccess.getCallingPackageName())
-                            .contains(param.getPubliclyVisibleTargetPackage().getPackageName());
+                            .contains(
+                                    param.getVisibilityConfig()
+                                            .getPubliclyVisibleTargetPackage()
+                                            .getPackageName());
                 };
 
         mAppSearchImpl =
@@ -5412,15 +5422,15 @@ public class AppSearchImplTest {
                         ALWAYS_OPTIMIZE,
                         publicAclMockChecker);
 
-        List<VisibilityConfig> visibilityConfigs =
+        List<InternalVisibilityConfig> visibilityConfigs =
                 ImmutableList.of(
-                        new VisibilityConfig.Builder("PublicTypeA")
+                        new InternalVisibilityConfig.Builder("PublicTypeA")
                                 .setPubliclyVisibleTargetPackage(pkgA)
                                 .build(),
-                        new VisibilityConfig.Builder("PublicTypeB")
+                        new InternalVisibilityConfig.Builder("PublicTypeB")
                                 .setPubliclyVisibleTargetPackage(pkgB)
                                 .build(),
-                        new VisibilityConfig.Builder("PublicTypeC")
+                        new InternalVisibilityConfig.Builder("PublicTypeC")
                                 .setPubliclyVisibleTargetPackage(pkgC)
                                 .build());
 
@@ -5486,11 +5496,14 @@ public class AppSearchImplTest {
                         "C", ImmutableSet.of("A", "B", "C"));
         final VisibilityChecker publicAclMockChecker =
                 (callerAccess, packageName, prefixedSchema, visibilityStore) -> {
-                    VisibilityConfig param = visibilityStore.getVisibility(prefixedSchema);
+                    InternalVisibilityConfig param = visibilityStore.getVisibility(prefixedSchema);
 
                     return packageCanSee
                             .get(callerAccess.getCallingPackageName())
-                            .contains(param.getPubliclyVisibleTargetPackage().getPackageName());
+                            .contains(
+                                    param.getVisibilityConfig()
+                                            .getPubliclyVisibleTargetPackage()
+                                            .getPackageName());
                 };
 
         mAppSearchImpl =
@@ -5502,15 +5515,15 @@ public class AppSearchImplTest {
                         ALWAYS_OPTIMIZE,
                         publicAclMockChecker);
 
-        List<VisibilityConfig> visibilityConfigs =
+        List<InternalVisibilityConfig> visibilityConfigs =
                 ImmutableList.of(
-                        new VisibilityConfig.Builder("PublicTypeA")
+                        new InternalVisibilityConfig.Builder("PublicTypeA")
                                 .setPubliclyVisibleTargetPackage(pkgA)
                                 .build(),
-                        new VisibilityConfig.Builder("PublicTypeB")
+                        new InternalVisibilityConfig.Builder("PublicTypeB")
                                 .setPubliclyVisibleTargetPackage(pkgB)
                                 .build(),
-                        new VisibilityConfig.Builder("PublicTypeC")
+                        new InternalVisibilityConfig.Builder("PublicTypeC")
                                 .setPubliclyVisibleTargetPackage(pkgC)
                                 .build());
 
@@ -5530,38 +5543,75 @@ public class AppSearchImplTest {
         GenericDocument visibilityOverlayA =
                 mAppSearchImpl.getDocument(
                         VISIBILITY_PACKAGE_NAME,
-                        VISIBILITY_DATABASE_NAME,
-                        VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                         "package$database/PublicTypeA",
                         Collections.emptyMap());
         GenericDocument visibilityOverlayB =
                 mAppSearchImpl.getDocument(
                         VISIBILITY_PACKAGE_NAME,
-                        VISIBILITY_DATABASE_NAME,
-                        VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                         "package$database/PublicTypeB",
                         Collections.emptyMap());
         GenericDocument visibilityOverlayC =
                 mAppSearchImpl.getDocument(
                         VISIBILITY_PACKAGE_NAME,
-                        VISIBILITY_DATABASE_NAME,
-                        VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                         "package$database/PublicTypeC",
                         Collections.emptyMap());
 
-        assertThat(visibilityOverlayA.getPropertyString("publiclyVisibleTargetPackage"))
-                .isEqualTo("A");
-        assertThat(visibilityOverlayB.getPropertyString("publiclyVisibleTargetPackage"))
-                .isEqualTo("B");
-        assertThat(visibilityOverlayC.getPropertyString("publiclyVisibleTargetPackage"))
-                .isEqualTo("C");
+        AndroidVOverlayProto overlayProtoA =
+                AndroidVOverlayProto.newBuilder()
+                        .setVisibilityConfig(
+                                VisibilityConfigProto.newBuilder()
+                                        .setPubliclyVisibleTargetPackage(
+                                                PackageIdentifierProto.newBuilder()
+                                                        .setPackageName("A")
+                                                        .setPackageSha256Cert(
+                                                                ByteString.copyFrom(new byte[32]))
+                                                        .build())
+                                        .build())
+                        .build();
+        AndroidVOverlayProto overlayProtoB =
+                AndroidVOverlayProto.newBuilder()
+                        .setVisibilityConfig(
+                                VisibilityConfigProto.newBuilder()
+                                        .setPubliclyVisibleTargetPackage(
+                                                PackageIdentifierProto.newBuilder()
+                                                        .setPackageName("B")
+                                                        .setPackageSha256Cert(
+                                                                ByteString.copyFrom(new byte[32]))
+                                                        .build())
+                                        .build())
+                        .build();
+        AndroidVOverlayProto overlayProtoC =
+                AndroidVOverlayProto.newBuilder()
+                        .setVisibilityConfig(
+                                VisibilityConfigProto.newBuilder()
+                                        .setPubliclyVisibleTargetPackage(
+                                                PackageIdentifierProto.newBuilder()
+                                                        .setPackageName("C")
+                                                        .setPackageSha256Cert(
+                                                                ByteString.copyFrom(new byte[32]))
+                                                        .build())
+                                        .build())
+                        .build();
+
+        assertThat(visibilityOverlayA.getPropertyBytes("visibilityProtoSerializeProperty"))
+                .isEqualTo(overlayProtoA.toByteArray());
+        assertThat(visibilityOverlayB.getPropertyBytes("visibilityProtoSerializeProperty"))
+                .isEqualTo(overlayProtoB.toByteArray());
+        assertThat(visibilityOverlayC.getPropertyBytes("visibilityProtoSerializeProperty"))
+                .isEqualTo(overlayProtoC.toByteArray());
 
         // now undo the "public" setting
         visibilityConfigs =
                 ImmutableList.of(
-                        new VisibilityConfig.Builder("PublicTypeA").build(),
-                        new VisibilityConfig.Builder("PublicTypeB").build(),
-                        new VisibilityConfig.Builder("PublicTypeC").build());
+                        new InternalVisibilityConfig.Builder("PublicTypeA").build(),
+                        new InternalVisibilityConfig.Builder("PublicTypeB").build(),
+                        new InternalVisibilityConfig.Builder("PublicTypeC").build());
 
         InternalSetSchemaResponse internalSetSchemaResponseRemoved =
                 mAppSearchImpl.setSchema(
@@ -5582,7 +5632,7 @@ public class AppSearchImplTest {
                                 mAppSearchImpl.getDocument(
                                         VISIBILITY_PACKAGE_NAME,
                                         VISIBILITY_DATABASE_NAME,
-                                        VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                                         "package$database/PublicTypeA",
                                         Collections.emptyMap()));
         assertThat(e.getMessage()).endsWith("not found.");
@@ -5593,7 +5643,7 @@ public class AppSearchImplTest {
                                 mAppSearchImpl.getDocument(
                                         VISIBILITY_PACKAGE_NAME,
                                         VISIBILITY_DATABASE_NAME,
-                                        VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                                         "package$database/PublicTypeB",
                                         Collections.emptyMap()));
         assertThat(e.getMessage()).endsWith("not found.");
@@ -5604,7 +5654,7 @@ public class AppSearchImplTest {
                                 mAppSearchImpl.getDocument(
                                         VISIBILITY_PACKAGE_NAME,
                                         VISIBILITY_DATABASE_NAME,
-                                        VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                                         "package$database/PublicTypeC",
                                         Collections.emptyMap()));
         assertThat(e.getMessage()).endsWith("not found.");
@@ -6182,7 +6232,10 @@ public class AppSearchImplTest {
                     }
 
                     for (PackageIdentifier packageIdentifier :
-                            visibilityStore.getVisibility(prefixedSchema).getVisibleToPackages()) {
+                            visibilityStore
+                                    .getVisibility(prefixedSchema)
+                                    .getVisibilityConfig()
+                                    .getVisibleToPackages()) {
                         if (packageIdentifier.getPackageName().equals(fakeListeningPackage)) {
                             return true;
                         }
@@ -6219,12 +6272,12 @@ public class AppSearchImplTest {
                         "database1",
                         schemas,
                         /*visibilityConfigs=*/ ImmutableList.of(
-                                new VisibilityConfig.Builder("Type1")
+                                new InternalVisibilityConfig.Builder("Type1")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
                                         .build(),
-                                new VisibilityConfig.Builder("Type2")
+                                new InternalVisibilityConfig.Builder("Type2")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
@@ -6254,12 +6307,12 @@ public class AppSearchImplTest {
                         "database1",
                         schemas,
                         /*visibilityConfigs=*/ ImmutableList.of(
-                                new VisibilityConfig.Builder("Type1")
+                                new InternalVisibilityConfig.Builder("Type1")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
                                         .build(),
-                                new VisibilityConfig.Builder("Type2").build()),
+                                new InternalVisibilityConfig.Builder("Type2").build()),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6293,12 +6346,12 @@ public class AppSearchImplTest {
                                                         .build())
                                         .build()),
                         /*visibilityConfigs=*/ ImmutableList.of(
-                                new VisibilityConfig.Builder("Type1")
+                                new InternalVisibilityConfig.Builder("Type1")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
                                         .build(),
-                                new VisibilityConfig.Builder("Type2").build()),
+                                new InternalVisibilityConfig.Builder("Type2").build()),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6327,12 +6380,12 @@ public class AppSearchImplTest {
                                                         .build())
                                         .build()),
                         /*visibilityConfigs=*/ ImmutableList.of(
-                                new VisibilityConfig.Builder("Type1")
+                                new InternalVisibilityConfig.Builder("Type1")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
                                         .build(),
-                                new VisibilityConfig.Builder("Type2")
+                                new InternalVisibilityConfig.Builder("Type2")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
