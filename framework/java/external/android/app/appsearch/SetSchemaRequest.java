@@ -171,6 +171,7 @@ public final class SetSchemaRequest {
     private final Map<String, Set<PackageIdentifier>> mSchemasVisibleToPackages;
     private final Map<String, Set<Set<Integer>>> mSchemasVisibleToPermissions;
     private final Map<String, PackageIdentifier> mPubliclyVisibleSchemas;
+    private final Map<String, Set<VisibilityConfig>> mSchemasVisibleToConfigs;
     private final Map<String, Migrator> mMigrators;
     private final boolean mForceOverride;
     private final int mVersion;
@@ -181,6 +182,7 @@ public final class SetSchemaRequest {
             @NonNull Map<String, Set<PackageIdentifier>> schemasVisibleToPackages,
             @NonNull Map<String, Set<Set<Integer>>> schemasVisibleToPermissions,
             @NonNull Map<String, PackageIdentifier> publiclyVisibleSchemas,
+            @NonNull Map<String, Set<VisibilityConfig>> schemasVisibleToConfigs,
             @NonNull Map<String, Migrator> migrators,
             boolean forceOverride,
             int version) {
@@ -189,6 +191,7 @@ public final class SetSchemaRequest {
         mSchemasVisibleToPackages = Objects.requireNonNull(schemasVisibleToPackages);
         mSchemasVisibleToPermissions = Objects.requireNonNull(schemasVisibleToPermissions);
         mPubliclyVisibleSchemas = Objects.requireNonNull(publiclyVisibleSchemas);
+        mSchemasVisibleToConfigs = Objects.requireNonNull(schemasVisibleToConfigs);
         mMigrators = Objects.requireNonNull(migrators);
         mForceOverride = forceOverride;
         mVersion = version;
@@ -270,6 +273,24 @@ public final class SetSchemaRequest {
     }
 
     /**
+     * Returns a mapping of schema types to the set of {@link VisibilityConfig} that have access to
+     * that schema type.
+     *
+     * <p>It’s inefficient to call this method repeatedly.
+     *
+     * @see SetSchemaRequest.Builder#addSchemaTypeVisibleToConfig
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_SET_SCHEMA_VISIBLE_TO_CONFIGS)
+    @NonNull
+    public Map<String, Set<VisibilityConfig>> getSchemasVisibleToConfigs() {
+        Map<String, Set<VisibilityConfig>> copy = new ArrayMap<>();
+        for (Map.Entry<String, Set<VisibilityConfig>> entry : mSchemasVisibleToConfigs.entrySet()) {
+            copy.put(entry.getKey(), new ArraySet<>(entry.getValue()));
+        }
+        return copy;
+    }
+
+    /**
      * Returns the map of {@link Migrator}, the key will be the schema type of the {@link Migrator}
      * associated with.
      */
@@ -312,6 +333,7 @@ public final class SetSchemaRequest {
                 new ArrayMap<>();
         private ArrayMap<String, Set<Set<Integer>>> mSchemasVisibleToPermissions = new ArrayMap<>();
         private ArrayMap<String, PackageIdentifier> mPubliclyVisibleSchemas = new ArrayMap<>();
+        private ArrayMap<String, Set<VisibilityConfig>> mSchemaVisibleToConfigs = new ArrayMap<>();
         private ArrayMap<String, Migrator> mMigrators = new ArrayMap<>();
         private boolean mForceOverride = false;
         private int mVersion = DEFAULT_VERSION;
@@ -390,6 +412,12 @@ public final class SetSchemaRequest {
          * #READ_CONTACTS}, {@link #READ_EXTERNAL_STORAGE}, {@link #READ_HOME_APP_SEARCH_DATA} and
          * {@link #READ_ASSISTANT_APP_SEARCH_DATA}.
          *
+         * <p>The relationship between permissions added in this method and package visibility
+         * setting {@link #setSchemaTypeVisibilityForPackage} is "OR". The caller could access the
+         * schema if they match ANY requirements. If you want to set "AND" requirements like a
+         * caller must hold required permissions AND it is a specified package, please use {@link
+         * #addSchemaTypeVisibleToConfig}.
+         *
          * @see android.Manifest.permission#READ_SMS
          * @see android.Manifest.permission#READ_CALENDAR
          * @see android.Manifest.permission#READ_CONTACTS
@@ -426,6 +454,7 @@ public final class SetSchemaRequest {
         }
 
         /** Clears all required permissions combinations for the given schema type. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder clearRequiredPermissionsForSchemaTypeVisibility(@NonNull String schemaType) {
             Objects.requireNonNull(schemaType);
@@ -449,6 +478,12 @@ public final class SetSchemaRequest {
          * one another.
          *
          * <p>By default, data sharing between applications is disabled.
+         *
+         * <p>The relationship between permissions added in this method and package visibility
+         * setting {@link #setSchemaTypeVisibilityForPackage} is "OR". The caller could access the
+         * schema if they match ANY requirements. If you want to set "AND" requirements like a
+         * caller must hold required permissions AND it is a specified package, please use {@link
+         * #addSchemaTypeVisibleToConfig}.
          *
          * @param schemaType The schema type to set visibility on.
          * @param visible Whether the {@code schemaType} will be visible or not.
@@ -526,6 +561,49 @@ public final class SetSchemaRequest {
             }
 
             mPubliclyVisibleSchemas.put(schema, packageIdentifier);
+            return this;
+        }
+
+        /**
+         * Sets the documents from the provided {@code schemaType} can be read by the caller if they
+         * match the ALL visibility requirements set in {@link VisibilityConfig}.
+         *
+         * <p>The requirements in a {@link VisibilityConfig} is "AND" relationship. A caller must
+         * match ALL requirements to access the schema. For example, a caller must hold required
+         * permissions AND it is a specified package.
+         *
+         * <p>You can call this method repeatedly to add multiple {@link VisibilityConfig}s, and the
+         * querier will have access if they match ANY of the {@link VisibilityConfig}.
+         *
+         * @param schemaType The schema type to set visibility on.
+         * @param visibilityConfig The {@link VisibilityConfig} holds all requirements that a call
+         *     must to match to access the schema.
+         */
+        // Merged list available from getSchemasVisibleToConfigs
+        @SuppressLint("MissingGetterMatchingBuilder")
+        @FlaggedApi(Flags.FLAG_ENABLE_SET_SCHEMA_VISIBLE_TO_CONFIGS)
+        @NonNull
+        public Builder addSchemaTypeVisibleToConfig(
+                @NonNull String schemaType, @NonNull VisibilityConfig visibilityConfig) {
+            Objects.requireNonNull(schemaType);
+            Objects.requireNonNull(visibilityConfig);
+            resetIfBuilt();
+            Set<VisibilityConfig> visibleToConfigs = mSchemaVisibleToConfigs.get(schemaType);
+            if (visibleToConfigs == null) {
+                visibleToConfigs = new ArraySet<>();
+                mSchemaVisibleToConfigs.put(schemaType, visibleToConfigs);
+            }
+            visibleToConfigs.add(visibilityConfig);
+            return this;
+        }
+
+        /** Clears all visible to {@link VisibilityConfig} for the given schema type. */
+        @FlaggedApi(Flags.FLAG_ENABLE_SET_SCHEMA_VISIBLE_TO_CONFIGS)
+        @NonNull
+        public Builder clearSchemaTypeVisibleToConfigs(@NonNull String schemaType) {
+            Objects.requireNonNull(schemaType);
+            resetIfBuilt();
+            mSchemaVisibleToConfigs.remove(schemaType);
             return this;
         }
 
@@ -664,6 +742,7 @@ public final class SetSchemaRequest {
             referencedSchemas.addAll(mSchemasVisibleToPackages.keySet());
             referencedSchemas.addAll(mSchemasVisibleToPermissions.keySet());
             referencedSchemas.addAll(mPubliclyVisibleSchemas.keySet());
+            referencedSchemas.addAll(mSchemaVisibleToConfigs.keySet());
 
             for (AppSearchSchema schema : mSchemas) {
                 referencedSchemas.remove(schema.getSchemaType());
@@ -685,6 +764,7 @@ public final class SetSchemaRequest {
                     mSchemasVisibleToPackages,
                     mSchemasVisibleToPermissions,
                     mPubliclyVisibleSchemas,
+                    mSchemaVisibleToConfigs,
                     mMigrators,
                     mForceOverride,
                     mVersion);
@@ -703,6 +783,14 @@ public final class SetSchemaRequest {
                 mPubliclyVisibleSchemas = new ArrayMap<>(mPubliclyVisibleSchemas);
 
                 mSchemasVisibleToPermissions = deepCopy(mSchemasVisibleToPermissions);
+
+                ArrayMap<String, Set<VisibilityConfig>> schemaVisibleToConfigs =
+                        new ArrayMap<>(mSchemaVisibleToConfigs.size());
+                for (Map.Entry<String, Set<VisibilityConfig>> entry :
+                        mSchemaVisibleToConfigs.entrySet()) {
+                    schemaVisibleToConfigs.put(entry.getKey(), new ArraySet<>(entry.getValue()));
+                }
+                mSchemaVisibleToConfigs = schemaVisibleToConfigs;
 
                 mSchemas = new ArraySet<>(mSchemas);
                 mSchemasNotDisplayedBySystem = new ArraySet<>(mSchemasNotDisplayedBySystem);

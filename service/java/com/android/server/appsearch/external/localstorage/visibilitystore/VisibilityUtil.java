@@ -58,7 +58,7 @@ public class VisibilityUtil {
         // and the target package are the same.
         if (callerAccess.doesCallerHaveSelfAccess()
                 && callerAccess.getCallingPackageName().equals(targetPackageName)) {
-            return true;   // Caller is allowed to retrieve its own data.
+            return true; // Caller is allowed to retrieve its own data.
         }
         if (visibilityStore == null || visibilityChecker == null) {
             return false; // No visibility is configured at this time; no other access possible.

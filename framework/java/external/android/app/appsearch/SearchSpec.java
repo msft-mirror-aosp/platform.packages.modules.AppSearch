@@ -1278,6 +1278,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
          *     weight to set for that property.
          * @throws IllegalArgumentException if a weight is equal to or less than 0.0.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setPropertyWeights(
                 @NonNull String schemaType, @NonNull Map<String, Double> propertyPathWeights) {
@@ -1311,6 +1312,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
          *
          * @param joinSpec a specification on how to perform the Join operation.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setJoinSpec(@NonNull JoinSpec joinSpec) {
             resetIfBuilt();
@@ -1343,6 +1345,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
          *     weight to set for that property.
          * @throws IllegalArgumentException if a weight is equal to or less than 0.0.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public SearchSpec.Builder setPropertyWeightPaths(
                 @NonNull String schemaType,
