@@ -212,6 +212,7 @@ public class AppSearchManager {
                 mService,
                 mContext.getUser(),
                 AppSearchAttributionSource.createAttributionSource(mContext),
+                AppSearchEnvironmentFactory.getEnvironmentInstance().getCacheDir(mContext),
                 executor,
                 callback);
     }

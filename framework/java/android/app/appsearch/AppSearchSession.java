@@ -20,6 +20,7 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
@@ -40,6 +41,7 @@ import android.util.Log;
 import com.android.internal.util.Preconditions;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -69,6 +71,8 @@ public final class AppSearchSession implements Closeable {
     private final String mDatabaseName;
     private final UserHandle mUserHandle;
     private final IAppSearchManager mService;
+    @Nullable
+    private final File mCacheDirectory;
 
     private boolean mIsMutated = false;
     private boolean mIsClosed = false;
@@ -76,17 +80,32 @@ public final class AppSearchSession implements Closeable {
     /**
      * Creates a search session for the client, defined by the {@code userHandle} and
      * {@code packageName}.
+     *
+     * @param searchContext The {@link AppSearchManager.SearchContext} contains all information to
+     *                      create a new {@link AppSearchSession}.
+     * @param service The {@link IAppSearchManager} service from which to make api calls.
+     * @param userHandle The user for which the session should be created.
+     * @param callerAttributionSource The attribution source containing the caller's package name
+     *                                and uid.
+     * @param cacheDirectory The directory to create temporary files needed for migration. If this
+     *                       is null, the default temporary-file directory (/data/local/tmp) will be
+     *                       used.
+     * @param executor Executor on which to invoke the callback.
+     * @param callback The {@link AppSearchResult}&lt;{@link AppSearchSession}&gt; of performing
+     *                 this operation. Or a {@link AppSearchResult} with failure reason code and
+     *                 error information.
      */
     static void createSearchSession(
             @NonNull AppSearchManager.SearchContext searchContext,
             @NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
             @NonNull AppSearchAttributionSource callerAttributionSource,
+            @Nullable File cacheDirectory,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<AppSearchSession>> callback) {
         AppSearchSession searchSession =
                 new AppSearchSession(service, userHandle, callerAttributionSource,
-                        searchContext.mDatabaseName);
+                        searchContext.mDatabaseName, cacheDirectory);
         searchSession.initialize(executor, callback);
     }
 
@@ -122,11 +141,12 @@ public final class AppSearchSession implements Closeable {
 
     private AppSearchSession(@NonNull IAppSearchManager service, @NonNull UserHandle userHandle,
             @NonNull AppSearchAttributionSource callerAttributionSource,
-            @NonNull String databaseName) {
+            @NonNull String databaseName, @Nullable File cacheDirectory) {
         mService = service;
         mUserHandle = userHandle;
         mCallerAttributionSource = callerAttributionSource;
         mDatabaseName = databaseName;
+        mCacheDirectory = cacheDirectory;
     }
 
     /**
@@ -982,7 +1002,7 @@ public final class AppSearchSession implements Closeable {
 
                 try (AppSearchMigrationHelper migrationHelper = new AppSearchMigrationHelper(
                         mService, mUserHandle, mCallerAttributionSource, mDatabaseName,
-                        request.getSchemas())) {
+                        request.getSchemas(), mCacheDirectory)) {
 
                     // 4. Trigger migration for all migrators.
                     long queryAndTransformLatencyStartTimeMillis = SystemClock.elapsedRealtime();
