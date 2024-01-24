@@ -29,8 +29,8 @@ import static com.google.common.truth.Truth.assertThat;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
-import android.app.appsearch.VisibilityConfig;
 
 import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
@@ -168,16 +168,14 @@ public class VisibilityStoreMigrationHelperFromV0Test {
 
         GenericDocument expectedDocument1 =
                 VisibilityToDocumentConverter.createVisibilityDocument(
-                        /*id=*/ prefix + "Schema1",
-                        new VisibilityConfig.Builder()
+                        new InternalVisibilityConfig.Builder(prefix + "Schema1")
                                 .setNotDisplayedBySystem(true)
                                 .addVisibleToPackage(
                                         new PackageIdentifier(packageNameFoo, sha256CertFoo))
                                 .build());
         GenericDocument expectedDocument2 =
                 VisibilityToDocumentConverter.createVisibilityDocument(
-                        /*id=*/ prefix + "Schema2",
-                        new VisibilityConfig.Builder()
+                        new InternalVisibilityConfig.Builder(prefix + "Schema2")
                                 .setNotDisplayedBySystem(true)
                                 .addVisibleToPackage(
                                         new PackageIdentifier(packageNameBar, sha256CertBar))
