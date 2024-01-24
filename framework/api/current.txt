@@ -241,6 +241,7 @@ package android.app.appsearch {
     method @FlaggedApi("com.android.appsearch.flags.enable_set_publicly_visible_schema") @NonNull public java.util.Map<java.lang.String,android.app.appsearch.PackageIdentifier> getPubliclyVisibleSchemas();
     method @NonNull public java.util.Map<java.lang.String,java.util.Set<java.util.Set<java.lang.Integer>>> getRequiredPermissionsForSchemaTypeVisibility();
     method @NonNull public java.util.Set<java.lang.String> getSchemaTypesNotDisplayedBySystem();
+    method @FlaggedApi("com.android.appsearch.flags.enable_set_schema_visible_to_configs") @NonNull public java.util.Map<java.lang.String,java.util.Set<android.app.appsearch.VisibilityConfig>> getSchemaTypesVisibleToConfigs();
     method @NonNull public java.util.Map<java.lang.String,java.util.Set<android.app.appsearch.PackageIdentifier>> getSchemaTypesVisibleToPackages();
     method @NonNull public java.util.Set<android.app.appsearch.AppSearchSchema> getSchemas();
     method @IntRange(from=0) public int getVersion();
@@ -255,6 +256,7 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.GetSchemaResponse build();
     method @FlaggedApi("com.android.appsearch.flags.enable_set_publicly_visible_schema") @NonNull public android.app.appsearch.GetSchemaResponse.Builder setPubliclyVisibleSchema(@NonNull String, @NonNull android.app.appsearch.PackageIdentifier);
     method @NonNull public android.app.appsearch.GetSchemaResponse.Builder setRequiredPermissionsForSchemaTypeVisibility(@NonNull String, @NonNull java.util.Set<java.util.Set<java.lang.Integer>>);
+    method @FlaggedApi("com.android.appsearch.flags.enable_set_schema_visible_to_configs") @NonNull public android.app.appsearch.GetSchemaResponse.Builder setSchemaTypeVisibleToConfigs(@NonNull String, @NonNull java.util.Set<android.app.appsearch.VisibilityConfig>);
     method @NonNull public android.app.appsearch.GetSchemaResponse.Builder setSchemaTypeVisibleToPackages(@NonNull String, @NonNull java.util.Set<android.app.appsearch.PackageIdentifier>);
     method @NonNull public android.app.appsearch.GetSchemaResponse.Builder setVersion(@IntRange(from=0) int);
   }
@@ -559,6 +561,7 @@ package android.app.appsearch {
     method @NonNull public java.util.Map<java.lang.String,java.util.Set<java.util.Set<java.lang.Integer>>> getRequiredPermissionsForSchemaTypeVisibility();
     method @NonNull public java.util.Set<android.app.appsearch.AppSearchSchema> getSchemas();
     method @NonNull public java.util.Set<java.lang.String> getSchemasNotDisplayedBySystem();
+    method @FlaggedApi("com.android.appsearch.flags.enable_set_schema_visible_to_configs") @NonNull public java.util.Map<java.lang.String,java.util.Set<android.app.appsearch.VisibilityConfig>> getSchemasVisibleToConfigs();
     method @NonNull public java.util.Map<java.lang.String,java.util.Set<android.app.appsearch.PackageIdentifier>> getSchemasVisibleToPackages();
     method @IntRange(from=1) public int getVersion();
     method public boolean isForceOverride();
@@ -573,10 +576,12 @@ package android.app.appsearch {
   public static final class SetSchemaRequest.Builder {
     ctor public SetSchemaRequest.Builder();
     method @NonNull public android.app.appsearch.SetSchemaRequest.Builder addRequiredPermissionsForSchemaTypeVisibility(@NonNull String, @NonNull java.util.Set<java.lang.Integer>);
+    method @FlaggedApi("com.android.appsearch.flags.enable_set_schema_visible_to_configs") @NonNull public android.app.appsearch.SetSchemaRequest.Builder addSchemaTypeVisibleToConfig(@NonNull String, @NonNull android.app.appsearch.VisibilityConfig);
     method @NonNull public android.app.appsearch.SetSchemaRequest.Builder addSchemas(@NonNull android.app.appsearch.AppSearchSchema...);
     method @NonNull public android.app.appsearch.SetSchemaRequest.Builder addSchemas(@NonNull java.util.Collection<android.app.appsearch.AppSearchSchema>);
     method @NonNull public android.app.appsearch.SetSchemaRequest build();
     method @NonNull public android.app.appsearch.SetSchemaRequest.Builder clearRequiredPermissionsForSchemaTypeVisibility(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_set_schema_visible_to_configs") @NonNull public android.app.appsearch.SetSchemaRequest.Builder clearSchemaTypeVisibleToConfigs(@NonNull String);
     method @NonNull public android.app.appsearch.SetSchemaRequest.Builder setForceOverride(boolean);
     method @NonNull public android.app.appsearch.SetSchemaRequest.Builder setMigrator(@NonNull String, @NonNull android.app.appsearch.Migrator);
     method @NonNull public android.app.appsearch.SetSchemaRequest.Builder setMigrators(@NonNull java.util.Map<java.lang.String,android.app.appsearch.Migrator>);
@@ -635,6 +640,27 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.StorageInfo.Builder setAliveDocumentsCount(int);
     method @NonNull public android.app.appsearch.StorageInfo.Builder setAliveNamespacesCount(int);
     method @NonNull public android.app.appsearch.StorageInfo.Builder setSizeBytes(long);
+  }
+
+  @FlaggedApi("com.android.appsearch.flags.enable_set_schema_visible_to_configs") public final class VisibilityConfig implements android.os.Parcelable {
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public final int describeContents();
+    method @Nullable public android.app.appsearch.PackageIdentifier getPubliclyVisibleTargetPackage();
+    method @NonNull public java.util.List<android.app.appsearch.PackageIdentifier> getVisibleToPackages();
+    method @NonNull public java.util.Set<java.util.Set<java.lang.Integer>> getVisibleToPermissions();
+    method public boolean isNotDisplayedBySystem();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.VisibilityConfig> CREATOR;
+  }
+
+  @FlaggedApi("com.android.appsearch.flags.enable_set_schema_visible_to_configs") public static final class VisibilityConfig.Builder {
+    ctor public VisibilityConfig.Builder();
+    method @NonNull public android.app.appsearch.VisibilityConfig.Builder addVisibleToPackage(@NonNull android.app.appsearch.PackageIdentifier);
+    method @NonNull public android.app.appsearch.VisibilityConfig.Builder addVisibleToPermissions(@NonNull java.util.Set<java.lang.Integer>);
+    method @NonNull public android.app.appsearch.VisibilityConfig build();
+    method @NonNull public android.app.appsearch.VisibilityConfig.Builder clearVisibleToPackages();
+    method @NonNull public android.app.appsearch.VisibilityConfig.Builder clearVisibleToPermissions();
+    method @NonNull public android.app.appsearch.VisibilityConfig.Builder setNotDisplayedBySystem(boolean);
+    method @NonNull public android.app.appsearch.VisibilityConfig.Builder setPubliclyVisibleTargetPackage(@Nullable android.app.appsearch.PackageIdentifier);
   }
 
 }

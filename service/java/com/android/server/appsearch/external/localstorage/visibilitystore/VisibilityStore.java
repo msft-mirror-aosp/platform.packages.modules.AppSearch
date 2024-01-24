@@ -24,6 +24,7 @@ import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.VisibilityPermissionConfig;
 import android.app.appsearch.exceptions.AppSearchException;
@@ -66,12 +67,13 @@ public class VisibilityStore {
     public static final String VISIBILITY_PACKAGE_NAME = "VS#Pkg";
 
     public static final String VISIBILITY_DATABASE_NAME = "VS#Db";
+    public static final String ANDROID_V_OVERLAY_DATABASE_NAME = "VS#AndroidVDb";
 
     /**
-     * Map of PrefixedSchemaType and VisibilityConfig stores visibility information for each schema
-     * type.
+     * Map of PrefixedSchemaType to InternalVisibilityConfig stores visibility information for each
+     * schema type.
      */
-    private final Map<String, VisibilityConfig> mVisibilityConfigMap = new ArrayMap<>();
+    private final Map<String, InternalVisibilityConfig> mVisibilityConfigMap = new ArrayMap<>();
 
     private final AppSearchImpl mAppSearchImpl;
 
@@ -85,7 +87,7 @@ public class VisibilityStore {
                         new CallerAccess(/*callingPackageName=*/ VISIBILITY_PACKAGE_NAME));
         List<VisibilityDocumentV1> visibilityDocumentsV1s = null;
         switch (getSchemaResponse.getVersion()) {
-            case VisibilityConfig.SCHEMA_VERSION_DOC_PER_PACKAGE:
+            case VisibilityToDocumentConverter.SCHEMA_VERSION_DOC_PER_PACKAGE:
                 // TODO (b/202194495) add VisibilityDocument in version 0 back instead of using
                 //  GenericDocument.
                 List<GenericDocument> visibilityDocumentsV0s =
@@ -95,7 +97,7 @@ public class VisibilityStore {
                         VisibilityStoreMigrationHelperFromV0.toVisibilityDocumentV1(
                                 visibilityDocumentsV0s);
                 // fall through
-            case VisibilityConfig.SCHEMA_VERSION_DOC_PER_SCHEMA:
+            case VisibilityToDocumentConverter.SCHEMA_VERSION_DOC_PER_SCHEMA:
                 if (visibilityDocumentsV1s == null) {
                     // We need to read VisibilityDocument in Version 1 from AppSearch instead of
                     // taking from the above step.
@@ -107,49 +109,12 @@ public class VisibilityStore {
                         VisibilityStoreMigrationHelperFromV1.toVisibilityDocumentsV2(
                                 visibilityDocumentsV1s));
                 break;
-            case VisibilityConfig.SCHEMA_VERSION_LATEST:
-                // We cannot change the schema version past 2 as detecting version "3" would hit the
-                // default block and throw an AppSearchException. This is why we added
-                // VisibilityOverlay.
-
-                Set<AppSearchSchema> existingVisibilitySchema = getSchemaResponse.getSchemas();
-                if (existingVisibilitySchema.contains(VisibilityConfig.VISIBILITY_DOCUMENT_SCHEMA)
-                        && existingVisibilitySchema.contains(VisibilityPermissionConfig.SCHEMA)
-                        && existingVisibilitySchema.contains(
-                                VisibilityConfig.PUBLIC_ACL_OVERLAY_SCHEMA)) {
-                    // The latest Visibility schema is in AppSearch, we must find our schema type.
-                    // Extract all stored Visibility Document into mVisibilityConfigMap.
-                    loadVisibilityConfigMap();
-                } else {
-                    // We must have a broken schema. Reset it to the latest version.
-                    // Do NOT set forceOverride to be true here, see comment below.
-                    InternalSetSchemaResponse internalSetSchemaResponse =
-                            mAppSearchImpl.setSchema(
-                                    VISIBILITY_PACKAGE_NAME,
-                                    VISIBILITY_DATABASE_NAME,
-                                    Arrays.asList(
-                                            VisibilityConfig.VISIBILITY_DOCUMENT_SCHEMA,
-                                            VisibilityPermissionConfig.SCHEMA,
-                                            VisibilityConfig.PUBLIC_ACL_OVERLAY_SCHEMA),
-                                    /*visibilityConfigs=*/ Collections.emptyList(),
-                                    /*forceOverride=*/ false,
-                                    /*version=*/ VisibilityConfig.SCHEMA_VERSION_LATEST,
-                                    /*setSchemaStatsBuilder=*/ null);
-                    if (!internalSetSchemaResponse.isSuccess()) {
-                        // If you hit problem here it means you made a incompatible change in
-                        // Visibility Schema without update the version number. You should bump
-                        // the version number and create a VisibilityStoreMigrationHelper which
-                        // can analyse the different between the old version and the new version
-                        // to migration user's visibility settings.
-                        throw new AppSearchException(
-                                AppSearchResult.RESULT_INTERNAL_ERROR,
-                                "Fail to set the latest visibility schema to AppSearch. "
-                                        + "You may need to update the visibility schema version "
-                                        + "number.");
-                    } else {
-                        loadVisibilityConfigMap();
-                    }
-                }
+            case VisibilityToDocumentConverter.SCHEMA_VERSION_LATEST:
+                verifyOrSetLatestVisibilitySchema(getSchemaResponse);
+                // Check the version for visibility overlay database.
+                migrateVisibilityOverlayDatabase();
+                // Now we have the latest schema, load visibility config map.
+                loadVisibilityConfigMap();
                 break;
             default:
                 // We must did something wrong.
@@ -160,14 +125,14 @@ public class VisibilityStore {
     }
 
     /**
-     * Sets visibility settings for the given {@link VisibilityConfig}s. Any previous {@link
-     * VisibilityConfig}s with same prefixed schema type will be overwritten.
+     * Sets visibility settings for the given {@link InternalVisibilityConfig}s. Any previous {@link
+     * InternalVisibilityConfig}s with same prefixed schema type will be overwritten.
      *
-     * @param prefixedVisibilityConfigs List of prefixed {@link VisibilityConfig}s which contains
-     *     schema type's visibility information.
+     * @param prefixedVisibilityConfigs List of prefixed {@link InternalVisibilityConfig}s which
+     *     contains schema type's visibility information.
      * @throws AppSearchException on AppSearchImpl error.
      */
-    public void setVisibility(@NonNull List<VisibilityConfig> prefixedVisibilityConfigs)
+    public void setVisibility(@NonNull List<InternalVisibilityConfig> prefixedVisibilityConfigs)
             throws AppSearchException {
         Objects.requireNonNull(prefixedVisibilityConfigs);
         // Save new setting.
@@ -175,29 +140,38 @@ public class VisibilityStore {
             // put VisibilityConfig to AppSearchImpl and mVisibilityConfigMap. If there is a
             // VisibilityConfig with same prefixed schema exists, it will be replaced by new
             // VisibilityConfig in both AppSearch and memory look up map.
-            VisibilityConfig prefixedVisibilityConfig = prefixedVisibilityConfigs.get(i);
+            InternalVisibilityConfig prefixedVisibilityConfig = prefixedVisibilityConfigs.get(i);
+            InternalVisibilityConfig oldVisibilityConfig =
+                    mVisibilityConfigMap.get(prefixedVisibilityConfig.getSchemaType());
             mAppSearchImpl.putDocument(
                     VISIBILITY_PACKAGE_NAME,
                     VISIBILITY_DATABASE_NAME,
-                    prefixedVisibilityConfig.createVisibilityDocument(),
+                    VisibilityToDocumentConverter.createVisibilityDocument(
+                            prefixedVisibilityConfig.getSchemaType(),
+                            prefixedVisibilityConfig.getVisibilityConfig()),
                     /*sendChangeNotifications=*/ false,
                     /*logger=*/ null);
-            GenericDocument publicAclOverlay = prefixedVisibilityConfig.createPublicAclOverlay();
-            if (publicAclOverlay != null) {
+
+            // Put the android V visibility overlay document to AppSearchImpl.
+            GenericDocument androidVOverlay =
+                    VisibilityToDocumentConverter.createAndroidVOverlay(prefixedVisibilityConfig);
+            if (androidVOverlay != null) {
                 mAppSearchImpl.putDocument(
                         VISIBILITY_PACKAGE_NAME,
-                        VISIBILITY_DATABASE_NAME,
-                        publicAclOverlay,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        androidVOverlay,
                         /*sendChangeNotifications=*/ false,
                         /*logger=*/ null);
-            } else {
+            } else if (isConfigContainsAndroidVOverlay(oldVisibilityConfig)) {
                 // We need to make sure to remove the VisibilityOverlay on disk as the current
                 // VisibilityConfig does not have a VisibilityOverlay.
+                // For performance improvement, we should only make the remove call if the old
+                // VisibilityConfig contains the overlay settings.
                 try {
                     mAppSearchImpl.remove(
                             VISIBILITY_PACKAGE_NAME,
-                            VISIBILITY_DATABASE_NAME,
-                            VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                            ANDROID_V_OVERLAY_DATABASE_NAME,
+                            VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                             prefixedVisibilityConfig.getSchemaType(),
                             /*removeStatsBuilder=*/ null);
                 } catch (AppSearchException e) {
@@ -207,6 +181,8 @@ public class VisibilityStore {
                     }
                 }
             }
+
+            // Put the VisibilityConfig to memory look up map.
             mVisibilityConfigMap.put(
                     prefixedVisibilityConfig.getSchemaType(), prefixedVisibilityConfig);
         }
@@ -228,7 +204,7 @@ public class VisibilityStore {
                     mAppSearchImpl.remove(
                             VISIBILITY_PACKAGE_NAME,
                             VISIBILITY_DATABASE_NAME,
-                            VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                            VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                             prefixedSchemaType,
                             /*removeStatsBuilder=*/ null);
                 } catch (AppSearchException e) {
@@ -240,16 +216,16 @@ public class VisibilityStore {
                                 "Cannot find visibility document for "
                                         + prefixedSchemaType
                                         + " to remove.");
-                        return;
+                    } else {
+                        throw e;
                     }
-                    throw e;
                 }
 
                 try {
                     mAppSearchImpl.remove(
                             VISIBILITY_PACKAGE_NAME,
-                            VISIBILITY_DATABASE_NAME,
-                            VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                            ANDROID_V_OVERLAY_DATABASE_NAME,
+                            VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                             prefixedSchemaType,
                             /*removeStatsBuilder=*/ null);
                 } catch (AppSearchException e) {
@@ -258,13 +234,13 @@ public class VisibilityStore {
                         if (LogUtil.DEBUG) {
                             Log.d(
                                     TAG,
-                                    "Cannot find public acl overlay document for "
+                                    "Cannot find Android V overlay document for "
                                             + prefixedSchemaType
                                             + " to remove.");
                         }
-                        return;
+                    } else {
+                        throw e;
                     }
-                    throw e;
                 }
             }
         }
@@ -272,7 +248,7 @@ public class VisibilityStore {
 
     /** Gets the {@link VisibilityConfig} for the given prefixed schema type. */
     @Nullable
-    public VisibilityConfig getVisibility(@NonNull String prefixedSchemaType) {
+    public InternalVisibilityConfig getVisibility(@NonNull String prefixedSchemaType) {
         return mVisibilityConfigMap.get(prefixedSchemaType);
     }
 
@@ -291,14 +267,14 @@ public class VisibilityStore {
             }
 
             GenericDocument visibilityDocument;
-            GenericDocument visibilityOverlay = null;
+            GenericDocument visibilityAndroidVOverlay = null;
             try {
                 // Note: We use the other clients' prefixed schema type as ids
                 visibilityDocument =
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
                                 VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.VISIBILITY_DOCUMENT_NAMESPACE,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /*id=*/ prefixedSchemaType,
                                 /*typePropertyPaths=*/ Collections.emptyMap());
             } catch (AppSearchException e) {
@@ -312,11 +288,11 @@ public class VisibilityStore {
             }
 
             try {
-                visibilityOverlay =
+                visibilityAndroidVOverlay =
                         mAppSearchImpl.getDocument(
                                 VISIBILITY_PACKAGE_NAME,
-                                VISIBILITY_DATABASE_NAME,
-                                VisibilityConfig.PUBLIC_ACL_OVERLAY_NAMESPACE,
+                                ANDROID_V_OVERLAY_DATABASE_NAME,
+                                VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
                                 /*id=*/ prefixedSchemaType,
                                 /*typePropertyPaths=*/ Collections.emptyMap());
             } catch (AppSearchException e) {
@@ -330,13 +306,14 @@ public class VisibilityStore {
 
             mVisibilityConfigMap.put(
                     prefixedSchemaType,
-                    VisibilityConfig.createVisibilityConfig(visibilityDocument, visibilityOverlay));
+                    VisibilityToDocumentConverter.createInternalVisibilityConfig(
+                            visibilityDocument, visibilityAndroidVOverlay));
         }
     }
 
-    /** Set the latest version of {@link VisibilityConfig} and its schema to AppSearch. */
-    private void setLatestSchemaAndDocuments(@NonNull List<VisibilityConfig> migratedDocuments)
-            throws AppSearchException {
+    /** Set the latest version of {@link InternalVisibilityConfig} and its schema to AppSearch. */
+    private void setLatestSchemaAndDocuments(
+            @NonNull List<InternalVisibilityConfig> migratedDocuments) throws AppSearchException {
         // The latest schema type doesn't exist yet. Add it. Set forceOverride true to
         // delete old schema.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -344,12 +321,11 @@ public class VisibilityStore {
                         VISIBILITY_PACKAGE_NAME,
                         VISIBILITY_DATABASE_NAME,
                         Arrays.asList(
-                                VisibilityConfig.VISIBILITY_DOCUMENT_SCHEMA,
-                                VisibilityPermissionConfig.SCHEMA,
-                                VisibilityConfig.PUBLIC_ACL_OVERLAY_SCHEMA),
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_SCHEMA,
+                                VisibilityPermissionConfig.SCHEMA),
                         /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
-                        /*version=*/ VisibilityConfig.SCHEMA_VERSION_LATEST,
+                        /*version=*/ VisibilityToDocumentConverter.SCHEMA_VERSION_LATEST,
                         /*setSchemaStatsBuilder=*/ null);
         if (!internalSetSchemaResponse.isSuccess()) {
             // Impossible case, we just set forceOverride to be true, we should never
@@ -358,15 +334,193 @@ public class VisibilityStore {
                     AppSearchResult.RESULT_INTERNAL_ERROR,
                     internalSetSchemaResponse.getErrorMessage());
         }
+        InternalSetSchemaResponse internalSetAndroidVOverlaySchemaResponse =
+                mAppSearchImpl.setSchema(
+                        VISIBILITY_PACKAGE_NAME,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        Collections.singletonList(
+                                VisibilityToDocumentConverter.ANDROID_V_OVERLAY_SCHEMA),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
+                        /*forceOverride=*/ true,
+                        /*version=*/ VisibilityToDocumentConverter
+                                .ANDROID_V_OVERLAY_SCHEMA_VERSION_LATEST,
+                        /*setSchemaStatsBuilder=*/ null);
+        if (!internalSetAndroidVOverlaySchemaResponse.isSuccess()) {
+            // Impossible case, we just set forceOverride to be true, we should never
+            // fail in incompatible changes.
+            throw new AppSearchException(
+                    AppSearchResult.RESULT_INTERNAL_ERROR,
+                    internalSetAndroidVOverlaySchemaResponse.getErrorMessage());
+        }
         for (int i = 0; i < migratedDocuments.size(); i++) {
-            VisibilityConfig migratedDocument = migratedDocuments.get(i);
-            mVisibilityConfigMap.put(migratedDocument.getSchemaType(), migratedDocument);
+            InternalVisibilityConfig migratedConfig = migratedDocuments.get(i);
+            mVisibilityConfigMap.put(migratedConfig.getSchemaType(), migratedConfig);
             mAppSearchImpl.putDocument(
                     VISIBILITY_PACKAGE_NAME,
                     VISIBILITY_DATABASE_NAME,
-                    migratedDocument.createVisibilityDocument(),
+                    VisibilityToDocumentConverter.createVisibilityDocument(
+                            migratedConfig.getSchemaType(), migratedConfig.getVisibilityConfig()),
                     /*sendChangeNotifications=*/ false,
                     /*logger=*/ null);
         }
+    }
+
+    /**
+     * Check and migrate visibility schemas in {@link #ANDROID_V_OVERLAY_DATABASE_NAME} to {@link
+     * VisibilityToDocumentConverter#ANDROID_V_OVERLAY_SCHEMA_VERSION_LATEST}.
+     */
+    private void migrateVisibilityOverlayDatabase() throws AppSearchException {
+        GetSchemaResponse getSchemaResponse =
+                mAppSearchImpl.getSchema(
+                        VISIBILITY_PACKAGE_NAME,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        new CallerAccess(/*callingPackageName=*/ VISIBILITY_PACKAGE_NAME));
+        switch (getSchemaResponse.getVersion()) {
+            case VisibilityToDocumentConverter.OVERLAY_SCHEMA_VERSION_PUBLIC_ACL_VISIBLE_TO_CONFIG:
+                // Force override to next version. This version hasn't released to any public
+                // version. There shouldn't have any public device in this state, so we don't
+                // actually need to migrate any document.
+                InternalSetSchemaResponse internalSetSchemaResponse =
+                        mAppSearchImpl.setSchema(
+                                VISIBILITY_PACKAGE_NAME,
+                                ANDROID_V_OVERLAY_DATABASE_NAME,
+                                Collections.singletonList(
+                                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_SCHEMA),
+                                /*visibilityConfigs=*/ Collections.emptyList(),
+                                /*forceOverride=*/ true, // force update to nest version.
+                                VisibilityToDocumentConverter
+                                        .ANDROID_V_OVERLAY_SCHEMA_VERSION_LATEST,
+                                /*setSchemaStatsBuilder=*/ null);
+                if (!internalSetSchemaResponse.isSuccess()) {
+                    // Impossible case, we just set forceOverride to be true, we should never
+                    // fail in incompatible changes.
+                    throw new AppSearchException(
+                            AppSearchResult.RESULT_INTERNAL_ERROR,
+                            internalSetSchemaResponse.getErrorMessage());
+                }
+                break;
+            case VisibilityToDocumentConverter.OVERLAY_SCHEMA_VERSION_ALL_IN_PROTO:
+                verifyOrSetLatestVisibilityOverlaySchema(getSchemaResponse);
+                break;
+            default:
+                // We must did something wrong.
+                throw new AppSearchException(
+                        AppSearchResult.RESULT_INTERNAL_ERROR,
+                        "Found unsupported visibility version: " + getSchemaResponse.getVersion());
+        }
+    }
+
+    /**
+     * Verify the existing visibility schema, set the latest visibilility schema if it's missing.
+     */
+    private void verifyOrSetLatestVisibilitySchema(@NonNull GetSchemaResponse getSchemaResponse)
+            throws AppSearchException {
+        // We cannot change the schema version past 2 as detecting version "3" would hit the
+        // default block and throw an AppSearchException. This is why we added
+        // VisibilityOverlay.
+
+        // Check Visibility schema first.
+        Set<AppSearchSchema> existingVisibilitySchema = getSchemaResponse.getSchemas();
+        // Force to override visibility schema if it contains DEPRECATED_PUBLIC_ACL_OVERLAY_SCHEMA.
+        // The DEPRECATED_PUBLIC_ACL_OVERLAY_SCHEMA was added to VISIBILITY_DATABASE_NAME and
+        // removed to ANDROID_V_OVERLAY_DATABASE_NAME. We need to force update the schema to
+        // migrate devices that have already store public acl schema.
+        // TODO(b/321326441) remove this method when we no longer to migrate devices in this state.
+        if (existingVisibilitySchema.contains(
+                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_SCHEMA)
+                && existingVisibilitySchema.contains(VisibilityPermissionConfig.SCHEMA)
+                && existingVisibilitySchema.contains(
+                        VisibilityToDocumentConverter.DEPRECATED_PUBLIC_ACL_OVERLAY_SCHEMA)) {
+            InternalSetSchemaResponse internalSetSchemaResponse =
+                    mAppSearchImpl.setSchema(
+                            VISIBILITY_PACKAGE_NAME,
+                            VISIBILITY_DATABASE_NAME,
+                            Arrays.asList(
+                                    VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_SCHEMA,
+                                    VisibilityPermissionConfig.SCHEMA),
+                            /*visibilityConfigs=*/ Collections.emptyList(),
+                            /*forceOverride=*/ true,
+                            /*version=*/ VisibilityToDocumentConverter.SCHEMA_VERSION_LATEST,
+                            /*setSchemaStatsBuilder=*/ null);
+            if (!internalSetSchemaResponse.isSuccess()) {
+                throw new AppSearchException(
+                        AppSearchResult.RESULT_INTERNAL_ERROR,
+                        "Fail to force override deprecated visibility schema with public acl.");
+            }
+        } else if (!(existingVisibilitySchema.contains(
+                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_SCHEMA)
+                && existingVisibilitySchema.contains(VisibilityPermissionConfig.SCHEMA))) {
+            // We must have a broken schema. Reset it to the latest version.
+            // Do NOT set forceOverride to be true here, see comment below.
+            InternalSetSchemaResponse internalSetSchemaResponse =
+                    mAppSearchImpl.setSchema(
+                            VISIBILITY_PACKAGE_NAME,
+                            VISIBILITY_DATABASE_NAME,
+                            Arrays.asList(
+                                    VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_SCHEMA,
+                                    VisibilityPermissionConfig.SCHEMA),
+                            /*visibilityConfigs=*/ Collections.emptyList(),
+                            /*forceOverride=*/ false,
+                            /*version=*/ VisibilityToDocumentConverter.SCHEMA_VERSION_LATEST,
+                            /*setSchemaStatsBuilder=*/ null);
+            if (!internalSetSchemaResponse.isSuccess()) {
+                // If you hit problem here it means you made a incompatible change in
+                // Visibility Schema without update the version number. You should bump
+                // the version number and create a VisibilityStoreMigrationHelper which
+                // can analyse the different between the old version and the new version
+                // to migration user's visibility settings.
+                throw new AppSearchException(
+                        AppSearchResult.RESULT_INTERNAL_ERROR,
+                        "Fail to set the latest visibility schema to AppSearch. "
+                                + "You may need to update the visibility schema version "
+                                + "number.");
+            }
+        }
+    }
+
+    /**
+     * Verify the existing visibility overlay schema, set the latest overlay schema if it's missing.
+     */
+    private void verifyOrSetLatestVisibilityOverlaySchema(
+            @NonNull GetSchemaResponse getAndroidVOverlaySchemaResponse) throws AppSearchException {
+        // Check Android V overlay schema.
+        Set<AppSearchSchema> existingAndroidVOverlaySchema =
+                getAndroidVOverlaySchemaResponse.getSchemas();
+        if (!existingAndroidVOverlaySchema.contains(
+                VisibilityToDocumentConverter.ANDROID_V_OVERLAY_SCHEMA)) {
+            // We must have a broken schema. Reset it to the latest version.
+            // Do NOT set forceOverride to be true here, see comment below.
+            InternalSetSchemaResponse internalSetSchemaResponse =
+                    mAppSearchImpl.setSchema(
+                            VISIBILITY_PACKAGE_NAME,
+                            ANDROID_V_OVERLAY_DATABASE_NAME,
+                            Collections.singletonList(
+                                    VisibilityToDocumentConverter.ANDROID_V_OVERLAY_SCHEMA),
+                            /*visibilityConfigs=*/ Collections.emptyList(),
+                            /*forceOverride=*/ false,
+                            VisibilityToDocumentConverter.ANDROID_V_OVERLAY_SCHEMA_VERSION_LATEST,
+                            /*setSchemaStatsBuilder=*/ null);
+            if (!internalSetSchemaResponse.isSuccess()) {
+                // If you hit problem here it means you made a incompatible change in
+                // Visibility Schema. You should create new overlay schema
+                throw new AppSearchException(
+                        AppSearchResult.RESULT_INTERNAL_ERROR,
+                        "Fail to set the overlay visibility schema to AppSearch. "
+                                + "You may need to create new overlay schema.");
+            }
+        }
+    }
+
+    /**
+     * Whether the given {@link VisibilityConfig} contains Android V overlay settings.
+     *
+     * <p>Android V overlay {@link VisibilityToDocumentConverter#ANDROID_V_OVERLAY_SCHEMA} contains
+     * public acl and visible to config.
+     */
+    private static boolean isConfigContainsAndroidVOverlay(
+            @Nullable InternalVisibilityConfig config) {
+        return config != null
+                && (config.getVisibilityConfig().getPubliclyVisibleTargetPackage() != null
+                        || !config.getVisibleToConfigs().isEmpty());
     }
 }

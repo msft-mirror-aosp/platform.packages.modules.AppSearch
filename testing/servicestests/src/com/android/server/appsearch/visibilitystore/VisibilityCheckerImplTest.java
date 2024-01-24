@@ -34,9 +34,9 @@ import static org.mockito.Mockito.when;
 
 import android.annotation.NonNull;
 import android.app.UiAutomation;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
-import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.testutil.FakeAppSearchConfig;
 import android.content.Context;
@@ -134,12 +134,12 @@ public class VisibilityCheckerImplTest {
 
     @Test
     public void testSetVisibility_displayedBySystem() throws Exception {
-        // Create two VisibilityConfig that are not displayed by system.
-        VisibilityConfig
-                visibilityConfig1 = new VisibilityConfig.Builder(/*id=*/"prefix/Schema1")
+        // Create two InternalVisibilityConfig that are not displayed by system.
+        InternalVisibilityConfig
+                visibilityConfig1 = new InternalVisibilityConfig.Builder(/*id=*/"prefix/Schema1")
                 .setNotDisplayedBySystem(true).build();
-        VisibilityConfig
-                visibilityConfig2 = new VisibilityConfig.Builder(/*id=*/"prefix/Schema2")
+        InternalVisibilityConfig
+                visibilityConfig2 = new InternalVisibilityConfig.Builder(/*id=*/"prefix/Schema2")
                 .setNotDisplayedBySystem(true).build();
         mVisibilityStore.setVisibility(
                 ImmutableList.of(visibilityConfig1, visibilityConfig2));
@@ -160,7 +160,7 @@ public class VisibilityCheckerImplTest {
                 .isFalse();
 
         // Rewrite Visibility Document 1 to let it accessible to the system.
-        visibilityConfig1 = new VisibilityConfig.Builder(/*id=*/"prefix/Schema1").build();
+        visibilityConfig1 = new InternalVisibilityConfig.Builder(/*id=*/"prefix/Schema1").build();
         mVisibilityStore.setVisibility(
                 ImmutableList.of(visibilityConfig1, visibilityConfig2));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
@@ -195,11 +195,11 @@ public class VisibilityCheckerImplTest {
         int uidNotFooOrBar = 3;
 
         // Grant package access
-        VisibilityConfig
-                visibilityConfig1 = new VisibilityConfig.Builder(/*id=*/"prefix/SchemaFoo")
+        InternalVisibilityConfig
+                visibilityConfig1 = new InternalVisibilityConfig.Builder(/*id=*/"prefix/SchemaFoo")
                 .addVisibleToPackage(new PackageIdentifier(packageNameFoo, sha256CertFoo)).build();
-        VisibilityConfig
-                visibilityConfig2 = new VisibilityConfig.Builder(/*id=*/"prefix/SchemaBar")
+        InternalVisibilityConfig
+                visibilityConfig2 = new InternalVisibilityConfig.Builder(/*id=*/"prefix/SchemaBar")
                 .addVisibleToPackage(new PackageIdentifier(packageNameBar, sha256CertBar)).build();
         mVisibilityStore.setVisibility(
                 ImmutableList.of(visibilityConfig1, visibilityConfig2));
@@ -261,8 +261,8 @@ public class VisibilityCheckerImplTest {
                 .isTrue();
 
         // Save default document and, then we shouldn't have access
-        visibilityConfig1 = new VisibilityConfig.Builder(/*id=*/"prefix/SchemaFoo").build();
-        visibilityConfig2 = new VisibilityConfig.Builder(/*id=*/"prefix/SchemaBar").build();
+        visibilityConfig1 = new InternalVisibilityConfig.Builder(/*id=*/"prefix/SchemaFoo").build();
+        visibilityConfig2 = new InternalVisibilityConfig.Builder(/*id=*/"prefix/SchemaBar").build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig1, visibilityConfig2));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
@@ -304,8 +304,8 @@ public class VisibilityCheckerImplTest {
         when(mockPackageManager.getPackageUid(eq(packageNameFoo), /*flags=*/ anyInt()))
                 .thenThrow(new PackageManager.NameNotFoundException());
 
-        VisibilityConfig
-                visibilityConfig1 = new VisibilityConfig.Builder(/*id=*/"prefix/SchemaFoo")
+        InternalVisibilityConfig
+                visibilityConfig1 = new InternalVisibilityConfig.Builder(/*id=*/"prefix/SchemaFoo")
                 .addVisibleToPackage(new PackageIdentifier(packageNameFoo, sha256CertFoo)).build();
         // Grant package access
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig1));
@@ -326,8 +326,8 @@ public class VisibilityCheckerImplTest {
         String packageNameFoo = "packageFoo";
         byte[] sha256CertFoo = new byte[] {10};
 
-        VisibilityConfig
-                visibilityConfig = new VisibilityConfig.Builder(/*id=*/"$/Schema")
+        InternalVisibilityConfig
+                visibilityConfig = new InternalVisibilityConfig.Builder(/*id=*/"$/Schema")
                 .addVisibleToPackage(new PackageIdentifier(packageNameFoo, sha256CertFoo)).build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
@@ -357,7 +357,7 @@ public class VisibilityCheckerImplTest {
     @Test
     public void testSetSchema_defaultPlatformVisible() throws Exception {
         String prefix = PrefixUtil.createPrefix("package", "database");
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/prefix + "Schema").build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
@@ -372,7 +372,7 @@ public class VisibilityCheckerImplTest {
     @Test
     public void testSetSchema_enterpriseNotPlatformVisible() throws Exception {
         String prefix = PrefixUtil.createPrefix("package", "database");
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/ prefix + "Schema").build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
@@ -387,7 +387,7 @@ public class VisibilityCheckerImplTest {
     @Test
     public void testSetSchema_platformHidden() throws Exception {
         String prefix = PrefixUtil.createPrefix("package", "database");
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/prefix + "Schema")
                 .setNotDisplayedBySystem(true).build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
@@ -404,7 +404,7 @@ public class VisibilityCheckerImplTest {
     @Test
     public void testSetSchema_defaultNotVisibleToPackages() throws Exception {
         String prefix = PrefixUtil.createPrefix("package", "database");
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/prefix + "Schema").build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
@@ -433,7 +433,7 @@ public class VisibilityCheckerImplTest {
 
         String prefix = PrefixUtil.createPrefix("package", "database");
 
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/prefix + "Schema")
                 .addVisibleToPackage(new PackageIdentifier(packageNameFoo, sha256CertFoo)).build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
@@ -463,7 +463,7 @@ public class VisibilityCheckerImplTest {
 
         String prefix = PrefixUtil.createPrefix("package", "database");
 
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/ prefix + "Schema")
                 .addVisibleToPackage(new PackageIdentifier(packageNameFoo, sha256CertFoo)).build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
@@ -482,10 +482,9 @@ public class VisibilityCheckerImplTest {
         String prefix = PrefixUtil.createPrefix("package", "database");
 
         // Create a VDoc that require READ_SMS permission only.
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/prefix + "Schema")
-                .setVisibleToPermissions(ImmutableSet.of(
-                        ImmutableSet.of(SetSchemaRequest.READ_SMS)))
+                .addVisibleToPermissions(ImmutableSet.of(SetSchemaRequest.READ_SMS))
                 .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
@@ -518,10 +517,9 @@ public class VisibilityCheckerImplTest {
         String prefix = PrefixUtil.createPrefix("package", "database");
 
         // Create a VDoc that require READ_SMS permission only.
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/ prefix + "Schema")
-                .setVisibleToPermissions(ImmutableSet.of(
-                        ImmutableSet.of(SetSchemaRequest.READ_SMS)))
+                .addVisibleToPermissions(ImmutableSet.of(SetSchemaRequest.READ_SMS))
                 .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
@@ -546,10 +544,10 @@ public class VisibilityCheckerImplTest {
         String prefix = PrefixUtil.createPrefix("package", "database");
 
         // Create a VDoc that requires READ_SMS and ENTERPRISE_ACCESS permission.
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/ prefix + "Schema")
-                .setVisibleToPermissions(ImmutableSet.of(
-                        ImmutableSet.of(SetSchemaRequest.READ_SMS, ENTERPRISE_ACCESS)))
+                .addVisibleToPermissions(
+                        ImmutableSet.of(SetSchemaRequest.READ_SMS, ENTERPRISE_ACCESS))
                 .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
@@ -584,10 +582,10 @@ public class VisibilityCheckerImplTest {
 
         // Create a VDoc that requires ENTERPRISE_ACCESS and ENTERPRISE_CONTACTS_DEVICE_POLICY
         // permission.
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/ prefix + "Schema")
-                .setVisibleToPermissions(ImmutableSet.of(
-                        ImmutableSet.of(ENTERPRISE_ACCESS, ENTERPRISE_CONTACTS_DEVICE_POLICY)))
+                .addVisibleToPermissions(
+                        ImmutableSet.of(ENTERPRISE_ACCESS, ENTERPRISE_CONTACTS_DEVICE_POLICY))
                 .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
@@ -609,12 +607,12 @@ public class VisibilityCheckerImplTest {
 
         // Create a VDoc that require the querier to hold both READ_SMS and READ_CALENDAR, or
         // READ_CONTACTS only or READ_EXTERNAL_STORAGE only.
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/prefix + "Schema")
-                .setVisibleToPermissions(ImmutableSet.of(
-                        ImmutableSet.of(SetSchemaRequest.READ_SMS, SetSchemaRequest.READ_CALENDAR),
-                        ImmutableSet.of(SetSchemaRequest.READ_CONTACTS),
-                        ImmutableSet.of(SetSchemaRequest.READ_EXTERNAL_STORAGE)))
+                .addVisibleToPermissions(
+                        ImmutableSet.of(SetSchemaRequest.READ_SMS, SetSchemaRequest.READ_CALENDAR))
+                .addVisibleToPermissions(ImmutableSet.of(SetSchemaRequest.READ_CONTACTS))
+                .addVisibleToPermissions(ImmutableSet.of(SetSchemaRequest.READ_EXTERNAL_STORAGE))
                 .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
@@ -703,7 +701,7 @@ public class VisibilityCheckerImplTest {
         String prefix = PrefixUtil.createPrefix("package", "database");
 
         // Create a VDoc with default setting.
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/prefix + "Schema").build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
@@ -728,11 +726,11 @@ public class VisibilityCheckerImplTest {
         String prefix = PrefixUtil.createPrefix("package", "database");
 
         // Create a VDoc which requires both READ_SMS and READ_CALENDAR
-        VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/prefix + "Schema")
-                .setVisibleToPermissions(ImmutableSet.of(
-                        ImmutableSet.of(SetSchemaRequest.READ_SMS, SetSchemaRequest.READ_CALENDAR)))
-                        .build();
+                .addVisibleToPermissions(
+                        ImmutableSet.of(SetSchemaRequest.READ_SMS, SetSchemaRequest.READ_CALENDAR))
+                .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
         mUiAutomation.adoptShellPermissionIdentity(READ_SMS);
@@ -791,18 +789,19 @@ public class VisibilityCheckerImplTest {
         // The Android package will own the schemas, but they will be visible from other packages.
         String prefix = PrefixUtil.createPrefix("android", "database");
         String[] packageNames = {"A", "B", "C"};
-        List<VisibilityConfig> VisibilityConfigs = new ArrayList<>(packageNames.length);
+        List<InternalVisibilityConfig> visibilityConfigs = new ArrayList<>(packageNames.length);
 
         for (String packageName : packageNames) {
             // android, database, schemaX
             String schemaName = prefix + "Schema" + packageName;
 
-            VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(/*id=*/schemaName)
+            InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
+                    /*id=*/schemaName)
                     .setPubliclyVisibleTargetPackage(
                             new PackageIdentifier(packageName, mockSignature)).build();
-            VisibilityConfigs.add(visibilityConfig);
+            visibilityConfigs.add(visibilityConfig);
         }
-        mVisibilityStore.setVisibility(VisibilityConfigs);
+        mVisibilityStore.setVisibility(visibilityConfigs);
 
         FrameworkCallerAccess callerAccessA =
                 new FrameworkCallerAccess(new AppSearchAttributionSource("A", 1),
@@ -857,18 +856,19 @@ public class VisibilityCheckerImplTest {
         // The Android package will own the schemas, but they will be visible from other packages.
         String prefix = PrefixUtil.createPrefix("android", "database");
         String[] packageNames = {"A", "B"};
-        List<VisibilityConfig> VisibilityConfigs = new ArrayList<>(packageNames.length);
+        List<InternalVisibilityConfig> visibilityConfigs = new ArrayList<>(packageNames.length);
 
         for (String packageName : packageNames) {
             // android, database, schemaX
             String schemaName = prefix + "Schema" + packageName;
 
-            VisibilityConfig visibilityConfig = new VisibilityConfig.Builder(/*id=*/schemaName)
+            InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
+                    /*id=*/schemaName)
                     .setPubliclyVisibleTargetPackage(
                             new PackageIdentifier(packageName, mockSignature)).build();
-            VisibilityConfigs.add(visibilityConfig);
+            visibilityConfigs.add(visibilityConfig);
         }
-        mVisibilityStore.setVisibility(VisibilityConfigs);
+        mVisibilityStore.setVisibility(visibilityConfigs);
 
         FrameworkCallerAccess callerAccessA =
                 new FrameworkCallerAccess(new AppSearchAttributionSource("A", 1),

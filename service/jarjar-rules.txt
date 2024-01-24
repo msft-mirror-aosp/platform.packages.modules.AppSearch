@@ -3,6 +3,7 @@
 # system service.
 rule com.google.protobuf.** com.android.server.appsearch.protobuf.@1
 rule com.google.android.icing.proto.** com.android.server.appsearch.icing.proto.@1
+rule com.google.android.appsearch.proto.** com.android.server.appsearch.appsearch.proto.@1
 
 # Rename all com.android.internal.util classes to prevent class name collisions
 # between this module and the other versions of the utility classes linked into

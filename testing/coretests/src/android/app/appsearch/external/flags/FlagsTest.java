@@ -61,6 +61,12 @@ public class FlagsTest {
     }
 
     @Test
+    public void testFlagValue_enableSetSchemaVisibleToConfigs() {
+        assertThat(Flags.FLAG_ENABLE_SET_SCHEMA_VISIBLE_TO_CONFIGS)
+                .isEqualTo("com" + ".android.appsearch.flags.enable_set_schema_visible_to_configs");
+    }
+
+    @Test
     public void testFlagValue_enablePutDocumentsRequestAddTakenActions() {
         assertThat(Flags.FLAG_ENABLE_PUT_DOCUMENTS_REQUEST_ADD_TAKEN_ACTIONS)
                 .isEqualTo(
@@ -72,6 +78,12 @@ public class FlagsTest {
         assertThat(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS)
                 .isEqualTo(
                         "com.android.appsearch.flags.enable_generic_document_builder_hidden_methods");
+    }
+
+    @Test
+    public void testFlagValue_enableSetPubliclyVisibleSchema() {
+        assertThat(Flags.FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA)
+                .isEqualTo("com.android.appsearch.flags.enable_set_publicly_visible_schema");
     }
 
     @Test

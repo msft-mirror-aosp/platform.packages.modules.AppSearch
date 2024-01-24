@@ -27,9 +27,9 @@ import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.AppSearchSchema;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SearchSuggestionSpec;
-import android.app.appsearch.VisibilityConfig;
 import android.content.AttributionSource;
 import android.os.ParcelFileDescriptor;
 
@@ -56,8 +56,8 @@ interface IAppSearchManager {
      * @param callerAttributionSource The permission identity of the package that owns this schema.
      * @param databaseName  The name of the database where this schema lives.
      * @param schemas List of {@link AppSearchSchema} objects.
-     * @param visibilityConfigs List of {@link VisibilityConfig} objects defining the visibility
-     *     for the schema types.
+     * @param visibilityConfigs List of {@link InternalVisibilityConfig} objects defining the
+     *     visibility for the schema types.
      * @param forceOverride Whether to apply the new schema even if it is incompatible. All
      *     incompatible documents will be deleted.
      * @param schemaVersion  The overall schema version number of the request.
@@ -72,7 +72,7 @@ interface IAppSearchManager {
         in AppSearchAttributionSource callerAttributionSource,
         in String databaseName,
         in List<AppSearchSchema> schemas,
-        in List<VisibilityConfig> visibilityConfigs,
+        in List<InternalVisibilityConfig> visibilityConfigs,
         boolean forceOverride,
         in int schemaVersion,
         in UserHandle userHandle,
