@@ -64,6 +64,7 @@ package android.app.appsearch {
 
   public static final class AppSearchSchema.Builder {
     ctor public AppSearchSchema.Builder(@NonNull String);
+    method @NonNull public android.app.appsearch.AppSearchSchema.Builder addParentType(@NonNull String);
     method @NonNull public android.app.appsearch.AppSearchSchema.Builder addProperty(@NonNull android.app.appsearch.AppSearchSchema.PropertyConfig);
     method @NonNull public android.app.appsearch.AppSearchSchema build();
   }
@@ -84,6 +85,7 @@ package android.app.appsearch {
 
   public static final class AppSearchSchema.DocumentPropertyConfig.Builder {
     ctor public AppSearchSchema.DocumentPropertyConfig.Builder(@NonNull String, @NonNull String);
+    method @NonNull public android.app.appsearch.AppSearchSchema.DocumentPropertyConfig.Builder addIndexableNestedProperties(@NonNull java.util.Collection<java.lang.String>);
     method @NonNull public android.app.appsearch.AppSearchSchema.DocumentPropertyConfig build();
     method @NonNull public android.app.appsearch.AppSearchSchema.DocumentPropertyConfig.Builder setCardinality(int);
     method @NonNull public android.app.appsearch.AppSearchSchema.DocumentPropertyConfig.Builder setShouldIndexNestedProperties(boolean);
@@ -465,8 +467,11 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.SearchSpec.Builder setVerbatimSearchEnabled(boolean);
   }
 
-  public final class SearchSuggestionResult {
+  public final class SearchSuggestionResult implements android.os.Parcelable {
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") public final int describeContents();
     method @NonNull public String getSuggestedResult();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.SearchSuggestionResult> CREATOR;
   }
 
   public static final class SearchSuggestionResult.Builder {
@@ -557,10 +562,13 @@ package android.app.appsearch {
     method @NonNull public String getSchemaType();
   }
 
-  public class StorageInfo {
+  public final class StorageInfo implements android.os.Parcelable {
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") public final int describeContents();
     method public int getAliveDocumentsCount();
     method public int getAliveNamespacesCount();
     method public long getSizeBytes();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable") @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.StorageInfo> CREATOR;
   }
 
   public static final class StorageInfo.Builder {

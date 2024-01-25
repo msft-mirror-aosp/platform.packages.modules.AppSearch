@@ -28,6 +28,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -37,6 +38,7 @@ import android.permission.PermissionManager;
 import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
+import com.android.server.appsearch.util.PackageManagerUtil;
 import com.android.server.appsearch.util.PackageUtil;
 
 import java.util.Objects;
@@ -128,12 +130,10 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
             }
 
             // Check that the package also has the matching certificate
-            if (mUserContext
-                    .getPackageManager()
-                    .hasSigningCertificate(
-                            packageNames[i],
-                            sha256Certs[i],
-                            PackageManager.CERT_INPUT_SHA256)) {
+            if (PackageManagerUtil.hasSigningCertificate(
+                    mUserContext,
+                    packageNames[i],
+                    sha256Certs[i])) {
                 // The caller has the right package name and right certificate!
                 return true;
             }
@@ -146,7 +146,7 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
      * Returns whether the caller holds required permissions for the given schema.
      */
     private boolean isSchemaVisibleToPermission(@NonNull VisibilityDocument visibilityDocument,
-            @Nullable AttributionSource callerAttributionSource) {
+            @Nullable AppSearchAttributionSource callerAttributionSource) {
         Set<Set<Integer>> visibleToPermissions = visibilityDocument.getVisibleToPermissions();
         if (visibleToPermissions == null || visibleToPermissions.isEmpty()
                 || callerAttributionSource == null) {
@@ -170,7 +170,7 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
     /** Returns true if the caller holds all required permission in the given set. */
     private boolean doesCallerHoldsAllRequiredPermissions(
             @NonNull Set<Integer> allRequiredPermissions,
-            @NonNull AttributionSource callerAttributionSource) {
+            @NonNull AppSearchAttributionSource callerAttributionSource) {
         for (int requiredPermission : allRequiredPermissions) {
             String permission;
             switch (requiredPermission) {
@@ -197,8 +197,11 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
                             "The required permission is unsupported in AppSearch : "
                                     + requiredPermission);
             }
+            // getAttributionSource can be safely called and the returned value will only be
+            // null on Android R-
             if (PERMISSION_GRANTED != mPermissionManager.checkPermissionForDataDelivery(
-                    permission, callerAttributionSource, /*message=*/"appsearch")) {
+                    permission, callerAttributionSource.getAttributionSource(),
+                    /*message=*/"appsearch")) {
                 // The calling package doesn't have this required permission, return false.
                 return false;
             }
