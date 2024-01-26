@@ -159,8 +159,7 @@ public class AppSearchManagerService extends SystemService {
     public void onStart() {
         publishBinderService(Context.APP_SEARCH_SERVICE, new Stub());
         mPackageManager = getContext().getPackageManager();
-        mServiceImplHelper = new ServiceImplHelper(mContext, mExecutorManager,
-                mAppSearchEnvironment);
+        mServiceImplHelper = new ServiceImplHelper(mContext, mExecutorManager);
         mAppSearchUserInstanceManager = AppSearchUserInstanceManager.getInstance();
         registerReceivers();
         LocalManagerRegistry.getManager(StorageStatsManagerLocal.class)
@@ -2620,7 +2619,6 @@ public class AppSearchManagerService extends SystemService {
      * global to go through the proper visibility checks. (Enterprise session calls are also always
      * considered global for CallStats logging.)
      */
-    @BinderThread
     private boolean isGlobalCall(@NonNull String callingPackageName,
             @NonNull String targetPackageName, boolean isForEnterprise) {
         return !callingPackageName.equals(targetPackageName) || isForEnterprise;
@@ -2629,7 +2627,6 @@ public class AppSearchManagerService extends SystemService {
     /**
      * Logs rate-limited or denied calls to CallStats.
      */
-    @WorkerThread
     private void logRateLimitedOrCallDeniedCallStats(@NonNull String callingPackageName,
             @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
             @NonNull UserHandle targetUser, long binderCallStartTimeMillis,
@@ -2660,7 +2657,6 @@ public class AppSearchManagerService extends SystemService {
      * @return true if the given api call should be denied for the given calling package and calling
      * database; otherwise false
      */
-    @WorkerThread
     private boolean checkCallDenied(@NonNull String callingPackageName,
             @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
             @NonNull UserHandle targetUser, long binderCallStartTimeMillis,
@@ -2685,7 +2681,6 @@ public class AppSearchManagerService extends SystemService {
      * @return true if the given api call should be denied for the given calling package and calling
      * database; otherwise false
      */
-    @WorkerThread
     private boolean checkCallDenied(@NonNull String callingPackageName,
             @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
             @NonNull IAppSearchResultCallback callback, @NonNull UserHandle targetUser,
@@ -2706,7 +2701,6 @@ public class AppSearchManagerService extends SystemService {
      * @return true if the given api call should be denied for the given calling package and calling
      * database; otherwise false
      */
-    @WorkerThread
     private boolean checkCallDenied(@NonNull String callingPackageName,
             @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
             @NonNull IAppSearchBatchResultCallback callback, @NonNull UserHandle targetUser,

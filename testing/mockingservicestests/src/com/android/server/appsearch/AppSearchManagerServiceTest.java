@@ -27,7 +27,6 @@ import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE
 import static com.android.server.appsearch.FrameworkAppSearchConfigImpl.KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.TruthJUnit.assume;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -79,7 +78,6 @@ import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.SystemClock;
 import android.os.UserHandle;
-import android.os.UserManager;
 import android.provider.DeviceConfig;
 
 import androidx.test.core.app.ApplicationProvider;
@@ -1074,23 +1072,10 @@ public class AppSearchManagerServiceTest {
         verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
     }
 
-    private UserHandle getEnterpriseProfile() {
-        UserManager userManager = mContext.getSystemService(UserManager.class);
-        List<UserHandle> profiles = userManager.getEnabledProfiles();
-        for (int i = 0; i < profiles.size(); i++) {
-            UserHandle userHandle = profiles.get(i);
-            if (userManager.isManagedProfile(userHandle.getIdentifier())) {
-                return userHandle;
-            }
-        }
-        return null;
-    }
-
     @Test
     public void testEnterpriseGetSchema_noEnterpriseUser_emptyResult() throws Exception {
-        // This test will not run correctly if there is a work profile as an AppSearch instance for
-        // the work profile has not been created for our instance of AppSearchManagerService
-        assume().that(getEnterpriseProfile()).isNull();
+        // Even on devices with an enterprise user, this test will run properly, since we haven't
+        // unlocked the enterprise user for our local instance of AppSearchManagerService
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getSchema(
                 AppSearchAttributionSource.createAttributionSource(mContext),
@@ -1106,9 +1091,8 @@ public class AppSearchManagerServiceTest {
 
     @Test
     public void testEnterpriseGetDocuments_noEnterpriseUser_emptyResult() throws Exception {
-        // This test will not run correctly if there is a work profile as an AppSearch instance for
-        // the work profile has not been created for our instance of AppSearchManagerService
-        assume().that(getEnterpriseProfile()).isNull();
+        // Even on devices with an enterprise user, this test will run properly, since we haven't
+        // unlocked the enterprise user for our local instance of AppSearchManagerService
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.getDocuments(
                 AppSearchAttributionSource.createAttributionSource(mContext),
@@ -1123,9 +1107,8 @@ public class AppSearchManagerServiceTest {
 
     @Test
     public void testEnterpriseGlobalQuery_noEnterpriseUser_emptyResult() throws Exception {
-        // This test will not run correctly if there is a work profile as an AppSearch instance for
-        // the work profile has not been created for our instance of AppSearchManagerService
-        assume().that(getEnterpriseProfile()).isNull();
+        // Even on devices with an enterprise user, this test will run properly, since we haven't
+        // unlocked the enterprise user for our local instance of AppSearchManagerService
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.globalQuery(
                 AppSearchAttributionSource.createAttributionSource(mContext),
@@ -1141,9 +1124,8 @@ public class AppSearchManagerServiceTest {
 
     @Test
     public void testEnterpriseGetNextPage_noEnterpriseUser_emptyResult() throws Exception {
-        // This test will not run correctly if there is a work profile as an AppSearch instance for
-        // the work profile has not been created for our instance of AppSearchManagerService
-        assume().that(getEnterpriseProfile()).isNull();
+        // Even on devices with an enterprise user, this test will run properly, since we haven't
+        // unlocked the enterprise user for our local instance of AppSearchManagerService
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getNextPage(
                 AppSearchAttributionSource.createAttributionSource(mContext),
@@ -1160,9 +1142,8 @@ public class AppSearchManagerServiceTest {
 
     @Test
     public void testEnterpriseInvalidateNextPageToken_noEnterpriseUser() throws Exception {
-        // This test will not run correctly if there is a work profile as an AppSearch instance for
-        // the work profile has not been created for our instance of AppSearchManagerService
-        assume().that(getEnterpriseProfile()).isNull();
+        // Even on devices with an enterprise user, this test will run properly, since we haven't
+        // unlocked the enterprise user for our local instance of AppSearchManagerService
         mAppSearchManagerServiceStub.invalidateNextPageToken(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
