@@ -647,7 +647,6 @@ package android.app.appsearch {
     method @Nullable public android.app.appsearch.PackageIdentifier getPubliclyVisibleTargetPackage();
     method @NonNull public java.util.List<android.app.appsearch.PackageIdentifier> getVisibleToPackages();
     method @NonNull public java.util.Set<java.util.Set<java.lang.Integer>> getVisibleToPermissions();
-    method public boolean isNotDisplayedBySystem();
     method public void writeToParcel(@NonNull android.os.Parcel, int);
     field @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.VisibilityConfig> CREATOR;
   }
@@ -659,7 +658,6 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.VisibilityConfig build();
     method @NonNull public android.app.appsearch.VisibilityConfig.Builder clearVisibleToPackages();
     method @NonNull public android.app.appsearch.VisibilityConfig.Builder clearVisibleToPermissions();
-    method @NonNull public android.app.appsearch.VisibilityConfig.Builder setNotDisplayedBySystem(boolean);
     method @NonNull public android.app.appsearch.VisibilityConfig.Builder setPubliclyVisibleTargetPackage(@Nullable android.app.appsearch.PackageIdentifier);
   }
 

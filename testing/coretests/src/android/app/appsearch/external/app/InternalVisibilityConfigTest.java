@@ -25,6 +25,17 @@ import org.junit.Test;
 import java.util.List;
 
 public class InternalVisibilityConfigTest {
+
+    @Test
+    public void testVisibilityConfig_setNotDisplayBySystem() {
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("schema")
+                        .setNotDisplayedBySystem(true)
+                        .build();
+
+        assertThat(visibilityConfig.isNotDisplayedBySystem()).isTrue();
+    }
+
     @Test
     public void testVisibilityConfig_setVisibilityConfig() {
         String visibleToPackage1 = "com.example.package";
@@ -56,7 +67,7 @@ public class InternalVisibilityConfigTest {
     }
 
     @Test
-    public void testToVisibilityConfig_publicAcl() {
+    public void testToInternalVisibilityConfig() {
         byte[] packageSha256Cert = new byte[32];
         packageSha256Cert[0] = 24;
         packageSha256Cert[8] = 23;
@@ -67,9 +78,14 @@ public class InternalVisibilityConfigTest {
         SetSchemaRequest setSchemaRequest =
                 new SetSchemaRequest.Builder()
                         .addSchemas(new AppSearchSchema.Builder("testSchema").build())
+                        .setSchemaTypeDisplayedBySystem("testSchema", false)
+                        .setSchemaTypeVisibilityForPackage(
+                                "testSchema",
+                                /*visible=*/ true,
+                                new PackageIdentifier("com.example.test", packageSha256Cert))
                         .setPubliclyVisibleSchema(
                                 "testSchema",
-                                new PackageIdentifier("com.example.test", packageSha256Cert))
+                                new PackageIdentifier("com.example.test1", packageSha256Cert))
                         .build();
 
         // Convert the SetSchemaRequest to GenericDocument map
@@ -79,6 +95,9 @@ public class InternalVisibilityConfigTest {
         // Check if the conversion is correct
         assertThat(visibilityConfigs).hasSize(1);
         InternalVisibilityConfig visibilityConfig = visibilityConfigs.get(0);
+        assertThat(visibilityConfig.isNotDisplayedBySystem()).isTrue();
+        assertThat(visibilityConfig.getVisibilityConfig().getVisibleToPackages())
+                .containsExactly(new PackageIdentifier("com.example.test", packageSha256Cert));
         assertThat(visibilityConfig.getVisibilityConfig().getPubliclyVisibleTargetPackage())
                 .isNotNull();
         assertThat(
@@ -86,7 +105,7 @@ public class InternalVisibilityConfigTest {
                                 .getVisibilityConfig()
                                 .getPubliclyVisibleTargetPackage()
                                 .getPackageName())
-                .isEqualTo("com.example.test");
+                .isEqualTo("com.example.test1");
         assertThat(
                         visibilityConfig
                                 .getVisibilityConfig()

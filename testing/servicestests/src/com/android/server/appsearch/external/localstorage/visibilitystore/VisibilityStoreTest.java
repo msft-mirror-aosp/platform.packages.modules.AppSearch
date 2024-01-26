@@ -149,9 +149,7 @@ public class VisibilityStoreTest {
 
         assertThat(actualDocument)
                 .isEqualTo(
-                        VisibilityToDocumentConverter.createVisibilityDocument(
-                                visibilityConfig.getSchemaType(),
-                                visibilityConfig.getVisibilityConfig()));
+                        VisibilityToDocumentConverter.createVisibilityDocument(visibilityConfig));
     }
 
     @Test
@@ -232,7 +230,6 @@ public class VisibilityStoreTest {
         String prefix = PrefixUtil.createPrefix("packageName", "databaseName");
         VisibilityConfig nestedvisibilityConfig =
                 new VisibilityConfig.Builder()
-                        .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .addVisibleToPermissions(ImmutableSet.of(1, 2))
                         .build();
@@ -372,7 +369,7 @@ public class VisibilityStoreTest {
                         .setNotDisplayedBySystem(true)
                         .addVisibleToConfig(
                                 new VisibilityConfig.Builder()
-                                        .setNotDisplayedBySystem(true)
+                                        .addVisibleToPermissions(ImmutableSet.of(1))
                                         .build())
                         .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
