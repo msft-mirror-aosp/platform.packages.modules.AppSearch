@@ -46,8 +46,10 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.UiAutomation;
 import android.app.appsearch.AppSearchBatchResult;
+import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
+import android.app.appsearch.FrameworkAppSearchEnvironment;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
@@ -194,7 +196,7 @@ public class AppSearchManagerServiceTest {
         // a fresh config with listeners in setUp in order to set new properties.
         FrameworkAppSearchConfig appSearchConfig =
             FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
-        AppSearchEnvironmentFactory.setConfigInstanceForTest(appSearchConfig);
+        AppSearchConfigFactory.setConfigInstanceForTest(appSearchConfig);
 
         // Create the user instance and add a spy to its logger to verify logging
         // Note, SimpleTestLogger does not suffice for our tests since CallStats logging in
