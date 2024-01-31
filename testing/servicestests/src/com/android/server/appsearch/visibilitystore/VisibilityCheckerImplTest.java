@@ -111,8 +111,8 @@ public class VisibilityCheckerImplTest {
                 mTemporaryFolder.newFolder(),
                 new FakeAppSearchConfig(),
                 /*initStatsBuilder=*/ null,
-                ALWAYS_OPTIMIZE,
-                mVisibilityChecker);
+                mVisibilityChecker,
+                ALWAYS_OPTIMIZE);
         mVisibilityStore = new VisibilityStore(appSearchImpl);
     }
 

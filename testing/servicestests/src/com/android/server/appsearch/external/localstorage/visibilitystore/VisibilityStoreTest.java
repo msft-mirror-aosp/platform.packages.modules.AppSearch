@@ -69,8 +69,8 @@ public class VisibilityStoreTest {
                         new AppSearchConfigImpl(
                                 new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         mVisibilityStore = new VisibilityStore(mAppSearchImpl);
     }
 
