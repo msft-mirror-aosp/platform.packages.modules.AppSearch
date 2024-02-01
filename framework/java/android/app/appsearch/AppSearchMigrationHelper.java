@@ -56,6 +56,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * The helper class for {@link AppSearchSchema} migration.
  *
  * <p>It will query and migrate {@link GenericDocument} in given type to a new version.
+ * Application-specific cache directory is used to store the temporary files created
+ * during migration.
  * @hide
  */
 public class AppSearchMigrationHelper implements Closeable {
@@ -63,20 +65,38 @@ public class AppSearchMigrationHelper implements Closeable {
     private final AppSearchAttributionSource mCallerAttributionSource;
     private final String mDatabaseName;
     private final UserHandle mUserHandle;
+    @Nullable
+    private final File mTempDirectoryForSchemaMigration;
     private final File mMigratedFile;
     private final Set<String> mDestinationTypes;
     private int mTotalNeedMigratedDocumentCount = 0;
 
+    /**
+     * Initializes an AppSearchMigrationHelper instance.
+     * @param service The {@link IAppSearchManager} service from which to make api calls.
+     * @param userHandle The user for which the session should be created.
+     * @param callerAttributionSource The attribution source containing the caller's package name
+     *                                and uid
+     * @param databaseName The name of the database where this schema lives.
+     * @param newSchemas The set of new schemas to update existing schemas.
+     * @param tempDirectoryForSchemaMigration The directory to create temporary files needed for
+     *                                        migration. If this is null, the default temporary-file
+     *                                        directory (/data/local/tmp) will be used.
+     * @throws IOException on failure to create a temporary file.
+     */
     AppSearchMigrationHelper(@NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
             @NonNull AppSearchAttributionSource callerAttributionSource,
             @NonNull String databaseName,
-            @NonNull Set<AppSearchSchema> newSchemas) throws IOException {
+            @NonNull Set<AppSearchSchema> newSchemas,
+            @Nullable File tempDirectoryForSchemaMigration) throws IOException {
         mService = Objects.requireNonNull(service);
         mUserHandle = Objects.requireNonNull(userHandle);
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
         mDatabaseName = Objects.requireNonNull(databaseName);
-        mMigratedFile = File.createTempFile(/*prefix=*/"appsearch", /*suffix=*/null);
+        mTempDirectoryForSchemaMigration = tempDirectoryForSchemaMigration;
+        mMigratedFile = File.createTempFile(/*prefix=*/ "appsearch",
+                /*suffix=*/ null, mTempDirectoryForSchemaMigration);
         mDestinationTypes = new ArraySet<>(newSchemas.size());
         for (AppSearchSchema newSchema : newSchemas) {
             mDestinationTypes.add(newSchema.getSchemaType());
@@ -102,7 +122,8 @@ public class AppSearchMigrationHelper implements Closeable {
             int currentVersion, int finalVersion,
             @Nullable SchemaMigrationStats.Builder schemaMigrationStatsBuilder)
             throws IOException, AppSearchException, InterruptedException, ExecutionException {
-        File queryFile = File.createTempFile(/*prefix=*/"appsearch", /*suffix=*/null);
+        File queryFile = File.createTempFile(/*prefix=*/ "appsearch",
+                /*suffix=*/ null, mTempDirectoryForSchemaMigration);
         try (ParcelFileDescriptor fileDescriptor =
                      ParcelFileDescriptor.open(queryFile, MODE_WRITE_ONLY)) {
             CountDownLatch latch = new CountDownLatch(1);
