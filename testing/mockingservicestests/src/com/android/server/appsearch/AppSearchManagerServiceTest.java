@@ -94,7 +94,6 @@ import com.android.server.LocalManagerRegistry;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
-import com.android.server.appsearch.stats.PlatformLogger;
 import com.android.server.usage.StorageStatsManagerLocal;
 
 import libcore.io.IoBridge;
@@ -145,7 +144,7 @@ public class AppSearchManagerServiceTest {
     private UiAutomation mUiAutomation;
     private IAppSearchManager.Stub mAppSearchManagerServiceStub;
     private AppSearchUserInstance mUserInstance;
-    private PlatformLogger mPlatformLogger;
+    private InternalAppSearchLogger mLogger;
 
     @Before
     public void setUp() throws Exception {
@@ -196,7 +195,7 @@ public class AppSearchManagerServiceTest {
         // a fresh config with listeners in setUp in order to set new properties.
         FrameworkAppSearchConfig appSearchConfig =
             FrameworkAppSearchConfigImpl.create(DIRECT_EXECUTOR);
-        AppSearchConfigFactory.setConfigInstanceForTest(appSearchConfig);
+        AppSearchComponentFactory.setConfigInstanceForTest(appSearchConfig);
 
         // Create the user instance and add a spy to its logger to verify logging
         // Note, SimpleTestLogger does not suffice for our tests since CallStats logging in
@@ -204,8 +203,8 @@ public class AppSearchManagerServiceTest {
         // timeout to catch asynchronous calls.
         mUserInstance = AppSearchUserInstanceManager.getInstance().getOrCreateUserInstance(mContext,
                 mUserHandle, appSearchConfig);
-        mPlatformLogger = spy(mUserInstance.getLogger());
-        mUserInstance.setLoggerForTest(mPlatformLogger);
+        mLogger = spy(mUserInstance.getLogger());
+        mUserInstance.setLoggerForTest(mLogger);
 
         // Start the service
         mAppSearchManagerService = new AppSearchManagerService(mContext,
@@ -257,7 +256,7 @@ public class AppSearchManagerServiceTest {
         // SetSchemaStats is also logged in SetSchema
         ArgumentCaptor<SetSchemaStats> setSchemaStatsCaptor = ArgumentCaptor.forClass(
                 SetSchemaStats.class);
-        verify(mPlatformLogger, timeout(1000).times(1)).logStats(setSchemaStatsCaptor.capture());
+        verify(mLogger, timeout(1000).times(1)).logStats(setSchemaStatsCaptor.capture());
         SetSchemaStats setSchemaStats = setSchemaStatsCaptor.getValue();
         assertThat(setSchemaStats.getPackageName()).isEqualTo(mContext.getPackageName());
         assertThat(setSchemaStats.getDatabase()).isEqualTo(DATABASE_NAME);
@@ -381,7 +380,7 @@ public class AppSearchManagerServiceTest {
                 CallStats.CALL_TYPE_GET_NEXT_PAGE);
         // getNextPage also logs SearchStats
         ArgumentCaptor<SearchStats> searchStatsCaptor = ArgumentCaptor.forClass(SearchStats.class);
-        verify(mPlatformLogger, timeout(1000).times(1)).logStats(searchStatsCaptor.capture());
+        verify(mLogger, timeout(1000).times(1)).logStats(searchStatsCaptor.capture());
         SearchStats searchStats = searchStatsCaptor.getValue();
         assertThat(searchStats.getVisibilityScope()).isEqualTo(SearchStats.VISIBILITY_SCOPE_LOCAL);
         assertThat(searchStats.getPackageName()).isEqualTo(mContext.getPackageName());
@@ -402,7 +401,7 @@ public class AppSearchManagerServiceTest {
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE);
         // getNextPage also logs SearchStats
         ArgumentCaptor<SearchStats> searchStatsCaptor = ArgumentCaptor.forClass(SearchStats.class);
-        verify(mPlatformLogger, timeout(1000).times(1)).logStats(searchStatsCaptor.capture());
+        verify(mLogger, timeout(1000).times(1)).logStats(searchStatsCaptor.capture());
         SearchStats searchStats = searchStatsCaptor.getValue();
         assertThat(searchStats.getVisibilityScope()).isEqualTo(SearchStats.VISIBILITY_SCOPE_GLOBAL);
         assertThat(searchStats.getPackageName()).isEqualTo(mContext.getPackageName());
@@ -451,7 +450,7 @@ public class AppSearchManagerServiceTest {
         // putDocumentsFromFile also logs SchemaMigrationStats
         ArgumentCaptor<SchemaMigrationStats> migrationStatsCaptor = ArgumentCaptor.forClass(
                 SchemaMigrationStats.class);
-        verify(mPlatformLogger, timeout(1000).times(1)).logStats(migrationStatsCaptor.capture());
+        verify(mLogger, timeout(1000).times(1)).logStats(migrationStatsCaptor.capture());
         SchemaMigrationStats migrationStats = migrationStatsCaptor.getValue();
         assertThat(migrationStats.getStatusCode()).isEqualTo(AppSearchResult.RESULT_OK);
         assertThat(migrationStats.getSaveDocumentLatencyMillis()).isGreaterThan(0);
@@ -612,7 +611,7 @@ public class AppSearchManagerServiceTest {
 
     private void verifyCallStats(String packageName, String databaseName, int callType) {
         ArgumentCaptor<CallStats> captor = ArgumentCaptor.forClass(CallStats.class);
-        verify(mPlatformLogger, timeout(1000).times(1)).logStats(captor.capture());
+        verify(mLogger, timeout(1000).times(1)).logStats(captor.capture());
         CallStats callStats = captor.getValue();
         assertThat(callStats.getPackageName()).isEqualTo(packageName);
         assertThat(callStats.getDatabase()).isEqualTo(databaseName);
@@ -1101,7 +1100,7 @@ public class AppSearchManagerServiceTest {
         assertThat(result.getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         assertThat(result.getResultValue().getSchemas()).isEmpty();
         // No CallStats logged since we returned early
-        verify(mPlatformLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
+        verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
 
     @Test
@@ -1118,7 +1117,7 @@ public class AppSearchManagerServiceTest {
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         assertThat(callback.getBatchResult().getAll()).isEmpty();
         // No CallStats logged since we returned early
-        verify(mPlatformLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
+        verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
 
     @Test
@@ -1136,7 +1135,7 @@ public class AppSearchManagerServiceTest {
         assertThat(result.getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         assertThat(result.getResultValue().getResults()).isEmpty();
         // No CallStats logged since we returned early
-        verify(mPlatformLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
+        verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
 
     @Test
@@ -1155,7 +1154,7 @@ public class AppSearchManagerServiceTest {
         assertThat(result.getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         assertThat(result.getResultValue().getResults()).isEmpty();
         // No CallStats logged since we returned early
-        verify(mPlatformLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
+        verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
 
     @Test
@@ -1168,7 +1167,7 @@ public class AppSearchManagerServiceTest {
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
                 /* isForEnterprise= */ true);
         // No CallStats logged since we returned early
-        verify(mPlatformLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
+        verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
 
     private void verifyLocalCallsResults(int resultCode) throws Exception {
@@ -1476,7 +1475,7 @@ public class AppSearchManagerServiceTest {
                 AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
                 BINDER_CALL_START_TIME, callback);
         if (resultCode == RESULT_DENIED) {
-            verify(mPlatformLogger, never()).logStats(any(CallStats.class));
+            verify(mLogger, never()).logStats(any(CallStats.class));
         } else {
             verifyCallResult(resultCode, CallStats.CALL_TYPE_INITIALIZE, /* result= */ null);
         }
@@ -1485,11 +1484,11 @@ public class AppSearchManagerServiceTest {
 
     private void verifyCallResult(int resultCode, int callType, AppSearchResult<?> result) {
         ArgumentCaptor<CallStats> captor = ArgumentCaptor.forClass(CallStats.class);
-        verify(mPlatformLogger, timeout(1000).times(1)).logStats(captor.capture());
+        verify(mLogger, timeout(1000).times(1)).logStats(captor.capture());
         assertThat(captor.getValue().getCallType()).isEqualTo(callType);
         assertThat(captor.getValue().getStatusCode()).isEqualTo(resultCode);
         assertThat(captor.getValue().getEstimatedBinderLatencyMillis()).isGreaterThan(0);
-        clearInvocations(mPlatformLogger);
+        clearInvocations(mLogger);
         // Not all calls return a result
         if (result != null) {
             assertThat(result.getResultCode()).isEqualTo(resultCode);

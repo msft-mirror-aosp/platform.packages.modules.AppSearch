@@ -19,7 +19,6 @@ import android.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
-import com.android.server.appsearch.stats.PlatformLogger;
 import com.android.server.appsearch.visibilitystore.VisibilityCheckerImpl;
 
 import java.util.Objects;
@@ -29,12 +28,12 @@ import java.util.Objects;
  * the core of the AppSearch system.
  */
 public final class AppSearchUserInstance {
-    private volatile PlatformLogger mLogger;
+    private volatile InternalAppSearchLogger mLogger;
     private final AppSearchImpl mAppSearchImpl;
     private final VisibilityCheckerImpl mVisibilityCheckerImpl;
 
     AppSearchUserInstance(
-            @NonNull PlatformLogger logger,
+            @NonNull InternalAppSearchLogger logger,
             @NonNull AppSearchImpl appSearchImpl,
             @NonNull VisibilityCheckerImpl visibilityCheckerImpl) {
         mLogger = Objects.requireNonNull(logger);
@@ -43,7 +42,7 @@ public final class AppSearchUserInstance {
     }
 
     @NonNull
-    public PlatformLogger getLogger() {
+    public InternalAppSearchLogger getLogger() {
         return mLogger;
     }
 
@@ -58,7 +57,7 @@ public final class AppSearchUserInstance {
     }
 
     @VisibleForTesting
-    void setLoggerForTest(@NonNull PlatformLogger logger) {
+    void setLoggerForTest(@NonNull InternalAppSearchLogger logger) {
         mLogger = Objects.requireNonNull(logger);
     }
 }
