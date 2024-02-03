@@ -29,7 +29,6 @@ import android.util.Log;
 import com.android.internal.annotations.GuardedBy;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
-import com.android.server.appsearch.stats.PlatformLogger;
 import com.android.server.appsearch.visibilitystore.VisibilityCheckerImpl;
 
 import java.io.File;
@@ -213,7 +212,8 @@ public final class AppSearchUserInstanceManager {
         InitializeStats.Builder initStatsBuilder = new InitializeStats.Builder();
 
         // Initialize the classes that make up AppSearchUserInstance
-        PlatformLogger logger = new PlatformLogger(userContext, config);
+        InternalAppSearchLogger logger = AppSearchComponentFactory
+                .createLoggerInstance(userContext, config);
 
         File appSearchDir = AppSearchEnvironmentFactory
             .getEnvironmentInstance()

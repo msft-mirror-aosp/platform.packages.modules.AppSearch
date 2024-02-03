@@ -16,18 +16,22 @@
 
 package com.android.server.appsearch;
 
+import android.annotation.NonNull;
+import android.content.Context;
+
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.appsearch.stats.PlatformLogger;
 
 import java.util.concurrent.Executor;
 
 /** This is a factory class for implementations needed based on environment for service code. */
-public final class AppSearchConfigFactory {
+public final class AppSearchComponentFactory {
     private static volatile FrameworkAppSearchConfig mConfigInstance;
 
-    public static FrameworkAppSearchConfig getConfigInstance(Executor executor) {
+    public static FrameworkAppSearchConfig getConfigInstance(@NonNull Executor executor) {
         FrameworkAppSearchConfig localRef = mConfigInstance;
         if (localRef == null) {
-            synchronized (AppSearchConfigFactory.class) {
+            synchronized (AppSearchComponentFactory.class) {
                 localRef = mConfigInstance;
                 if (localRef == null) {
                     mConfigInstance = localRef = FrameworkAppSearchConfigImpl
@@ -40,12 +44,17 @@ public final class AppSearchConfigFactory {
 
     @VisibleForTesting
     static void setConfigInstanceForTest(
-            FrameworkAppSearchConfig appSearchConfig) {
-        synchronized (AppSearchConfigFactory.class) {
+            @NonNull FrameworkAppSearchConfig appSearchConfig) {
+        synchronized (AppSearchComponentFactory.class) {
             mConfigInstance = appSearchConfig;
         }
     }
 
-    private AppSearchConfigFactory() {
+    public static InternalAppSearchLogger createLoggerInstance(
+            @NonNull Context context, @NonNull FrameworkAppSearchConfig config) {
+        return new PlatformLogger(context, config);
+    }
+
+    private AppSearchComponentFactory() {
     }
 }

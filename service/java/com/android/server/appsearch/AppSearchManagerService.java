@@ -151,7 +151,7 @@ public class AppSearchManagerService extends SystemService {
         mContext = context;
         mLifecycle = lifecycle;
         mAppSearchEnvironment = AppSearchEnvironmentFactory.getEnvironmentInstance();
-        mAppSearchConfig = AppSearchConfigFactory.getConfigInstance(SHARED_EXECUTOR);
+        mAppSearchConfig = AppSearchComponentFactory.getConfigInstance(SHARED_EXECUTOR);
         mExecutorManager = new ExecutorManager(mAppSearchConfig);
     }
 
@@ -282,7 +282,7 @@ public class AppSearchManagerService extends SystemService {
                                     mAppSearchConfig);
                     instance.getAppSearchImpl().clearPackageData(packageName);
                     dispatchChangeNotifications(instance);
-                    instance.getLogger().removeCachedUidForPackage(packageName);
+                    instance.getLogger().removeCacheForPackage(packageName);
                 } catch (AppSearchException | RuntimeException e) {
                     Log.e(TAG, "Unable to remove data for package: " + packageName, e);
                     ExceptionUtil.handleException(e);
