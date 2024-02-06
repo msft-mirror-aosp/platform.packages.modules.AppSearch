@@ -1,4 +1,5 @@
 package: "com.android.appsearch.flags"
+container: "com.android.appsearch"
 
 #
 # all the flags we are adding in V have to be is_fixed_read_only true.
