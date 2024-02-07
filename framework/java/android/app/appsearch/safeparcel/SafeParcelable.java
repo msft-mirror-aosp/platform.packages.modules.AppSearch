@@ -53,8 +53,8 @@ import android.os.Parcelable;
  *       indicates the constructor that the "creator" class will use to construct a new instance of
  *       this class. Each parameter to this constructor must be annotated with the {@link Param} or
  *       {@link RemovedParam} annotation indicating the field id that the parameter corresponds to.
- *       Every {@link Param} must corrospond to a {@link Field} or {@link VersionField}, and every
- *       {@link RemovedParam} must corrospond to a {@link Reserved} field. Note that this
+ *       Every {@link Param} must correspond to a {@link Field} or {@link VersionField}, and every
+ *       {@link RemovedParam} must correspond to a {@link Reserved} field. Note that this
  *       constructor must have at least package visibility because the generated "creator" class
  *       must be able to use this constructor. (The "creator" class is generated in the same package
  *       as the SafeParcelable class.).
@@ -144,6 +144,9 @@ public interface SafeParcelable extends Parcelable {
          * SafeParceable.
          */
         String creator();
+
+        /** Whether the generated "creator" class is final. */
+        boolean creatorIsFinal() default true;
 
         /**
          * When set to true, invokes the validateContents() method in this SafeParcelable object

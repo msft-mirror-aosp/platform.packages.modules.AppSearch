@@ -37,7 +37,7 @@ import java.util.Objects;
  * @see Parcel#writeBlob(byte[])
  * @hide
  */
-@SafeParcelable.Class(creator = "DocumentsParcelCreator")
+@SafeParcelable.Class(creator = "DocumentsParcelCreator", creatorIsFinal = false)
 public final class DocumentsParcel extends AbstractSafeParcelable {
     public static final DocumentsParcelCreator CREATOR = new DocumentsParcelCreator() {
         @Override
