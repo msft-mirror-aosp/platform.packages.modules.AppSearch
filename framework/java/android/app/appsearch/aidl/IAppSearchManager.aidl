@@ -24,6 +24,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.AppSearchSchema;
@@ -54,31 +55,13 @@ interface IAppSearchManager {
     /**
      * Updates the AppSearch schema for this database.
      *
-     * @param callerAttributionSource The permission identity of the package that owns this schema.
-     * @param databaseName  The name of the database where this schema lives.
-     * @param schemas List of {@link AppSearchSchema} objects.
-     * @param visibilityConfigs List of {@link InternalVisibilityConfig} objects defining the
-     *     visibility for the schema types.
-     * @param forceOverride Whether to apply the new schema even if it is incompatible. All
-     *     incompatible documents will be deleted.
-     * @param schemaVersion  The overall schema version number of the request.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param schemaMigrationCallType Indicates how a SetSchema call relative to SchemaMigration
-     *     case.
+     * @param request {@link SetSchemaAidlRequest} contains the input parameters for set schema
+     *     operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link InternalSetSchemaResponse}&gt;.
      */
     void setSchema(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in List<AppSearchSchema> schemas,
-        in List<InternalVisibilityConfig> visibilityConfigs,
-        boolean forceOverride,
-        in int schemaVersion,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in int schemaMigrationCallType,
+        in SetSchemaAidlRequest request,
         in IAppSearchResultCallback callback) = 1;
 
     /**
