@@ -78,8 +78,8 @@ public class SearchSpecToProtoConverterTest {
                         new AppSearchConfigImpl(
                                 new UnlimitedLimitConfig(), mLocalStorageIcingOptionsConfig),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
     }
 
     @After

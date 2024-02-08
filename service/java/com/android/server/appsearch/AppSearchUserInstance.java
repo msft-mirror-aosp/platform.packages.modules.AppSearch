@@ -19,7 +19,7 @@ import android.annotation.NonNull;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
-import com.android.server.appsearch.visibilitystore.VisibilityCheckerImpl;
+import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
 
 import java.util.Objects;
 
@@ -30,15 +30,15 @@ import java.util.Objects;
 public final class AppSearchUserInstance {
     private volatile InternalAppSearchLogger mLogger;
     private final AppSearchImpl mAppSearchImpl;
-    private final VisibilityCheckerImpl mVisibilityCheckerImpl;
+    private final VisibilityChecker mVisibilityChecker;
 
     AppSearchUserInstance(
             @NonNull InternalAppSearchLogger logger,
             @NonNull AppSearchImpl appSearchImpl,
-            @NonNull VisibilityCheckerImpl visibilityCheckerImpl) {
+            @NonNull VisibilityChecker visibilityChecker) {
         mLogger = Objects.requireNonNull(logger);
         mAppSearchImpl = Objects.requireNonNull(appSearchImpl);
-        mVisibilityCheckerImpl = Objects.requireNonNull(visibilityCheckerImpl);
+        mVisibilityChecker = Objects.requireNonNull(visibilityChecker);
     }
 
     @NonNull
@@ -52,8 +52,8 @@ public final class AppSearchUserInstance {
     }
 
     @NonNull
-    public VisibilityCheckerImpl getVisibilityChecker() {
-        return mVisibilityCheckerImpl;
+    public VisibilityChecker getVisibilityChecker() {
+        return mVisibilityChecker;
     }
 
     @VisibleForTesting

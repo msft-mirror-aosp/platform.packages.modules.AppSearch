@@ -20,7 +20,9 @@ import android.annotation.NonNull;
 import android.content.Context;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
 import com.android.server.appsearch.stats.PlatformLogger;
+import com.android.server.appsearch.visibilitystore.VisibilityCheckerImpl;
 
 import java.util.concurrent.Executor;
 
@@ -53,6 +55,10 @@ public final class AppSearchComponentFactory {
     public static InternalAppSearchLogger createLoggerInstance(
             @NonNull Context context, @NonNull FrameworkAppSearchConfig config) {
         return new PlatformLogger(context, config);
+    }
+
+    public static VisibilityChecker createVisibilityCheckerInstance(@NonNull Context context) {
+        return new VisibilityCheckerImpl(context);
     }
 
     private AppSearchComponentFactory() {

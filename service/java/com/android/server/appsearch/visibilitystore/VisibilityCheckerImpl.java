@@ -383,6 +383,7 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
      *
      * @param callerPackageName Package name of the caller.
      */
+    @Override
     public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
         Objects.requireNonNull(callerPackageName);
         return mUserContext.getPackageManager()
