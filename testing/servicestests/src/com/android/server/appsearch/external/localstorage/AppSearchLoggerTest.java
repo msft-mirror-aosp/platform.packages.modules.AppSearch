@@ -80,8 +80,8 @@ public class AppSearchLoggerTest {
                         new AppSearchConfigImpl(
                                 new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         mLogger = new SimpleTestLogger();
     }
 
@@ -378,8 +378,8 @@ public class AppSearchLoggerTest {
                         new AppSearchConfigImpl(
                                 new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         initStatsBuilder,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         InitializeStats iStats = initStatsBuilder.build();
         appSearchImpl.close();
 
@@ -410,8 +410,8 @@ public class AppSearchLoggerTest {
                         new AppSearchConfigImpl(
                                 new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         List<AppSearchSchema> schemas =
                 ImmutableList.of(
                         new AppSearchSchema.Builder("Type1").build(),
@@ -442,8 +442,8 @@ public class AppSearchLoggerTest {
                         new AppSearchConfigImpl(
                                 new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         initStatsBuilder,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         InitializeStats iStats = initStatsBuilder.build();
 
         assertThat(iStats).isNotNull();
@@ -475,8 +475,8 @@ public class AppSearchLoggerTest {
                         new AppSearchConfigImpl(
                                 new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         List<AppSearchSchema> schemas =
                 ImmutableList.of(
@@ -517,8 +517,8 @@ public class AppSearchLoggerTest {
                         new AppSearchConfigImpl(
                                 new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         initStatsBuilder,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         InitializeStats iStats = initStatsBuilder.build();
 
         // Some of other fields are already covered by AppSearchImplTest#testReset()
