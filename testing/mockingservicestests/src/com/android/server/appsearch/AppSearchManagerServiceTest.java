@@ -63,6 +63,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.AttributionSource;
@@ -244,11 +245,13 @@ public class AppSearchManagerServiceTest {
     public void testSetSchemaStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.setSchema(
+                new SetSchemaAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
                 /* schemaBundles= */ Collections.emptyList(),
                 /* visibilityBundles= */ Collections.emptyList(), /* forceOverride= */ false,
                 /* schemaVersion= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE, callback);
+                SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME, CallStats.CALL_TYPE_SET_SCHEMA);
         // SetSchemaStats is also logged in SetSchema
@@ -1188,12 +1191,15 @@ public class AppSearchManagerServiceTest {
 
     private void verifySetSchemaResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.setSchema(AppSearchAttributionSource
+        mAppSearchManagerServiceStub.setSchema(
+                new SetSchemaAidlRequest(
+                AppSearchAttributionSource
                     .createAttributionSource(mContext), DATABASE_NAME,
                 /* schemaBundles= */ Collections.emptyList(),
                 /* visibilityBundles= */ Collections.emptyList(), /* forceOverride= */ false,
                 /* schemaVersion= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE, callback);
+                SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_SET_SCHEMA, callback.get());
     }
 
