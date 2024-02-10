@@ -40,7 +40,6 @@ import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
-import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SearchSuggestionResult;
@@ -55,6 +54,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
@@ -346,34 +346,23 @@ public class AppSearchManagerService extends SystemService {
     private class Stub extends IAppSearchManager.Stub {
         @Override
         public void setSchema(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull List<AppSearchSchema> schemas,
-                @NonNull List<InternalVisibilityConfig> visibilityConfigs,
-                boolean forceOverride,
-                int schemaVersion,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
-                @SchemaMigrationStats.SchemaMigrationCallType int schemaMigrationCallType,
+                @NonNull SetSchemaAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(schemas);
-            Objects.requireNonNull(visibilityConfigs);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             long verifyIncomingCallLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
             String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    Objects.requireNonNull(request.getCallerAttributionSource().getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName, CallStats.CALL_TYPE_SET_SCHEMA,
-                    callback, targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
+                    CallStats.CALL_TYPE_SET_SCHEMA, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -388,7 +377,7 @@ public class AppSearchManagerService extends SystemService {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 SetSchemaStats.Builder setSchemaStatsBuilder = new SetSchemaStats.Builder(
-                        callingPackageName, databaseName);
+                        callingPackageName, request.getDatabaseName());
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
@@ -396,11 +385,11 @@ public class AppSearchManagerService extends SystemService {
                     InternalSetSchemaResponse internalSetSchemaResponse =
                             instance.getAppSearchImpl().setSchema(
                                     callingPackageName,
-                                    databaseName,
-                                    schemas,
-                                    visibilityConfigs,
-                                    forceOverride,
-                                    schemaVersion,
+                                    request.getDatabaseName(),
+                                    request.getSchemas(),
+                                    request.getVisibilityConfigs(),
+                                    request.isForceOverride(),
+                                    request.getSchemaVersion(),
                                     setSchemaStatsBuilder);
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
@@ -414,7 +403,7 @@ public class AppSearchManagerService extends SystemService {
                     long dispatchNotificationLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                     // setSchema will sync the schemas in the request to AppSearch, any existing
-                    // schemas which  is not included in the request will be delete if we force
+                    // schemas which are not included in the request will be deleted if we force
                     // override incompatible schemas. And all documents of these types will be
                     // deleted as well. We should checkForOptimize for these deletion.
                     long checkForOptimizeLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -444,12 +433,13 @@ public class AppSearchManagerService extends SystemService {
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis -
+                                        request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_SET_SCHEMA)
@@ -462,16 +452,17 @@ public class AppSearchManagerService extends SystemService {
                                 .build());
                         instance.getLogger().logStats(setSchemaStatsBuilder
                                 .setStatusCode(statusCode)
-                                .setSchemaMigrationCallType(schemaMigrationCallType)
+                                .setSchemaMigrationCallType(request.getSchemaMigrationCallType())
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .build());
                     }
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
-                        CallStats.CALL_TYPE_SET_SCHEMA, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
+                        CallStats.CALL_TYPE_SET_SCHEMA, targetUser,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                        /*numOperations=*/ 1, RESULT_RATE_LIMITED);
             }
         }
 
