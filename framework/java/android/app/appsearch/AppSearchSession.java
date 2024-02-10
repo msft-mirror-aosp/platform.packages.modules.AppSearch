@@ -28,6 +28,7 @@ import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.stats.SchemaMigrationStats;
@@ -850,7 +851,7 @@ public final class AppSearchSession implements Closeable {
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
         try {
-            mService.setSchema(
+            SetSchemaAidlRequest setSchemaAidlRequest = new SetSchemaAidlRequest(
                     mCallerAttributionSource,
                     mDatabaseName,
                     schemas,
@@ -859,7 +860,9 @@ public final class AppSearchSession implements Closeable {
                     request.getVersion(),
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                    SchemaMigrationStats.NO_MIGRATION,
+                    SchemaMigrationStats.NO_MIGRATION);
+            mService.setSchema(
+                    setSchemaAidlRequest,
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -963,7 +966,7 @@ public final class AppSearchSession implements Closeable {
                 AtomicReference<AppSearchResult<InternalSetSchemaResponse>> setSchemaResultRef =
                         new AtomicReference<>();
 
-                mService.setSchema(
+                SetSchemaAidlRequest setSchemaAidlRequest = new SetSchemaAidlRequest(
                         mCallerAttributionSource,
                         mDatabaseName,
                         schemas,
@@ -972,7 +975,9 @@ public final class AppSearchSession implements Closeable {
                         request.getVersion(),
                         mUserHandle,
                         /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                        SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE,
+                        SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE);
+                mService.setSchema(
+                        setSchemaAidlRequest,
                         new IAppSearchResultCallback.Stub() {
                             @Override
                             public void onResult(AppSearchResultParcel resultParcel) {
@@ -1026,7 +1031,7 @@ public final class AppSearchSession implements Closeable {
                         AtomicReference<AppSearchResult<InternalSetSchemaResponse>>
                                 setSchema2ResultRef = new AtomicReference<>();
                         // only trigger second setSchema() call if the first one is fail.
-                        mService.setSchema(
+                        SetSchemaAidlRequest setSchemaAidlRequest1 = new SetSchemaAidlRequest(
                                 mCallerAttributionSource,
                                 mDatabaseName,
                                 schemas,
@@ -1035,7 +1040,9 @@ public final class AppSearchSession implements Closeable {
                                 request.getVersion(),
                                 mUserHandle,
                                 /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                                SchemaMigrationStats.SECOND_CALL_APPLY_NEW_SCHEMA,
+                                SchemaMigrationStats.SECOND_CALL_APPLY_NEW_SCHEMA);
+                        mService.setSchema(
+                                setSchemaAidlRequest1,
                                 new IAppSearchResultCallback.Stub() {
                                     @Override
                                     public void onResult(AppSearchResultParcel resultParcel) {
