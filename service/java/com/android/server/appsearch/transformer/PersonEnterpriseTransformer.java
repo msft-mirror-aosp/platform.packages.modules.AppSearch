@@ -52,6 +52,12 @@ final class PersonEnterpriseTransformer {
 
     private static final List<String> PERSON_ACCESSIBLE_PROPERTIES = List.of(
             Person.PERSON_PROPERTY_NAME,
+            Person.PERSON_PROPERTY_GIVEN_NAME,
+            Person.PERSON_PROPERTY_MIDDLE_NAME,
+            Person.PERSON_PROPERTY_FAMILY_NAME,
+            Person.PERSON_PROPERTY_EXTERNAL_URI,
+            Person.PERSON_PROPERTY_ADDITIONAL_NAME_TYPES,
+            Person.PERSON_PROPERTY_ADDITIONAL_NAMES,
             Person.PERSON_PROPERTY_IMAGE_URI,
             Person.PERSON_PROPERTY_CONTACT_POINTS + "."
                     + ContactPoint.CONTACT_POINT_PROPERTY_LABEL,
