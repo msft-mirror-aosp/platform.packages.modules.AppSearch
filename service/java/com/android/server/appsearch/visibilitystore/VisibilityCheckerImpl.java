@@ -29,8 +29,8 @@ import android.annotation.Nullable;
 import android.app.admin.DevicePolicyManager;
 import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
+import android.app.appsearch.SchemaVisibilityConfig;
 import android.app.appsearch.SetSchemaRequest;
-import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -106,7 +106,7 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
 
         // Check OR visibility settings. Caller could access if they match ANY of the requirements
         // in the visibilityConfig.
-        VisibilityConfig visibilityConfig = internalVisibilityConfig.getVisibilityConfig();
+        SchemaVisibilityConfig visibilityConfig = internalVisibilityConfig.getVisibilityConfig();
         if (checkMatchAnyVisibilityConfig(
                 frameworkCallerAccess, visibilityConfig)) {
             return true;
@@ -114,8 +114,9 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
 
         // Check AND visibility settings. Caller could access if they match ALL of the requirements
         // in the visibilityConfig.
-        Set<VisibilityConfig> visibleToConfigs = internalVisibilityConfig.getVisibleToConfigs();
-        for (VisibilityConfig visibleToConfig : visibleToConfigs) {
+        Set<SchemaVisibilityConfig> visibleToConfigs =
+                internalVisibilityConfig.getVisibleToConfigs();
+        for (SchemaVisibilityConfig visibleToConfig : visibleToConfigs) {
             if (checkMatchAllVisibilityConfig(
                     frameworkCallerAccess, visibleToConfig)) {
                 return true;
@@ -127,7 +128,7 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
     /**  Check whether the caller math ANY of the visibility requirements.     */
     private boolean checkMatchAnyVisibilityConfig(
         @NonNull FrameworkCallerAccess frameworkCallerAccess,
-        @NonNull VisibilityConfig visibilityConfig) {
+        @NonNull SchemaVisibilityConfig visibilityConfig) {
         if (isSchemaVisibleToPackages(visibilityConfig,
             frameworkCallerAccess.getCallingAttributionSource().getUid())) {
             // The caller is in the allow list and has access to the given schema.
@@ -148,14 +149,14 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
     /**  Check whether the caller math ALL of the visibility requirements.     */
     private boolean checkMatchAllVisibilityConfig(
         @NonNull FrameworkCallerAccess frameworkCallerAccess,
-        @NonNull VisibilityConfig visibilityConfig) {
+        @NonNull SchemaVisibilityConfig visibilityConfig) {
 
         // We will skip following checks if user never specific them. But the caller should has
         // passed at least one check to get the access.
         boolean hasPassedCheck = false;
 
         // Check whether the caller is in the allow list and has access to the given schema.
-        if (!visibilityConfig.getVisibleToPackages().isEmpty()) {
+        if (!visibilityConfig.getAllowedPackages().isEmpty()) {
             if (!isSchemaVisibleToPackages(visibilityConfig,
                 frameworkCallerAccess.getCallingAttributionSource().getUid())) {
                 return false;// Return early for the 'ALL' case.
@@ -165,7 +166,7 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
 
         // Check whether caller has all required permissions for the given schema.
         // We could directly return the boolean results since it is the last checking.
-        if (!visibilityConfig.getVisibleToPermissions().isEmpty()) {
+        if (!visibilityConfig.getRequiredPermissions().isEmpty()) {
             if (!isSchemaVisibleToPermission(visibilityConfig,
                 frameworkCallerAccess.getCallingAttributionSource(),
                 /*checkEnterpriseAccess=*/ false)) {
@@ -185,7 +186,8 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         return hasPassedCheck;
     }
 
-    private boolean isSchemaPubliclyVisibleFromPackage(@NonNull VisibilityConfig visibilityConfig,
+    private boolean isSchemaPubliclyVisibleFromPackage(
+            @NonNull SchemaVisibilityConfig visibilityConfig,
             FrameworkCallerAccess frameworkCallerAccess) {
         PackageIdentifier targetPackage = visibilityConfig.getPubliclyVisibleTargetPackage();
         if (targetPackage == null) {
@@ -226,9 +228,9 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
      * certificate was once used to sign the package, the package will still be granted access. This
      * does not handle packages that have been signed by multiple certificates.
      */
-    private boolean isSchemaVisibleToPackages(@NonNull VisibilityConfig visibilityConfig,
+    private boolean isSchemaVisibleToPackages(@NonNull SchemaVisibilityConfig visibilityConfig,
             int callerUid) {
-        List<PackageIdentifier> visibleToPackages = visibilityConfig.getVisibleToPackages();
+        List<PackageIdentifier> visibleToPackages = visibilityConfig.getAllowedPackages();
         for (int i = 0; i < visibleToPackages.size(); i++) {
             PackageIdentifier visibleToPackage = visibleToPackages.get(i);
 
@@ -264,10 +266,11 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
     /**
      * Returns whether the caller holds required permissions for the given schema.
      */
-    private boolean isSchemaVisibleToPermission(@NonNull VisibilityConfig visibilityConfig,
+    private boolean isSchemaVisibleToPermission(
+            @NonNull SchemaVisibilityConfig visibilityConfig,
             @Nullable AppSearchAttributionSource callerAttributionSource,
             boolean checkEnterpriseAccess) {
-        Set<Set<Integer>> visibleToPermissions = visibilityConfig.getVisibleToPermissions();
+        Set<Set<Integer>> visibleToPermissions = visibilityConfig.getRequiredPermissions();
         if (visibleToPermissions.isEmpty() || callerAttributionSource == null) {
             // Provider doesn't set any permissions or there is no caller attribution source,
             // default is not accessible to anyone.
