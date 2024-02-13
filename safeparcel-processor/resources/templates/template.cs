@@ -11,7 +11,7 @@ package <?cs var:creator_package ?>;
 <?cs each:annotation=annotations ?>
 <?cs var:annotation ?>
 <?cs /each ?>
-public class <?cs var:creator_name ?> implements android.os.Parcelable.Creator< <?cs var:class ?> > {
+public <?cs if:creatorIsFinal ?>final<?cs /if ?> class <?cs var:creator_name ?> implements android.os.Parcelable.Creator< <?cs var:class ?> > {
     public static final int CONTENT_DESCRIPTION = 0;
 
     public <?cs var:creator_name ?>() {
