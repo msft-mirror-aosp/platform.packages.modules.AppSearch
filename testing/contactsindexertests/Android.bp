@@ -28,6 +28,9 @@ android_test {
         "service-appsearch-for-tests",
         "services.core",
         "truth",
+        "Nene",
+        "Harrier",
+        "TestApp",
     ],
     libs: [
         "android.test.runner",

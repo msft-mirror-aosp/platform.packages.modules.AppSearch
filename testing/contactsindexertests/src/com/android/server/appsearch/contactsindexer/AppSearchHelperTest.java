@@ -61,9 +61,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-// Since AppSearchHelper mainly just calls AppSearch's api to index/remove files, we shouldn't
-// worry too much about it since AppSearch has good test coverage. Here just add some simple checks.
 public class AppSearchHelperTest {
+    // These are hidden constants in SetSchemaRequest
+    private static final int ENTERPRISE_ACCESS = 7;
+    private static final int MANAGED_PROFILE_CONTACTS_ACCESS = 8;
+
     private final Executor mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
 
     private Context mContext;
@@ -135,7 +137,9 @@ public class AppSearchHelperTest {
         GetSchemaResponse response = result.getResultValue();
         assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).containsExactly(
                 Person.SCHEMA_TYPE,
-                ImmutableSet.of(ImmutableSet.of(SetSchemaRequest.READ_CONTACTS)));
+                ImmutableSet.of(Collections.singleton(SetSchemaRequest.READ_CONTACTS),
+                        ImmutableSet.of(SetSchemaRequest.READ_CONTACTS, ENTERPRISE_ACCESS,
+                                MANAGED_PROFILE_CONTACTS_ACCESS)));
     }
 
     @Test
