@@ -70,8 +70,12 @@ import javax.tools.JavaFileObject;
  */
 // Include the SafeParcel source code directly in AppSearch until it gets officially open-sourced.
 @SupportedAnnotationTypes({SafeParcelProcessor.CLASS_ANNOTATION_NAME})
-@SupportedSourceVersion(SourceVersion.RELEASE_17)
 public class SafeParcelProcessor extends AbstractProcessor {
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        return SourceVersion.latestSupported();
+    }
+
     public static final String SAFE_PARCELABLE_NAME =
             "android.app.appsearch.safeparcel.SafeParcelable";
     public static final String REFLECTED_PARCELABLE_NAME =
@@ -1552,6 +1556,10 @@ public class SafeParcelProcessor extends AbstractProcessor {
                 data.setValue("creator_name", cl.mGeneratedClassName.substring(index + 1));
             } else {
                 data.setValue("creator_name", cl.mGeneratedClassName);
+            }
+
+            if (cl.mAnnotation.creatorIsFinal()) {
+                data.setValue("creatorIsFinal", "true");
             }
 
             // Data class name
