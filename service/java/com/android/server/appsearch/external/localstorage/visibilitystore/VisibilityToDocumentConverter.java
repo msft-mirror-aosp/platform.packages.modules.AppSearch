@@ -22,7 +22,7 @@ import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
-import android.app.appsearch.VisibilityConfig;
+import android.app.appsearch.SchemaVisibilityConfig;
 import android.app.appsearch.VisibilityPermissionConfig;
 import android.util.ArraySet;
 import android.util.Log;
@@ -168,7 +168,7 @@ public class VisibilityToDocumentConverter {
                     .build();
 
     /**
-     * Constructs a {@link VisibilityConfig} from two {@link GenericDocument}s.
+     * Constructs a {@link InternalVisibilityConfig} from two {@link GenericDocument}s.
      *
      * <p>This constructor is still needed until we don't treat Visibility related documents as
      * {@link GenericDocument}s internally.
@@ -201,7 +201,7 @@ public class VisibilityToDocumentConverter {
         }
 
         // Handle all visibility settings other than visibleToConfigs
-        VisibilityConfig visibilityConfig =
+        SchemaVisibilityConfig schemaVisibilityConfig =
                 createVisibilityConfig(visibilityDocument, androidVOverlayProto);
 
         // Handle visibleToConfigs
@@ -211,12 +211,12 @@ public class VisibilityToDocumentConverter {
                         .setNotDisplayedBySystem(
                                 visibilityDocument.getPropertyBoolean(
                                         NOT_DISPLAYED_BY_SYSTEM_PROPERTY))
-                        .setVisibilityConfig(visibilityConfig);
+                        .setVisibilityConfig(schemaVisibilityConfig);
         if (androidVOverlayProto != null) {
             List<VisibilityConfigProto> visibleToConfigProtoList =
                     androidVOverlayProto.getVisibleToConfigsList();
             for (int i = 0; i < visibleToConfigProtoList.size(); i++) {
-                VisibilityConfig visibleToConfig =
+                SchemaVisibilityConfig visibleToConfig =
                         convertVisibilityConfigFromProto(visibleToConfigProtoList.get(i));
                 builder.addVisibleToConfig(visibleToConfig);
             }
@@ -226,7 +226,7 @@ public class VisibilityToDocumentConverter {
     }
 
     /**
-     * Constructs a {@link VisibilityConfig} from a {@link GenericDocument} containing legacy
+     * Constructs a {@link SchemaVisibilityConfig} from a {@link GenericDocument} containing legacy
      * visibility settings, and an {@link AndroidVOverlayProto} containing extended visibility
      * settings.
      *
@@ -238,13 +238,13 @@ public class VisibilityToDocumentConverter {
      * @param androidVOverlayProto the proto containing post-V visibility settings
      */
     @NonNull
-    private static VisibilityConfig createVisibilityConfig(
+    private static SchemaVisibilityConfig createVisibilityConfig(
             @NonNull GenericDocument visibilityDocument,
             @Nullable AndroidVOverlayProto androidVOverlayProto) {
         Objects.requireNonNull(visibilityDocument);
 
         // Pre-V visibility settings come from visibilityDocument
-        VisibilityConfig.Builder builder = new VisibilityConfig.Builder();
+        SchemaVisibilityConfig.Builder builder = new SchemaVisibilityConfig.Builder();
 
         String[] visibleToPackageNames =
                 visibilityDocument.getPropertyStringArray(VISIBLE_TO_PACKAGE_IDENTIFIER_PROPERTY);
@@ -252,7 +252,7 @@ public class VisibilityToDocumentConverter {
                 visibilityDocument.getPropertyBytesArray(VISIBLE_TO_PACKAGE_SHA_256_CERT_PROPERTY);
         if (visibleToPackageNames != null && visibleToPackageShaCerts != null) {
             for (int i = 0; i < visibleToPackageNames.length; i++) {
-                builder.addVisibleToPackage(
+                builder.addAllowedPackage(
                         new PackageIdentifier(
                                 visibleToPackageNames[i], visibleToPackageShaCerts[i]));
             }
@@ -271,14 +271,14 @@ public class VisibilityToDocumentConverter {
                     for (int j = 0; j < visibleToPermissionLongs.length; j++) {
                         allRequiredPermissions.add((int) visibleToPermissionLongs[j]);
                     }
-                    builder.addVisibleToPermissions(allRequiredPermissions);
+                    builder.addRequiredPermissions(allRequiredPermissions);
                 }
             }
         }
 
         // Post-V visibility settings come from androidVOverlayProto
         if (androidVOverlayProto != null) {
-            VisibilityConfig androidVOverlayConfig =
+            SchemaVisibilityConfig androidVOverlayConfig =
                     convertVisibilityConfigFromProto(androidVOverlayProto.getVisibilityConfig());
             builder.setPubliclyVisibleTargetPackage(
                     androidVOverlayConfig.getPubliclyVisibleTargetPackage());
@@ -288,14 +288,14 @@ public class VisibilityToDocumentConverter {
     }
 
     @NonNull
-    private static VisibilityConfig convertVisibilityConfigFromProto(
+    private static SchemaVisibilityConfig convertVisibilityConfigFromProto(
             @NonNull VisibilityConfigProto proto) {
-        VisibilityConfig.Builder builder = new VisibilityConfig.Builder();
+        SchemaVisibilityConfig.Builder builder = new SchemaVisibilityConfig.Builder();
 
         List<PackageIdentifierProto> visibleToPackageProtoList = proto.getVisibleToPackagesList();
         for (int i = 0; i < visibleToPackageProtoList.size(); i++) {
             PackageIdentifierProto visibleToPackage = proto.getVisibleToPackages(i);
-            builder.addVisibleToPackage(convertPackageIdentifierFromProto(visibleToPackage));
+            builder.addAllowedPackage(convertPackageIdentifierFromProto(visibleToPackage));
         }
 
         List<VisibleToPermissionProto> visibleToPermissionProtoList =
@@ -304,7 +304,7 @@ public class VisibilityToDocumentConverter {
             VisibleToPermissionProto visibleToPermissionProto = visibleToPermissionProtoList.get(i);
             Set<Integer> visibleToPermissions =
                     new ArraySet<>(visibleToPermissionProto.getPermissionsList());
-            builder.addVisibleToPermissions(visibleToPermissions);
+            builder.addRequiredPermissions(visibleToPermissions);
         }
 
         if (proto.hasPubliclyVisibleTargetPackage()) {
@@ -317,17 +317,17 @@ public class VisibilityToDocumentConverter {
         return builder.build();
     }
 
-    private static VisibilityConfigProto convertVisibilityConfigToProto(
-            @NonNull VisibilityConfig visibilityConfig) {
+    private static VisibilityConfigProto convertSchemaVisibilityConfigToProto(
+            @NonNull SchemaVisibilityConfig schemaVisibilityConfig) {
         VisibilityConfigProto.Builder builder = VisibilityConfigProto.newBuilder();
 
-        List<PackageIdentifier> visibleToPackages = visibilityConfig.getVisibleToPackages();
+        List<PackageIdentifier> visibleToPackages = schemaVisibilityConfig.getAllowedPackages();
         for (int i = 0; i < visibleToPackages.size(); i++) {
             PackageIdentifier visibleToPackage = visibleToPackages.get(i);
             builder.addVisibleToPackages(convertPackageIdentifierToProto(visibleToPackage));
         }
 
-        Set<Set<Integer>> visibleToPermissions = visibilityConfig.getVisibleToPermissions();
+        Set<Set<Integer>> visibleToPermissions = schemaVisibilityConfig.getRequiredPermissions();
         if (!visibleToPermissions.isEmpty()) {
             for (Set<Integer> allRequiredPermissions : visibleToPermissions) {
                 builder.addVisibleToPermissions(
@@ -336,7 +336,8 @@ public class VisibilityToDocumentConverter {
             }
         }
 
-        PackageIdentifier publicAclPackage = visibilityConfig.getPubliclyVisibleTargetPackage();
+        PackageIdentifier publicAclPackage =
+                schemaVisibilityConfig.getPubliclyVisibleTargetPackage();
         if (publicAclPackage != null) {
             builder.setPubliclyVisibleTargetPackage(
                     convertPackageIdentifierToProto(publicAclPackage));
@@ -360,8 +361,8 @@ public class VisibilityToDocumentConverter {
                         VISIBILITY_DOCUMENT_SCHEMA_TYPE);
         builder.setPropertyBoolean(
                 NOT_DISPLAYED_BY_SYSTEM_PROPERTY, config.isNotDisplayedBySystem());
-        VisibilityConfig visibilityConfig = config.getVisibilityConfig();
-        List<PackageIdentifier> visibleToPackages = visibilityConfig.getVisibleToPackages();
+        SchemaVisibilityConfig schemaVisibilityConfig = config.getVisibilityConfig();
+        List<PackageIdentifier> visibleToPackages = schemaVisibilityConfig.getAllowedPackages();
         String[] visibleToPackageNames = new String[visibleToPackages.size()];
         byte[][] visibleToPackageSha256Certs = new byte[visibleToPackages.size()][32];
         for (int i = 0; i < visibleToPackages.size(); i++) {
@@ -373,7 +374,7 @@ public class VisibilityToDocumentConverter {
                 VISIBLE_TO_PACKAGE_SHA_256_CERT_PROPERTY, visibleToPackageSha256Certs);
 
         // Generate an array of GenericDocument for VisibilityPermissionConfig.
-        Set<Set<Integer>> visibleToPermissions = visibilityConfig.getVisibleToPermissions();
+        Set<Set<Integer>> visibleToPermissions = schemaVisibilityConfig.getRequiredPermissions();
         if (!visibleToPermissions.isEmpty()) {
             GenericDocument[] permissionGenericDocs =
                     new GenericDocument[visibleToPermissions.size()];
@@ -403,7 +404,8 @@ public class VisibilityToDocumentConverter {
             @NonNull InternalVisibilityConfig internalVisibilityConfig) {
         PackageIdentifier publiclyVisibleTargetPackage =
                 internalVisibilityConfig.getVisibilityConfig().getPubliclyVisibleTargetPackage();
-        Set<VisibilityConfig> visibleToConfigs = internalVisibilityConfig.getVisibleToConfigs();
+        Set<SchemaVisibilityConfig> visibleToConfigs =
+                internalVisibilityConfig.getVisibleToConfigs();
         if (publiclyVisibleTargetPackage == null && visibleToConfigs.isEmpty()) {
             // This config doesn't contains any Android V overlay settings
             return null;
@@ -421,9 +423,9 @@ public class VisibilityToDocumentConverter {
         AndroidVOverlayProto.Builder androidVOverlayProtoBuilder =
                 AndroidVOverlayProto.newBuilder().setVisibilityConfig(visibilityConfigProtoBuilder);
         if (!visibleToConfigs.isEmpty()) {
-            for (VisibilityConfig visibleToConfig : visibleToConfigs) {
+            for (SchemaVisibilityConfig visibleToConfig : visibleToConfigs) {
                 VisibilityConfigProto visibleToConfigProto =
-                        convertVisibilityConfigToProto(visibleToConfig);
+                        convertSchemaVisibilityConfigToProto(visibleToConfig);
                 androidVOverlayProtoBuilder.addVisibleToConfigs(visibleToConfigProto);
             }
         }
