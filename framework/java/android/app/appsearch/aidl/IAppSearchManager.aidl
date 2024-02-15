@@ -26,6 +26,7 @@ import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
+import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
@@ -42,16 +43,13 @@ interface IAppSearchManager {
     /**
      * Creates and initializes AppSearchImpl for the calling app.
      *
-     * @param callerAttributionSource The permission identity of the package to initialize for.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link InitializeAidlRequest} contains the input parameters for initialize
+     *     operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Void}&gt;.
      */
     void initialize(
-        in AppSearchAttributionSource callerAttributionSource,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+        in InitializeAidlRequest request,
         in IAppSearchResultCallback callback) = 0;
 
     /**
