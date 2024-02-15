@@ -22,6 +22,7 @@ import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
+import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.os.RemoteException;
@@ -199,12 +200,13 @@ public abstract class ReadOnlyGlobalSearchSession {
         Objects.requireNonNull(callback);
         try {
             mService.getSchema(
-                    mCallerAttributionSource,
-                    packageName,
-                    databaseName,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                    mIsForEnterprise,
+                    new GetSchemaAidlRequest(
+                            mCallerAttributionSource,
+                            packageName,
+                            databaseName,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                            mIsForEnterprise),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {

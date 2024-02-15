@@ -59,6 +59,7 @@ import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
@@ -270,9 +271,11 @@ public class AppSearchManagerServiceTest {
     public void testLocalGetSchemaStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getSchema(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                mContext.getPackageName(), DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false, callback);
+                new GetSchemaAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        mContext.getPackageName(), DATABASE_NAME, mUserHandle,
+                        BINDER_CALL_START_TIME, /* isForEnterprise= */ false),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME, CallStats.CALL_TYPE_GET_SCHEMA);
     }
@@ -282,8 +285,10 @@ public class AppSearchManagerServiceTest {
         String otherPackageName = mContext.getPackageName() + "foo";
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getSchema(
-                AppSearchAttributionSource.createAttributionSource(mContext), otherPackageName,
-                DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME, /* isForEnterprise= */ false,
+                new GetSchemaAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        otherPackageName, DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME,
+                        /* isForEnterprise= */ false),
                 callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
@@ -1080,9 +1085,11 @@ public class AppSearchManagerServiceTest {
         // unlocked the enterprise user for our local instance of AppSearchManagerService
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getSchema(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                mContext.getPackageName(), DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ true, callback);
+                new GetSchemaAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        mContext.getPackageName(), DATABASE_NAME, mUserHandle,
+                        BINDER_CALL_START_TIME, /* isForEnterprise= */ true),
+                callback);
         AppSearchResult<GetSchemaResponse> result =
                 (AppSearchResult<GetSchemaResponse>) callback.get();
         assertThat(result.getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
@@ -1206,9 +1213,11 @@ public class AppSearchManagerServiceTest {
     private void verifyLocalGetSchemaResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getSchema(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                mContext.getPackageName(), DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false, callback);
+                new GetSchemaAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        mContext.getPackageName(), DATABASE_NAME, mUserHandle,
+                        BINDER_CALL_START_TIME, /* isForEnterprise= */ false),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_SCHEMA, callback.get());
     }
 
@@ -1216,8 +1225,10 @@ public class AppSearchManagerServiceTest {
         String otherPackageName = mContext.getPackageName() + "foo";
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getSchema(
-                AppSearchAttributionSource.createAttributionSource(mContext), otherPackageName,
-                DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME, /* isForEnterprise= */ false,
+                new GetSchemaAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        otherPackageName, DATABASE_NAME, mUserHandle, BINDER_CALL_START_TIME,
+                        /* isForEnterprise= */ false),
                 callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_GET_SCHEMA, callback.get());
     }
