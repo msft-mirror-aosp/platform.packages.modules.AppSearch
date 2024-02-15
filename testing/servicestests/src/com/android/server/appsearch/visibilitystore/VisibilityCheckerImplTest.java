@@ -73,7 +73,7 @@ public class VisibilityCheckerImplTest {
     private static final OptimizeStrategy ALWAYS_OPTIMIZE = optimizeInfo -> true;
     // These constants are hidden in SetSchemaRequest
     private static final int ENTERPRISE_ACCESS = 7;
-    private static final int ENTERPRISE_CONTACTS_DEVICE_POLICY = 8;
+    private static final int MANAGED_PROFILE_CONTACTS_ACCESS = 8;
 
     @Rule public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
     private final Map<UserHandle, PackageManager> mMockPackageManagers = new ArrayMap<>();
@@ -104,7 +104,6 @@ public class VisibilityCheckerImplTest {
             }
         };
         mUiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
-
         mVisibilityChecker = new VisibilityCheckerImpl(mContext);
         // Give ourselves global query permissions
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
@@ -576,27 +575,118 @@ public class VisibilityCheckerImplTest {
     }
 
     @Test
-    public void testSetSchema_nonEnterpriseVisibleToPermissions_ignoresEnterprisePermissions()
+    public void testSetSchema_enterpriseVisibleToPermissions_managedProfileContactsAccess()
             throws Exception {
         String prefix = PrefixUtil.createPrefix("package", "database");
 
-        // Create a VDoc that requires ENTERPRISE_ACCESS and ENTERPRISE_CONTACTS_DEVICE_POLICY
+        // Create a VDoc that requires ENTERPRISE_ACCESS and MANAGED_PROFILE_CONTACTS_ACCESS
         // permission.
         InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
                 /*id=*/ prefix + "Schema")
                 .addVisibleToPermissions(
-                        ImmutableSet.of(ENTERPRISE_ACCESS, ENTERPRISE_CONTACTS_DEVICE_POLICY))
+                        ImmutableSet.of(ENTERPRISE_ACCESS, MANAGED_PROFILE_CONTACTS_ACCESS))
                 .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
 
-        // We should be able to access since there is effectively a freebie for non-enterprise
+        // Use a policy checker without managed profile contacts access
+        mVisibilityChecker = new VisibilityCheckerImpl(mContext, new PolicyChecker() {
+            @Override
+            public boolean doesCallerHaveManagedProfileContactsAccess(
+                    @NonNull String callingPackageName) {
+                return false;
+            }
+        });
+
+        // Fails without managed profile contacts access
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*shouldCheckEnterpriseAccess=*/ true),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isFalse();
+
+        // Grant managed profile contacts access
+        mVisibilityChecker = new VisibilityCheckerImpl(mContext, new PolicyChecker() {
+            @Override
+            public boolean doesCallerHaveManagedProfileContactsAccess(
+                    @NonNull String callingPackageName) {
+                return true;
+            }
+        });
+
+        // Passes with managed profile contacts access
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*shouldCheckEnterpriseAccess=*/ true),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isTrue();
+    }
+
+    @Test
+    public void testSetSchema_visibleToPermissions_managedProfileAccessRequiresEnterprise()
+            throws Exception {
+        String prefix = PrefixUtil.createPrefix("package", "database");
+
+        // Create a VDoc that requires READ_SMS and ENTERPRISE_ACCESS permission.
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
+                /*id=*/ prefix + "Schema")
+                .addVisibleToPermissions(
+                        ImmutableSet.of(ENTERPRISE_ACCESS, MANAGED_PROFILE_CONTACTS_ACCESS))
+                .build();
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
+
+        // Use a policy checker with managed profile contacts access
+        mVisibilityChecker = new VisibilityCheckerImpl(mContext, new PolicyChecker() {
+            @Override
+            public boolean doesCallerHaveManagedProfileContactsAccess(
+                    @NonNull String callingPackageName) {
+                return true;
+            }
+        });
+
+        // Passes with enterprise access
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*shouldCheckEnterpriseAccess=*/ true),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isTrue();
+
+        // Fails without enterprise access
+        assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
+                new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
+                        /*shouldCheckEnterpriseAccess=*/ false),
+                "package",
+                prefix + "Schema",
+                mVisibilityStore))
+                .isFalse();
+    }
+
+    @Test
+    public void testSetSchema_visibleToPermissions_withoutEnterpriseAccessPermission()
+            throws Exception {
+        String prefix = PrefixUtil.createPrefix("package", "database");
+
+        // Create a VDoc that requires ENTERPRISE_ACCESS permission.
+        InternalVisibilityConfig visibilityConfig = new InternalVisibilityConfig.Builder(
+                /*id=*/ prefix + "Schema")
+                .addVisibleToPermissions(
+                        ImmutableSet.of(ENTERPRISE_ACCESS))
+                .build();
+        mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));
+
+        // We should not be able to access since the only permission set has ENTERPRISE_ACCESS
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
                 new FrameworkCallerAccess(mAttributionSource, /*callerHasSystemAccess=*/ false,
                         /*isForEnterprise=*/ false),
                 "package",
                 prefix + "Schema",
                 mVisibilityStore))
-                .isTrue();
+                .isFalse();
     }
 
     //TODO(b/202194495) add test for READ_HOME_APP_SEARCH_DATA and READ_ASSISTANT_APP_SEARCH_DATA
