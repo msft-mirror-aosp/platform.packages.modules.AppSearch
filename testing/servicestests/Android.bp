@@ -20,13 +20,13 @@ android_test {
     name: "AppSearchServicesTests",
     srcs: ["src/**/*.java"],
     static_libs: [
-        "AppSearchTestUtils",
+        "CtsAppSearchTestUtils",
         "androidx.test.ext.junit",
         "androidx.test.rules",
         "compatibility-device-util-axt",
         "framework-appsearch.impl",
         "service-appsearch-for-tests",
-        "truth-prebuilt",
+        "truth",
     ],
     libs: [
         "android.test.runner",

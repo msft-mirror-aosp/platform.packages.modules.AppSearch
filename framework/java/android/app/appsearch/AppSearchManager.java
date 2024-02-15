@@ -16,10 +16,13 @@
 package android.app.appsearch;
 
 import android.annotation.CallbackExecutor;
+import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.SystemService;
 import android.annotation.UserHandleAware;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.IAppSearchManager;
+import android.app.appsearch.flags.Flags;
 import android.content.Context;
 
 import com.android.internal.util.Preconditions;
@@ -208,7 +211,8 @@ public class AppSearchManager {
                 searchContext,
                 mService,
                 mContext.getUser(),
-                mContext.getAttributionSource(),
+                AppSearchAttributionSource.createAttributionSource(mContext),
+                AppSearchEnvironmentFactory.getEnvironmentInstance().getCacheDir(mContext),
                 executor,
                 callback);
     }
@@ -233,7 +237,38 @@ public class AppSearchManager {
         GlobalSearchSession.createGlobalSearchSession(
                 mService,
                 mContext.getUser(),
-                mContext.getAttributionSource(),
+                AppSearchAttributionSource.createAttributionSource(mContext),
                 executor, callback);
+    }
+
+    /**
+     * Creates a new {@link EnterpriseGlobalSearchSession}
+     *
+     * <p>EnterpriseGlobalSearchSession queries data from the user’s work profile, allowing apps
+     * running on the personal profile to access a limited subset of work profile data. Enterprise
+     * access must be explicitly enabled on schemas, and schemas may also specify additional
+     * permissions required for enterprise access.
+     *
+     * <p>This process requires an AppSearch native indexing file system. If it's not created, the
+     * initialization process will create one under the user's credential encrypted directory.
+     *
+     * @param executor Executor on which to invoke the callback.
+     * @param callback The {@link AppSearchResult}&lt;{@link EnterpriseGlobalSearchSession}&gt;
+     *     of performing this operation. Or a {@link AppSearchResult} with failure reason code and
+     *     error information.
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_ENTERPRISE_GLOBAL_SEARCH_SESSION)
+    @UserHandleAware
+    public void createEnterpriseGlobalSearchSession(
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull Consumer<AppSearchResult<EnterpriseGlobalSearchSession>> callback) {
+        Objects.requireNonNull(executor);
+        Objects.requireNonNull(callback);
+        EnterpriseGlobalSearchSession.createEnterpriseGlobalSearchSession(
+                mService,
+                mContext.getUser(),
+                AppSearchAttributionSource.createAttributionSource(mContext),
+                executor,
+                callback);
     }
 }

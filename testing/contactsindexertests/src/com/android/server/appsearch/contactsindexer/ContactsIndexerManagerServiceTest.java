@@ -34,6 +34,7 @@ import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.observer.SchemaChangeInfo;
 import android.app.appsearch.testutil.AppSearchSessionShimImpl;
 import android.app.appsearch.testutil.GlobalSearchSessionShimImpl;
+import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -42,10 +43,8 @@ import android.content.ContextWrapper;
 import android.content.pm.UserInfo;
 import android.os.UserHandle;
 import android.provider.ContactsContract;
-import android.test.ProviderTestCase2;
 
 import androidx.annotation.NonNull;
-import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
@@ -66,39 +65,18 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
-public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeContactsProvider> {
+public class ContactsIndexerManagerServiceTest extends FakeContactsProviderTestBase {
     private static final String TAG = "ContactsIndexerManagerServiceTest";
 
     private final ExecutorService mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
     private ContactsIndexerManagerService mContactsIndexerManagerService;
     private UiAutomation mUiAutomation;
 
-    public ContactsIndexerManagerServiceTest() {
-        super(FakeContactsProvider.class, FakeContactsProvider.AUTHORITY);
-    }
-
     @Override
     @Before
     public void setUp() throws Exception {
         super.setUp();
-        Context context = ApplicationProvider.getApplicationContext();
         mUiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
-        mContext = new ContextWrapper(context) {
-            @Override
-            public Context getApplicationContext() {
-                return this;
-            }
-
-            @Override
-            public Context createContextAsUser(@NonNull UserHandle user, int flags) {
-                return this;
-            }
-
-            @Override
-            public ContentResolver getContentResolver() {
-                return getMockContentResolver();
-            }
-        };
         // INTERACT_ACROSS_USERS_FULL: needed when we do registerReceiverForAllUsers for getting
         // package change notifications.
         mUiAutomation.adoptShellPermissionIdentity(INTERACT_ACROSS_USERS_FULL);

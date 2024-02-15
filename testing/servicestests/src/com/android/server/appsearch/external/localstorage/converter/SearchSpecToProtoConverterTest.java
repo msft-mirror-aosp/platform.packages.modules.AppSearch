@@ -28,9 +28,10 @@ import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.testutil.AppSearchTestUtils;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
-import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
+import com.android.server.appsearch.external.localstorage.LocalStorageIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
@@ -44,6 +45,7 @@ import com.android.server.appsearch.icing.proto.ScoringSpecProto;
 import com.android.server.appsearch.icing.proto.SearchSpecProto;
 import com.android.server.appsearch.icing.proto.TypePropertyWeights;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
@@ -63,7 +65,8 @@ public class SearchSpecToProtoConverterTest {
 
     @Rule public final TemporaryFolder mTemporaryFolder = new TemporaryFolder();
 
-    private final IcingOptionsConfig mDefaultIcingOptionsConfig = new DefaultIcingOptionsConfig();
+    private final IcingOptionsConfig mLocalStorageIcingOptionsConfig =
+            new LocalStorageIcingOptionsConfig();
 
     private AppSearchImpl mAppSearchImpl;
 
@@ -72,11 +75,11 @@ public class SearchSpecToProtoConverterTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
-                        mDefaultIcingOptionsConfig,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), mLocalStorageIcingOptionsConfig),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
     }
 
     @After
@@ -112,7 +115,7 @@ public class SearchSpecToProtoConverterTest {
                                         ImmutableMap.of(
                                                 prefix2 + "typeA", configProto,
                                                 prefix2 + "typeB", configProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         // Convert SearchSpec to proto.
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
 
@@ -174,7 +177,7 @@ public class SearchSpecToProtoConverterTest {
                                         ImmutableMap.of(
                                                 prefix2 + "typeA", configProto,
                                                 prefix2 + "typeB", configProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         // Convert SearchSpec to proto.
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
@@ -248,7 +251,7 @@ public class SearchSpecToProtoConverterTest {
                                 ImmutableMap.of(
                                         prefix2 + "typeA", configProto,
                                         prefix2 + "typeB", configProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         VisibilityStore visibilityStore = new VisibilityStore(mAppSearchImpl);
         converter.removeInaccessibleSchemaFilter(
@@ -307,7 +310,7 @@ public class SearchSpecToProtoConverterTest {
                                         ImmutableMap.of(
                                                 prefix + schemaType,
                                                 SchemaTypeConfigProto.getDefaultInstance())),
-                                mDefaultIcingOptionsConfig)
+                                mLocalStorageIcingOptionsConfig)
                         .toScoringSpecProto();
         TypePropertyWeights typePropertyWeights =
                 TypePropertyWeights.newBuilder()
@@ -342,7 +345,7 @@ public class SearchSpecToProtoConverterTest {
                                 /*prefixes=*/ ImmutableSet.of(),
                                 /*namespaceMap=*/ ImmutableMap.of(),
                                 /*schemaMap=*/ ImmutableMap.of(),
-                                mDefaultIcingOptionsConfig)
+                                mLocalStorageIcingOptionsConfig)
                         .toScoringSpecProto();
 
         assertThat(scoringSpecProto.getOrderBy().getNumber())
@@ -370,7 +373,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(),
                         /*namespaceMap=*/ ImmutableMap.of(),
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         ResultSpecProto resultSpecProto =
                 convert.toResultSpecProto(
                         /*namespaceMap=*/ ImmutableMap.of(), /*schemaMap=*/ ImmutableMap.of());
@@ -414,7 +417,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(),
                         /*namespaceMap=*/ ImmutableMap.of(),
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         ResultSpecProto resultSpecProto =
                 converter.toResultSpecProto(
@@ -425,6 +428,246 @@ public class SearchSpecToProtoConverterTest {
         assertThat(resultSpecProto.getSnippetSpec().getNumMatchesPerProperty()).isEqualTo(345);
         assertThat(resultSpecProto.getSnippetSpec().getMaxWindowUtf32Length()).isEqualTo(456);
         assertThat(resultSpecProto.getMaxJoinedChildrenPerParentToReturn()).isEqualTo(10);
+    }
+
+    @Test
+    public void testToResultSpecProto_grouping_withJoinSpec_packageFilter() throws Exception {
+        String personPrefix = PrefixUtil.createPrefix("contacts", "database");
+        String actionPrefix = PrefixUtil.createPrefix("aiai", "database");
+
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        Map<String, Map<String, SchemaTypeConfigProto>> schemaMap =
+                ImmutableMap.of(
+                        personPrefix, ImmutableMap.of(personPrefix + "typeA", configProto),
+                        actionPrefix, ImmutableMap.of(actionPrefix + "typeA", configProto));
+        Map<String, Set<String>> namespaceMap =
+                ImmutableMap.of(
+                        personPrefix, ImmutableSet.of(personPrefix + "namespaceA"),
+                        actionPrefix, ImmutableSet.of(actionPrefix + "namespaceA"));
+
+        SearchSpec nestedSearchSpec =
+                new SearchSpec.Builder()
+                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_PACKAGE, 10)
+                        .addFilterPackageNames("aiai")
+                        .build();
+
+        // Create a JoinSpec object and set it in the converter
+        JoinSpec joinSpec =
+                new JoinSpec.Builder("childPropertyExpression")
+                        .setNestedSearch("nestedQuery", nestedSearchSpec)
+                        .build();
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setJoinSpec(joinSpec)
+                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_PACKAGE, 10)
+                        .addFilterPackageNames("contacts")
+                        .build();
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(personPrefix, actionPrefix),
+                        namespaceMap,
+                        schemaMap,
+                        mLocalStorageIcingOptionsConfig);
+
+        ResultSpecProto resultSpecProto = converter.toResultSpecProto(namespaceMap, schemaMap);
+
+        assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(1);
+        assertThat(resultSpecProto.getResultGroupings(0).getEntryGroupings(0).getNamespace())
+                .isEqualTo("contacts$database/namespaceA");
+        ResultSpecProto nestedResultSpecProto =
+                converter.toSearchSpecProto().getJoinSpec().getNestedSpec().getResultSpec();
+        assertThat(nestedResultSpecProto.getResultGroupingsCount()).isEqualTo(1);
+        assertThat(nestedResultSpecProto.getResultGroupings(0).getEntryGroupings(0).getNamespace())
+                .isEqualTo("aiai$database/namespaceA");
+    }
+
+    @Test
+    public void testToResultSpecProto_projection_withJoinSpec_packageFilter() throws Exception {
+        String personPrefix = PrefixUtil.createPrefix("contacts", "database");
+        String actionPrefix = PrefixUtil.createPrefix("aiai", "database");
+
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        Map<String, Map<String, SchemaTypeConfigProto>> schemaMap =
+                ImmutableMap.of(
+                        personPrefix, ImmutableMap.of(personPrefix + "Person", configProto),
+                        actionPrefix, ImmutableMap.of(actionPrefix + "ContactAction", configProto));
+        Map<String, Set<String>> namespaceMap =
+                ImmutableMap.of(
+                        personPrefix, ImmutableSet.of(personPrefix + "namespaceA"),
+                        actionPrefix, ImmutableSet.of(actionPrefix + "namespaceA"));
+
+        SearchSpec nestedSearchSpec =
+                new SearchSpec.Builder()
+                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_PACKAGE, 10)
+                        .addProjection("ContactAction", ImmutableList.of("type"))
+                        .build();
+
+        // Create a JoinSpec object and set it in the converter
+        JoinSpec joinSpec =
+                new JoinSpec.Builder("childPropertyExpression")
+                        .setNestedSearch("nestedQuery", nestedSearchSpec)
+                        .build();
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setJoinSpec(joinSpec)
+                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_PACKAGE, 10)
+                        .addProjection("Person", ImmutableList.of("name"))
+                        .build();
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(personPrefix, actionPrefix),
+                        namespaceMap,
+                        schemaMap,
+                        mLocalStorageIcingOptionsConfig);
+
+        ResultSpecProto resultSpecProto = converter.toResultSpecProto(namespaceMap, schemaMap);
+
+        assertThat(resultSpecProto.getTypePropertyMasksCount()).isEqualTo(1);
+        assertThat(resultSpecProto.getTypePropertyMasks(0).getSchemaType())
+                .isEqualTo("contacts$database/Person");
+        assertThat(resultSpecProto.getTypePropertyMasks(0).getPaths(0)).isEqualTo("name");
+
+        ResultSpecProto nestedResultSpecProto =
+                converter.toSearchSpecProto().getJoinSpec().getNestedSpec().getResultSpec();
+        assertThat(nestedResultSpecProto.getTypePropertyMasksCount()).isEqualTo(1);
+        assertThat(nestedResultSpecProto.getTypePropertyMasks(0).getSchemaType())
+                .isEqualTo("aiai$database/ContactAction");
+        assertThat(nestedResultSpecProto.getTypePropertyMasks(0).getPaths(0)).isEqualTo("type");
+    }
+
+    @Test
+    public void testToSearchSpecProto_propertyFilter_withJoinSpec_packageFilter() throws Exception {
+        String personPrefix = PrefixUtil.createPrefix("contacts", "database");
+        String actionPrefix = PrefixUtil.createPrefix("aiai", "database");
+
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        Map<String, Map<String, SchemaTypeConfigProto>> schemaMap =
+                ImmutableMap.of(
+                        personPrefix, ImmutableMap.of(personPrefix + "Person", configProto),
+                        actionPrefix, ImmutableMap.of(actionPrefix + "ContactAction", configProto));
+        Map<String, Set<String>> namespaceMap =
+                ImmutableMap.of(
+                        personPrefix, ImmutableSet.of(personPrefix + "namespaceA"),
+                        actionPrefix, ImmutableSet.of(actionPrefix + "namespaceA"));
+
+        SearchSpec nestedSearchSpec =
+                new SearchSpec.Builder()
+                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_PACKAGE, 10)
+                        .addFilterProperties("ContactAction", ImmutableList.of("type"))
+                        .build();
+
+        // Create a JoinSpec object and set it in the converter
+        JoinSpec joinSpec =
+                new JoinSpec.Builder("childPropertyExpression")
+                        .setNestedSearch("nestedQuery", nestedSearchSpec)
+                        .build();
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setJoinSpec(joinSpec)
+                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_PACKAGE, 10)
+                        .addFilterProperties("Person", ImmutableList.of("name"))
+                        .build();
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(personPrefix, actionPrefix),
+                        namespaceMap,
+                        schemaMap,
+                        mLocalStorageIcingOptionsConfig);
+
+        SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
+
+        assertThat(searchSpecProto.getTypePropertyFiltersCount()).isEqualTo(1);
+        assertThat(searchSpecProto.getTypePropertyFilters(0).getSchemaType())
+                .isEqualTo("contacts$database/Person");
+        assertThat(searchSpecProto.getTypePropertyFilters(0).getPaths(0)).isEqualTo("name");
+
+        SearchSpecProto nestedSearchSpecProto =
+                searchSpecProto.getJoinSpec().getNestedSpec().getSearchSpec();
+        assertThat(nestedSearchSpecProto.getTypePropertyFiltersCount()).isEqualTo(1);
+        assertThat(nestedSearchSpecProto.getTypePropertyFilters(0).getSchemaType())
+                .isEqualTo("aiai$database/ContactAction");
+        assertThat(nestedSearchSpecProto.getTypePropertyFilters(0).getPaths(0)).isEqualTo("type");
+    }
+
+    @Test
+    public void testToResultSpecProto_weight_withJoinSpec_packageFilter() throws Exception {
+        String personPrefix = PrefixUtil.createPrefix("contacts", "database");
+        String actionPrefix = PrefixUtil.createPrefix("aiai", "database");
+
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        Map<String, Map<String, SchemaTypeConfigProto>> schemaMap =
+                ImmutableMap.of(
+                        personPrefix, ImmutableMap.of(personPrefix + "Person", configProto),
+                        actionPrefix, ImmutableMap.of(actionPrefix + "ContactAction", configProto));
+        Map<String, Set<String>> namespaceMap =
+                ImmutableMap.of(
+                        personPrefix, ImmutableSet.of(personPrefix + "namespaceA"),
+                        actionPrefix, ImmutableSet.of(actionPrefix + "namespaceA"));
+
+        SearchSpec nestedSearchSpec =
+                new SearchSpec.Builder()
+                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_PACKAGE, 10)
+                        .setPropertyWeights("ContactAction", ImmutableMap.of("type", 3.0))
+                        .setRankingStrategy(RANKING_STRATEGY_RELEVANCE_SCORE)
+                        .build();
+
+        // Create a JoinSpec object and set it in the converter
+        JoinSpec joinSpec =
+                new JoinSpec.Builder("childPropertyExpression")
+                        .setNestedSearch("nestedQuery", nestedSearchSpec)
+                        .build();
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setJoinSpec(joinSpec)
+                        .setPropertyWeights("Person", ImmutableMap.of("name", 2.0))
+                        .setRankingStrategy(RANKING_STRATEGY_RELEVANCE_SCORE)
+                        .build();
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(personPrefix, actionPrefix),
+                        namespaceMap,
+                        schemaMap,
+                        mLocalStorageIcingOptionsConfig);
+
+        ScoringSpecProto scoringSpecProto = converter.toScoringSpecProto();
+
+        assertThat(scoringSpecProto.getTypePropertyWeightsCount()).isEqualTo(1);
+        assertThat(scoringSpecProto.getTypePropertyWeights(0).getSchemaType())
+                .isEqualTo("contacts$database/Person");
+        assertThat(scoringSpecProto.getTypePropertyWeights(0).getPropertyWeights(0).getWeight())
+                .isEqualTo(2);
+        assertThat(scoringSpecProto.getTypePropertyWeights(0).getPropertyWeights(0).getPath())
+                .isEqualTo("name");
+
+        ScoringSpecProto nestedScoringSpecProto =
+                converter.toSearchSpecProto().getJoinSpec().getNestedSpec().getScoringSpec();
+        assertThat(nestedScoringSpecProto.getTypePropertyWeightsCount()).isEqualTo(1);
+        assertThat(nestedScoringSpecProto.getTypePropertyWeights(0).getSchemaType())
+                .isEqualTo("aiai$database/ContactAction");
+        assertThat(
+                        nestedScoringSpecProto
+                                .getTypePropertyWeights(0)
+                                .getPropertyWeights(0)
+                                .getWeight())
+                .isEqualTo(3);
+        assertThat(nestedScoringSpecProto.getTypePropertyWeights(0).getPropertyWeights(0).getPath())
+                .isEqualTo("type");
     }
 
     @Test
@@ -442,7 +685,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         /*namespaceMap=*/ ImmutableMap.of(),
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         ResultSpecProto resultSpecProto =
                 converter.toResultSpecProto(
                         /*namespaceMap=*/ ImmutableMap.of(
@@ -493,7 +736,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         namespaceMap,
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         ResultSpecProto resultSpecProto =
                 converter.toResultSpecProto(namespaceMap, /*schemaMap=*/ ImmutableMap.of());
 
@@ -509,6 +752,53 @@ public class SearchSpecToProtoConverterTest {
         assertThat(grouping2.getEntryGroupingsList()).hasSize(2);
         assertThat(PrefixUtil.removePrefix(grouping2.getEntryGroupings(0).getNamespace()))
                 .isEqualTo(PrefixUtil.removePrefix(grouping2.getEntryGroupings(1).getNamespace()));
+    }
+
+    @Test
+    public void testToResultSpecProto_groupBySchema() throws Exception {
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setResultGrouping(SearchSpec.GROUPING_TYPE_PER_SCHEMA, 5)
+                        .build();
+
+        String prefix1 = PrefixUtil.createPrefix("package1", "database");
+        String prefix2 = PrefixUtil.createPrefix("package2", "database");
+
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        Map<String, Map<String, SchemaTypeConfigProto>> schemaMap =
+                ImmutableMap.of(
+                        prefix1,
+                                ImmutableMap.of(
+                                        prefix1 + "typeA", configProto,
+                                        prefix1 + "typeB", configProto),
+                        prefix2,
+                                ImmutableMap.of(
+                                        prefix2 + "typeA", configProto,
+                                        prefix2 + "typeB", configProto));
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
+                        /*namespaceMap=*/ ImmutableMap.of(),
+                        schemaMap,
+                        mLocalStorageIcingOptionsConfig);
+        ResultSpecProto resultSpecProto =
+                converter.toResultSpecProto(/*namespaceMap=*/ ImmutableMap.of(), schemaMap);
+
+        assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(2);
+        // First grouping should have the same schema type.
+        ResultSpecProto.ResultGrouping grouping1 = resultSpecProto.getResultGroupings(0);
+        assertThat(grouping1.getEntryGroupingsList()).hasSize(2);
+        assertThat(PrefixUtil.removePrefix(grouping1.getEntryGroupings(0).getSchema()))
+                .isEqualTo(PrefixUtil.removePrefix(grouping1.getEntryGroupings(1).getSchema()));
+
+        // Second grouping should have the same schema type.
+        ResultSpecProto.ResultGrouping grouping2 = resultSpecProto.getResultGroupings(1);
+        assertThat(grouping2.getEntryGroupingsList()).hasSize(2);
+        assertThat(PrefixUtil.removePrefix(grouping2.getEntryGroupings(0).getSchema()))
+                .isEqualTo(PrefixUtil.removePrefix(grouping2.getEntryGroupings(1).getSchema()));
     }
 
     @Test
@@ -534,7 +824,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         namespaceMap,
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         ResultSpecProto resultSpecProto =
                 converter.toResultSpecProto(namespaceMap, /*schemaMap=*/ ImmutableMap.of());
 
@@ -544,6 +834,240 @@ public class SearchSpecToProtoConverterTest {
         assertThat(resultSpecProto.getResultGroupings(1).getEntryGroupingsList()).hasSize(1);
         assertThat(resultSpecProto.getResultGroupings(2).getEntryGroupingsList()).hasSize(1);
         assertThat(resultSpecProto.getResultGroupings(3).getEntryGroupingsList()).hasSize(1);
+    }
+
+    @Test
+    public void testToResultSpecProto_groupBySchemaAndPackage() throws Exception {
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setResultGrouping(
+                                GROUPING_TYPE_PER_PACKAGE | SearchSpec.GROUPING_TYPE_PER_SCHEMA, 5)
+                        .build();
+
+        String prefix1 = PrefixUtil.createPrefix("package1", "database");
+        String prefix2 = PrefixUtil.createPrefix("package2", "database");
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        Map<String, Map<String, SchemaTypeConfigProto>> schemaMap =
+                ImmutableMap.of(
+                        prefix1,
+                                ImmutableMap.of(
+                                        prefix1 + "typeA", configProto,
+                                        prefix1 + "typeB", configProto),
+                        prefix2,
+                                ImmutableMap.of(
+                                        prefix2 + "typeA", configProto,
+                                        prefix2 + "typeB", configProto));
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
+                        /*namespaceMap=*/ ImmutableMap.of(),
+                        schemaMap,
+                        mLocalStorageIcingOptionsConfig);
+        ResultSpecProto resultSpecProto =
+                converter.toResultSpecProto(/*namespaceMap=*/ ImmutableMap.of(), schemaMap);
+
+        // All schema should be separated.
+        assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(4);
+        assertThat(resultSpecProto.getResultGroupings(0).getEntryGroupingsList()).hasSize(1);
+        assertThat(resultSpecProto.getResultGroupings(1).getEntryGroupingsList()).hasSize(1);
+        assertThat(resultSpecProto.getResultGroupings(2).getEntryGroupingsList()).hasSize(1);
+        assertThat(resultSpecProto.getResultGroupings(3).getEntryGroupingsList()).hasSize(1);
+    }
+
+    @Test
+    public void testToResultSpecProto_groupByNamespaceAndSchema() throws Exception {
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setResultGrouping(
+                                SearchSpec.GROUPING_TYPE_PER_NAMESPACE
+                                        | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
+                                5)
+                        .build();
+
+        String prefix1 = PrefixUtil.createPrefix("package1", "database");
+        String prefix2 = PrefixUtil.createPrefix("package2", "database");
+        Map<String, Set<String>> namespaceMap =
+                /*namespaceMap=*/ ImmutableMap.of(
+                        prefix1, ImmutableSet.of(prefix1 + "namespaceA", prefix1 + "namespaceB"),
+                        prefix2, ImmutableSet.of(prefix2 + "namespaceA", prefix2 + "namespaceB"));
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        Map<String, Map<String, SchemaTypeConfigProto>> schemaMap =
+                ImmutableMap.of(
+                        prefix1,
+                                ImmutableMap.of(
+                                        prefix1 + "typeA", configProto,
+                                        prefix1 + "typeB", configProto),
+                        prefix2,
+                                ImmutableMap.of(
+                                        prefix2 + "typeA", configProto,
+                                        prefix2 + "typeB", configProto));
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
+                        namespaceMap,
+                        schemaMap,
+                        mLocalStorageIcingOptionsConfig);
+        ResultSpecProto resultSpecProto = converter.toResultSpecProto(namespaceMap, schemaMap);
+
+        assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(4);
+        ResultSpecProto.ResultGrouping grouping1 = resultSpecProto.getResultGroupings(0);
+        // Each grouping should have a size of 2.
+        assertThat(grouping1.getEntryGroupingsList()).hasSize(2);
+        // Each grouping should have the same namespace and schema type.
+        // Each entry should have the same package and database.
+        assertThat(grouping1.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package1$database/namespaceA");
+        assertThat(grouping1.getEntryGroupings(0).getSchema()).isEqualTo("package1$database/typeA");
+        assertThat(grouping1.getEntryGroupings(1).getNamespace())
+                .isEqualTo("package2$database/namespaceA");
+        assertThat(grouping1.getEntryGroupings(1).getSchema()).isEqualTo("package2$database/typeA");
+
+        ResultSpecProto.ResultGrouping grouping2 = resultSpecProto.getResultGroupings(1);
+        // Each grouping should have a size of 2.
+        assertThat(grouping2.getEntryGroupingsList()).hasSize(2);
+        // Each grouping should have the same namespace and schema type.
+        // Each entry should have the same package and database.
+        assertThat(grouping2.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package1$database/namespaceA");
+        assertThat(grouping2.getEntryGroupings(0).getSchema()).isEqualTo("package1$database/typeB");
+        assertThat(grouping2.getEntryGroupings(1).getNamespace())
+                .isEqualTo("package2$database/namespaceA");
+        assertThat(grouping2.getEntryGroupings(1).getSchema()).isEqualTo("package2$database/typeB");
+
+        ResultSpecProto.ResultGrouping grouping3 = resultSpecProto.getResultGroupings(2);
+        // Each grouping should have a size of 2.
+        assertThat(grouping3.getEntryGroupingsList()).hasSize(2);
+        // Each grouping should have the same namespace and schema type.
+        // Each entry should have the same package and database.
+        assertThat(grouping3.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package1$database/namespaceB");
+        assertThat(grouping3.getEntryGroupings(0).getSchema()).isEqualTo("package1$database/typeA");
+        assertThat(grouping3.getEntryGroupings(1).getNamespace())
+                .isEqualTo("package2$database/namespaceB");
+        assertThat(grouping3.getEntryGroupings(1).getSchema()).isEqualTo("package2$database/typeA");
+
+        ResultSpecProto.ResultGrouping grouping4 = resultSpecProto.getResultGroupings(3);
+        // Each grouping should have a size of 2.
+        assertThat(grouping4.getEntryGroupingsList()).hasSize(2);
+        // Each grouping should have the same namespace and schema type.
+        // Each entry should have the same package and database.
+        assertThat(grouping4.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package1$database/namespaceB");
+        assertThat(grouping4.getEntryGroupings(0).getSchema()).isEqualTo("package1$database/typeB");
+        assertThat(grouping4.getEntryGroupings(1).getNamespace())
+                .isEqualTo("package2$database/namespaceB");
+        assertThat(grouping4.getEntryGroupings(1).getSchema()).isEqualTo("package2$database/typeB");
+    }
+
+    @Test
+    public void testToResultSpecProto_groupByNamespaceAndSchemaAndPackage() throws Exception {
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setResultGrouping(
+                                SearchSpec.GROUPING_TYPE_PER_PACKAGE
+                                        | SearchSpec.GROUPING_TYPE_PER_NAMESPACE
+                                        | SearchSpec.GROUPING_TYPE_PER_SCHEMA,
+                                5)
+                        .build();
+        String prefix1 = PrefixUtil.createPrefix("package1", "database");
+        String prefix2 = PrefixUtil.createPrefix("package2", "database");
+        Map<String, Set<String>> namespaceMap =
+                /*namespaceMap=*/ ImmutableMap.of(
+                        prefix1, ImmutableSet.of(prefix1 + "namespaceA", prefix1 + "namespaceB"),
+                        prefix2, ImmutableSet.of(prefix2 + "namespaceA", prefix2 + "namespaceB"));
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        Map<String, Map<String, SchemaTypeConfigProto>> schemaMap =
+                ImmutableMap.of(
+                        prefix1,
+                                ImmutableMap.of(
+                                        prefix1 + "typeA", configProto,
+                                        prefix1 + "typeB", configProto),
+                        prefix2,
+                                ImmutableMap.of(
+                                        prefix2 + "typeA", configProto,
+                                        prefix2 + "typeB", configProto));
+
+        SearchSpecToProtoConverter converter =
+                new SearchSpecToProtoConverter(
+                        /*queryExpression=*/ "query",
+                        searchSpec,
+                        /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
+                        namespaceMap,
+                        schemaMap,
+                        mLocalStorageIcingOptionsConfig);
+        ResultSpecProto resultSpecProto = converter.toResultSpecProto(namespaceMap, schemaMap);
+
+        assertThat(resultSpecProto.getResultGroupingsCount()).isEqualTo(8);
+        ResultSpecProto.ResultGrouping grouping1 = resultSpecProto.getResultGroupings(0);
+        // assertThat(grouping1.getEntryGroupingsList()).containsExactly();
+        // Each grouping should have the size of 1.
+        assertThat(grouping1.getEntryGroupingsList()).hasSize(1);
+        // Each entry should have the same package.
+        assertThat(grouping1.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package2$database/namespaceA");
+        assertThat(grouping1.getEntryGroupings(0).getSchema()).isEqualTo("package2$database/typeA");
+
+        ResultSpecProto.ResultGrouping grouping2 = resultSpecProto.getResultGroupings(1);
+        // Each grouping should have the size of 1.
+        assertThat(grouping2.getEntryGroupingsList()).hasSize(1);
+        // Each entry should have the same package.
+        assertThat(grouping2.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package2$database/namespaceA");
+        assertThat(grouping2.getEntryGroupings(0).getSchema()).isEqualTo("package2$database/typeB");
+
+        ResultSpecProto.ResultGrouping grouping3 = resultSpecProto.getResultGroupings(2);
+        // Each grouping should have the size of 1.
+        assertThat(grouping3.getEntryGroupingsList()).hasSize(1);
+        // Each entry should have the same package.
+        assertThat(grouping3.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package2$database/namespaceB");
+        assertThat(grouping3.getEntryGroupings(0).getSchema()).isEqualTo("package2$database/typeA");
+
+        ResultSpecProto.ResultGrouping grouping4 = resultSpecProto.getResultGroupings(3);
+        // Each grouping should have the size of 1.
+        assertThat(grouping4.getEntryGroupingsList()).hasSize(1);
+        // Each entry should have the same package.
+        assertThat(grouping4.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package2$database/namespaceB");
+        assertThat(grouping4.getEntryGroupings(0).getSchema()).isEqualTo("package2$database/typeB");
+
+        ResultSpecProto.ResultGrouping grouping5 = resultSpecProto.getResultGroupings(4);
+        // Each grouping should have the size of 1.
+        assertThat(grouping5.getEntryGroupingsList()).hasSize(1);
+        // Each entry should have the same package.
+        assertThat(grouping5.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package1$database/namespaceA");
+        assertThat(grouping5.getEntryGroupings(0).getSchema()).isEqualTo("package1$database/typeA");
+
+        ResultSpecProto.ResultGrouping grouping6 = resultSpecProto.getResultGroupings(5);
+        // Each grouping should have the size of 1.
+        assertThat(grouping6.getEntryGroupingsList()).hasSize(1);
+        // Each entry should have the same package.
+        assertThat(grouping6.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package1$database/namespaceA");
+        assertThat(grouping6.getEntryGroupings(0).getSchema()).isEqualTo("package1$database/typeB");
+
+        ResultSpecProto.ResultGrouping grouping7 = resultSpecProto.getResultGroupings(6);
+        // Each grouping should have the size of 1.
+        assertThat(grouping7.getEntryGroupingsList()).hasSize(1);
+        // Each entry should have the same package.
+        assertThat(grouping7.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package1$database/namespaceB");
+        assertThat(grouping7.getEntryGroupings(0).getSchema()).isEqualTo("package1$database/typeA");
+
+        ResultSpecProto.ResultGrouping grouping8 = resultSpecProto.getResultGroupings(7);
+        // Each grouping should have the size of 1.
+        assertThat(grouping8.getEntryGroupingsList()).hasSize(1);
+        // Each entry should have the same package.
+        assertThat(grouping8.getEntryGroupings(0).getNamespace())
+                .isEqualTo("package1$database/namespaceB");
+        assertThat(grouping8.getEntryGroupings(0).getSchema()).isEqualTo("package1$database/typeB");
     }
 
     @Test
@@ -569,7 +1093,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         namespaceMap,
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
 
@@ -601,7 +1125,7 @@ public class SearchSpecToProtoConverterTest {
                                                 "package$database2/namespace3",
                                                 "package$database2/namespace4")),
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
         // Only search prefix1 will return namespace 1 and 2.
@@ -627,7 +1151,7 @@ public class SearchSpecToProtoConverterTest {
                                         "package$database1/namespace1",
                                         "package$database1/namespace2")),
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
         // If the searching namespace filter is not empty, the target namespace filter will be the
         // intersection of the searching namespace filters that users want to search over and
@@ -653,7 +1177,7 @@ public class SearchSpecToProtoConverterTest {
                                         "package$database1/namespace1",
                                         "package$database1/namespace2")),
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
         // If the searching namespace filter is not empty, the target namespace filter will be the
         // intersection of the searching namespace filters that users want to search over and
@@ -684,7 +1208,7 @@ public class SearchSpecToProtoConverterTest {
                                         ImmutableMap.of(
                                                 "package$database2/typeC", schemaTypeConfigProto,
                                                 "package$database2/typeD", schemaTypeConfigProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
         // Empty searching filter will get all types for target filter
         assertThat(searchSpecProto.getSchemaTypeFiltersList())
@@ -717,7 +1241,7 @@ public class SearchSpecToProtoConverterTest {
                                         ImmutableMap.of(
                                                 "package$database2/typeC", schemaTypeConfigProto,
                                                 "package$database2/typeD", schemaTypeConfigProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
         // Only search prefix1 will return typeA and B.
         assertThat(searchSpecProto.getSchemaTypeFiltersList())
@@ -744,7 +1268,7 @@ public class SearchSpecToProtoConverterTest {
                                 ImmutableMap.of(
                                         "package$database1/typeA", schemaTypeConfigProto,
                                         "package$database1/typeB", schemaTypeConfigProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
         // If the searching schema filter is not empty, the target schema filter will be the
         // intersection of the schema filters that users want to search over and those candidates
@@ -772,7 +1296,7 @@ public class SearchSpecToProtoConverterTest {
                                 ImmutableMap.of(
                                         "package$database1/typeA", schemaTypeConfigProto,
                                         "package$database1/typeB", schemaTypeConfigProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         SearchSpecProto searchSpecProto = converter.toSearchSpecProto();
         // If there is no intersection of the schema filters that user want to search over and
         // those filters which are stored in AppSearch, return empty.
@@ -804,7 +1328,7 @@ public class SearchSpecToProtoConverterTest {
                                         "package$database/schema1", schemaTypeConfigProto,
                                         "package$database/schema2", schemaTypeConfigProto,
                                         "package$database/schema3", schemaTypeConfigProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         converter.removeInaccessibleSchemaFilter(
                 new CallerAccess(/*callingPackageName=*/ "otherPackageName"),
@@ -853,7 +1377,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix),
                         /*namespaceMap=*/ namespaceMap,
                         /*schemaMap=*/ ImmutableMap.of(),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         assertThat(emptySchemaConverter.hasNothingToSearch()).isTrue();
 
         SearchSpecToProtoConverter emptyNamespaceConverter =
@@ -863,7 +1387,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix),
                         /*namespaceMap=*/ ImmutableMap.of(),
                         schemaMap,
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         assertThat(emptyNamespaceConverter.hasNothingToSearch()).isTrue();
 
         SearchSpecToProtoConverter nonEmptyConverter =
@@ -873,7 +1397,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix),
                         namespaceMap,
                         schemaMap,
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
         assertThat(nonEmptyConverter.hasNothingToSearch()).isFalse();
 
         // remove all target schema filter, and the query becomes nothing to search.
@@ -914,7 +1438,7 @@ public class SearchSpecToProtoConverterTest {
                                         "package$database/schema1", schemaTypeConfigProto,
                                         "package$database/schema2", schemaTypeConfigProto,
                                         "package$database/schema3", schemaTypeConfigProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         converter.removeInaccessibleSchemaFilter(
                 new CallerAccess(/*callingPackageName=*/ "otherPackageName"),
@@ -968,7 +1492,7 @@ public class SearchSpecToProtoConverterTest {
                         /*prefixes=*/ ImmutableSet.of(prefix1, prefix2),
                         namespaceMap,
                         schemaTypeMap,
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         TypePropertyWeights expectedTypePropertyWeight1 =
                 TypePropertyWeights.newBuilder()
@@ -1021,7 +1545,7 @@ public class SearchSpecToProtoConverterTest {
                                 prefix1, ImmutableSet.of(prefix1 + "namespace1")),
                         /*schemaMap=*/ ImmutableMap.of(
                                 prefix1, ImmutableMap.of(prefix1 + "typeA", schemaTypeConfigProto)),
-                        mDefaultIcingOptionsConfig);
+                        mLocalStorageIcingOptionsConfig);
 
         ScoringSpecProto convertedScoringSpecProto = converter.toScoringSpecProto();
 

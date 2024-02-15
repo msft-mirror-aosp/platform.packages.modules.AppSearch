@@ -23,6 +23,7 @@ import static com.android.server.appsearch.external.localstorage.util.PrefixUtil
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.FeatureConstants;
 import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchResult;
 import android.app.appsearch.SearchSpec;
@@ -63,7 +64,13 @@ public final class SearchSpecToProtoConverter {
     private static final String TAG = "AppSearchSearchSpecConv";
     private final String mQueryExpression;
     private final SearchSpec mSearchSpec;
-    private final Set<String> mPrefixes;
+    /** The union of allowed prefixes for the top-level SearchSpec and any nested SearchSpecs. */
+    private final Set<String> mAllAllowedPrefixes;
+    /**
+     * The intersection of mAllAllowedPrefixes and prefixes requested in the SearchSpec currently
+     * being handled.
+     */
+    private final Set<String> mCurrentSearchSpecPrefixFilters;
     /**
      * The intersected prefixed namespaces that are existing in AppSearch and also accessible to the
      * client.
@@ -102,7 +109,9 @@ public final class SearchSpecToProtoConverter {
      *
      * @param queryExpression Query String to search.
      * @param searchSpec The spec we need to convert from.
-     * @param prefixes Set of database prefix which the caller want to access.
+     * @param allAllowedPrefixes Superset of database prefixes which the {@link SearchSpec} and all
+     *     nested SearchSpecs are allowed to access. An empty set means no database prefixes are
+     *     allowed, so nothing will be searched.
      * @param namespaceMap The cached Map of {@code <Prefix, Set<PrefixedNamespace>>} stores all
      *     prefixed namespace filters which are stored in AppSearch.
      * @param schemaMap The cached Map of {@code <Prefix, Map<PrefixedSchemaType, schemaProto>>}
@@ -111,25 +120,53 @@ public final class SearchSpecToProtoConverter {
     public SearchSpecToProtoConverter(
             @NonNull String queryExpression,
             @NonNull SearchSpec searchSpec,
-            @NonNull Set<String> prefixes,
+            @NonNull Set<String> allAllowedPrefixes,
             @NonNull Map<String, Set<String>> namespaceMap,
             @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
             @NonNull IcingOptionsConfig icingOptionsConfig) {
         mQueryExpression = Objects.requireNonNull(queryExpression);
         mSearchSpec = Objects.requireNonNull(searchSpec);
-        mPrefixes = Objects.requireNonNull(prefixes);
+        mAllAllowedPrefixes = Objects.requireNonNull(allAllowedPrefixes);
         mNamespaceMap = Objects.requireNonNull(namespaceMap);
         mSchemaMap = Objects.requireNonNull(schemaMap);
         mIcingOptionsConfig = Objects.requireNonNull(icingOptionsConfig);
+
+        // This field holds the prefix filters for the SearchSpec currently being handled, which
+        // could be an outer or inner SearchSpec. If this constructor is called from outside of
+        // SearchSpecToProtoConverter, it will be handling an outer SearchSpec. If this SearchSpec
+        // contains a JoinSpec, the nested SearchSpec will be handled in the creation of
+        // mNestedConverter. This is useful as the two SearchSpecs could have different package
+        // filters.
+        List<String> packageFilters = searchSpec.getFilterPackageNames();
+        if (packageFilters.isEmpty()) {
+            mCurrentSearchSpecPrefixFilters = mAllAllowedPrefixes;
+        } else {
+            mCurrentSearchSpecPrefixFilters = new ArraySet<>();
+            for (String prefix : mAllAllowedPrefixes) {
+                String packageName = getPackageName(prefix);
+                if (packageFilters.contains(packageName)) {
+                    // This performs an intersection of allowedPrefixes with prefixes requested
+                    // in the SearchSpec currently being handled. The same operation is done
+                    // on the nested SearchSpecs when mNestedConverter is created.
+                    mCurrentSearchSpecPrefixFilters.add(prefix);
+                }
+            }
+        }
+
         mTargetPrefixedNamespaceFilters =
                 SearchSpecToProtoConverterUtil.generateTargetNamespaceFilters(
-                        prefixes, namespaceMap, searchSpec.getFilterNamespaces());
+                        mCurrentSearchSpecPrefixFilters,
+                        namespaceMap,
+                        searchSpec.getFilterNamespaces());
+
         // If the target namespace filter is empty, the user has nothing to search for. We can skip
         // generate the target schema filter.
         if (!mTargetPrefixedNamespaceFilters.isEmpty()) {
             mTargetPrefixedSchemaFilters =
                     SearchSpecToProtoConverterUtil.generateTargetSchemaFilters(
-                            prefixes, schemaMap, searchSpec.getFilterSchemas());
+                            mCurrentSearchSpecPrefixFilters,
+                            schemaMap,
+                            searchSpec.getFilterSchemas());
         } else {
             mTargetPrefixedSchemaFilters = new ArraySet<>();
         }
@@ -143,7 +180,7 @@ public final class SearchSpecToProtoConverter {
                 new SearchSpecToProtoConverter(
                         joinSpec.getNestedQuery(),
                         joinSpec.getNestedSearchSpec(),
-                        mPrefixes,
+                        mAllAllowedPrefixes,
                         namespaceMap,
                         schemaMap,
                         mIcingOptionsConfig);
@@ -250,6 +287,28 @@ public final class SearchSpecToProtoConverter {
                         .addAllSchemaTypeFilters(mTargetPrefixedSchemaFilters)
                         .setUseReadOnlySearch(mIcingOptionsConfig.getUseReadOnlySearch());
 
+        // Convert type property filter map into type property mask proto.
+        for (Map.Entry<String, List<String>> entry : mSearchSpec.getFilterProperties().entrySet()) {
+            if (entry.getKey().equals(SearchSpec.SCHEMA_TYPE_WILDCARD)) {
+                protoBuilder.addTypePropertyFilters(
+                        TypePropertyMask.newBuilder()
+                                .setSchemaType(SearchSpec.SCHEMA_TYPE_WILDCARD)
+                                .addAllPaths(entry.getValue())
+                                .build());
+            } else {
+                for (String prefix : mCurrentSearchSpecPrefixFilters) {
+                    String prefixedSchemaType = prefix + entry.getKey();
+                    if (mTargetPrefixedSchemaFilters.contains(prefixedSchemaType)) {
+                        protoBuilder.addTypePropertyFilters(
+                                TypePropertyMask.newBuilder()
+                                        .setSchemaType(prefixedSchemaType)
+                                        .addAllPaths(entry.getValue())
+                                        .build());
+                    }
+                }
+            }
+        }
+
         @SearchSpec.TermMatch int termMatchCode = mSearchSpec.getTermMatch();
         TermMatchType.Code termMatchCodeProto = TermMatchType.Code.forNumber(termMatchCode);
         if (termMatchCodeProto == null || termMatchCodeProto.equals(TermMatchType.Code.UNKNOWN)) {
@@ -280,19 +339,30 @@ public final class SearchSpecToProtoConverter {
             protoBuilder.setJoinSpec(joinSpecProtoBuilder);
         }
 
+        if (mSearchSpec.isListFilterHasPropertyFunctionEnabled()
+                && !mIcingOptionsConfig.getBuildPropertyExistenceMetadataHits()) {
+            // This condition should never be reached as long as Features.isFeatureSupported() is
+            // consistent with IcingOptionsConfig.
+            throw new UnsupportedOperationException(
+                    FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION
+                            + " is currently not operational because the building process for the "
+                            + "associated metadata has not yet been turned on.");
+        }
+
         // TODO(b/208654892) Remove this field once EXPERIMENTAL_ICING_ADVANCED_QUERY is fully
         //  supported.
         boolean turnOnIcingAdvancedQuery =
                 mSearchSpec.isNumericSearchEnabled()
                         || mSearchSpec.isVerbatimSearchEnabled()
-                        || mSearchSpec.isListFilterQueryLanguageEnabled();
+                        || mSearchSpec.isListFilterQueryLanguageEnabled()
+                        || mSearchSpec.isListFilterHasPropertyFunctionEnabled();
         if (turnOnIcingAdvancedQuery) {
             protoBuilder.setSearchType(
                     SearchSpecProto.SearchType.Code.EXPERIMENTAL_ICING_ADVANCED_QUERY);
         }
 
         // Set enabled features
-        protoBuilder.addAllEnabledFeatures(mSearchSpec.getEnabledFeatures());
+        protoBuilder.addAllEnabledFeatures(toIcingSearchFeatures(mSearchSpec.getEnabledFeatures()));
 
         return protoBuilder.build();
     }
@@ -360,7 +430,7 @@ public final class SearchSpecToProtoConverter {
         switch (groupingType) {
             case SearchSpec.GROUPING_TYPE_PER_PACKAGE:
                 addPerPackageResultGroupings(
-                        mPrefixes,
+                        mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         namespaceMap,
                         resultSpecBuilder);
@@ -368,7 +438,7 @@ public final class SearchSpecToProtoConverter {
                 break;
             case SearchSpec.GROUPING_TYPE_PER_NAMESPACE:
                 addPerNamespaceResultGroupings(
-                        mPrefixes,
+                        mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         namespaceMap,
                         resultSpecBuilder);
@@ -376,7 +446,7 @@ public final class SearchSpecToProtoConverter {
                 break;
             case SearchSpec.GROUPING_TYPE_PER_SCHEMA:
                 addPerSchemaResultGrouping(
-                        mPrefixes,
+                        mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         schemaMap,
                         resultSpecBuilder);
@@ -384,7 +454,7 @@ public final class SearchSpecToProtoConverter {
                 break;
             case SearchSpec.GROUPING_TYPE_PER_PACKAGE | SearchSpec.GROUPING_TYPE_PER_NAMESPACE:
                 addPerPackagePerNamespaceResultGroupings(
-                        mPrefixes,
+                        mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         namespaceMap,
                         resultSpecBuilder);
@@ -392,7 +462,7 @@ public final class SearchSpecToProtoConverter {
                 break;
             case SearchSpec.GROUPING_TYPE_PER_PACKAGE | SearchSpec.GROUPING_TYPE_PER_SCHEMA:
                 addPerPackagePerSchemaResultGroupings(
-                        mPrefixes,
+                        mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         schemaMap,
                         resultSpecBuilder);
@@ -400,7 +470,7 @@ public final class SearchSpecToProtoConverter {
                 break;
             case SearchSpec.GROUPING_TYPE_PER_NAMESPACE | SearchSpec.GROUPING_TYPE_PER_SCHEMA:
                 addPerNamespaceAndSchemaResultGrouping(
-                        mPrefixes,
+                        mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         namespaceMap,
                         schemaMap,
@@ -411,7 +481,7 @@ public final class SearchSpecToProtoConverter {
                     | SearchSpec.GROUPING_TYPE_PER_NAMESPACE
                     | SearchSpec.GROUPING_TYPE_PER_SCHEMA:
                 addPerPackagePerNamespacePerSchemaResultGrouping(
-                        mPrefixes,
+                        mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         namespaceMap,
                         schemaMap,
@@ -430,9 +500,9 @@ public final class SearchSpecToProtoConverter {
         resultSpecBuilder.clearTypePropertyMasks();
         for (int i = 0; i < typePropertyMaskBuilders.size(); i++) {
             String unprefixedType = typePropertyMaskBuilders.get(i).getSchemaType();
-            boolean isWildcard = unprefixedType.equals(SearchSpec.PROJECTION_SCHEMA_TYPE_WILDCARD);
+            boolean isWildcard = unprefixedType.equals(SearchSpec.SCHEMA_TYPE_WILDCARD);
             // Qualify the given schema types
-            for (String prefix : mPrefixes) {
+            for (String prefix : mCurrentSearchSpecPrefixFilters) {
                 String prefixedType = isWildcard ? unprefixedType : prefix + unprefixedType;
                 if (isWildcard || mTargetPrefixedSchemaFilters.contains(prefixedType)) {
                     resultSpecBuilder.addTypePropertyMasks(
@@ -493,6 +563,26 @@ public final class SearchSpecToProtoConverter {
                 throw new IllegalArgumentException(
                         "Invalid result ranking strategy: " + rankingStrategyCode);
         }
+    }
+
+    /**
+     * Maps a list of AppSearch search feature strings to the list of the corresponding Icing
+     * feature strings.
+     *
+     * @param appSearchFeatures The list of AppSearch search feature strings.
+     */
+    @NonNull
+    private static List<String> toIcingSearchFeatures(@NonNull List<String> appSearchFeatures) {
+        List<String> result = new ArrayList<>();
+        for (int i = 0; i < appSearchFeatures.size(); i++) {
+            String appSearchFeature = appSearchFeatures.get(i);
+            if (appSearchFeature.equals(FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION)) {
+                result.add("HAS_PROPERTY_FUNCTION");
+            } else {
+                result.add(appSearchFeature);
+            }
+        }
+        return result;
     }
 
     /**
@@ -955,7 +1045,7 @@ public final class SearchSpecToProtoConverter {
 
         for (Map.Entry<String, Map<String, Double>> typePropertyWeight :
                 typePropertyWeightsMap.entrySet()) {
-            for (String prefix : mPrefixes) {
+            for (String prefix : mCurrentSearchSpecPrefixFilters) {
                 String prefixedSchemaType = prefix + typePropertyWeight.getKey();
                 if (mTargetPrefixedSchemaFilters.contains(prefixedSchemaType)) {
                     TypePropertyWeights.Builder typePropertyWeightsBuilder =

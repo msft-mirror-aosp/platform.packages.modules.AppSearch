@@ -20,6 +20,7 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
@@ -29,8 +30,6 @@ import android.app.appsearch.observer.DocumentChangeInfo;
 import android.app.appsearch.observer.ObserverCallback;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.observer.SchemaChangeInfo;
-import android.content.AttributionSource;
-import android.os.Bundle;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -42,7 +41,6 @@ import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.Preconditions;
 
 import java.io.Closeable;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -57,12 +55,8 @@ import java.util.function.Consumer;
  *
  * @see AppSearchSession
  */
-public class GlobalSearchSession implements Closeable {
+public class GlobalSearchSession extends ReadOnlyGlobalSearchSession implements Closeable {
     private static final String TAG = "AppSearchGlobalSearchSe";
-
-    private final UserHandle mUserHandle;
-    private final IAppSearchManager mService;
-    private final AttributionSource mCallerAttributionSource;
 
     // Management of observer callbacks. Key is observed package.
     @GuardedBy("mObserverCallbacksLocked")
@@ -79,49 +73,23 @@ public class GlobalSearchSession implements Closeable {
     static void createGlobalSearchSession(
             @NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
-            @NonNull AttributionSource attributionSource,
+            @NonNull AppSearchAttributionSource attributionSource,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<GlobalSearchSession>> callback) {
         GlobalSearchSession globalSearchSession = new GlobalSearchSession(service, userHandle,
                 attributionSource);
-        globalSearchSession.initialize(executor, callback);
-    }
-
-    // NOTE: No instance of this class should be created or returned except via initialize().
-    // Once the callback.accept has been called here, the class is ready to use.
-    private void initialize(
-            @NonNull @CallbackExecutor Executor executor,
-            @NonNull Consumer<AppSearchResult<GlobalSearchSession>> callback) {
-        try {
-            mService.initialize(
-                    mCallerAttributionSource,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                    new IAppSearchResultCallback.Stub() {
-                        @Override
-                        public void onResult(AppSearchResultParcel resultParcel) {
-                            safeExecute(executor, callback, () -> {
-                                AppSearchResult<Void> result = resultParcel.getResult();
-                                if (result.isSuccess()) {
-                                    callback.accept(
-                                            AppSearchResult.newSuccessfulResult(
-                                                    GlobalSearchSession.this));
-                                } else {
-                                    callback.accept(AppSearchResult.newFailedResult(result));
-                                }
-                            });
-                        }
-                    });
-        } catch (RemoteException e) {
-            throw e.rethrowFromSystemServer();
-        }
+        globalSearchSession.initialize(executor, result -> {
+            if (result.isSuccess()) {
+                callback.accept(AppSearchResult.newSuccessfulResult(globalSearchSession));
+            } else {
+                callback.accept(AppSearchResult.newFailedResult(result));
+            }
+        });
     }
 
     private GlobalSearchSession(@NonNull IAppSearchManager service, @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource) {
-        mService = service;
-        mUserHandle = userHandle;
-        mCallerAttributionSource = callerAttributionSource;
+            @NonNull AppSearchAttributionSource callerAttributionSource) {
+        super(service, userHandle, callerAttributionSource, /*isForEnterprise=*/ false);
     }
 
     /**
@@ -147,33 +115,15 @@ public class GlobalSearchSession implements Closeable {
      *                     {@link BatchResultCallback#onSystemError} will be invoked with a
      *                     {@link Throwable}.
      */
+    @Override
     public void getByDocumentId(
             @NonNull String packageName,
             @NonNull String databaseName,
             @NonNull GetByDocumentIdRequest request,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull BatchResultCallback<String, GenericDocument> callback) {
-        Objects.requireNonNull(packageName);
-        Objects.requireNonNull(databaseName);
-        Objects.requireNonNull(request);
-        Objects.requireNonNull(executor);
-        Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "GlobalSearchSession has already been closed");
-
-        try {
-            mService.getDocuments(
-                    mCallerAttributionSource,
-                    /*targetPackageName=*/packageName,
-                    databaseName,
-                    request.getNamespace(),
-                    new ArrayList<>(request.getIds()),
-                    request.getProjectionsInternal(),
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                    SearchSessionUtil.createGetDocumentCallback(executor, callback));
-        } catch (RemoteException e) {
-            throw e.rethrowFromSystemServer();
-        }
+        super.getByDocumentId(packageName, databaseName, request, executor, callback);
     }
 
     /**
@@ -196,12 +146,34 @@ public class GlobalSearchSession implements Closeable {
      * @return a {@link SearchResults} object for retrieved matched documents.
      */
     @NonNull
+    @Override
     public SearchResults search(@NonNull String queryExpression, @NonNull SearchSpec searchSpec) {
-        Objects.requireNonNull(queryExpression);
-        Objects.requireNonNull(searchSpec);
         Preconditions.checkState(!mIsClosed, "GlobalSearchSession has already been closed");
-        return new SearchResults(mService, mCallerAttributionSource, /*databaseName=*/null,
-                queryExpression, searchSpec, mUserHandle);
+        return super.search(queryExpression, searchSpec);
+    }
+
+    /**
+     * Retrieves the collection of schemas most recently successfully provided to {@link
+     * AppSearchSession#setSchema} for any types belonging to the requested package and database
+     * that the caller has been granted access to.
+     *
+     * <p>If the requested package/database combination does not exist or the caller has not been
+     * granted access to it, then an empty GetSchemaResponse will be returned.
+     *
+     * @param packageName  the package that owns the requested {@link AppSearchSchema} instances.
+     * @param databaseName the database that owns the requested {@link AppSearchSchema} instances.
+     * @return The pending {@link GetSchemaResponse} containing the schemas that the caller has
+     *         access to or an empty GetSchemaResponse if the request package and database does not
+     *         exist, has not set a schema or contains no schemas that are accessible to the caller.
+     */
+    @Override
+    public void getSchema(
+            @NonNull String packageName,
+            @NonNull String databaseName,
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull Consumer<AppSearchResult<GetSchemaResponse>> callback) {
+        Preconditions.checkState(!mIsClosed, "GlobalSearchSession has already been closed");
+        super.getSchema(packageName, databaseName, executor, callback);
     }
 
     /**
@@ -252,58 +224,6 @@ public class GlobalSearchSession implements Closeable {
                         }
                     });
             mIsMutated = true;
-        } catch (RemoteException e) {
-            throw e.rethrowFromSystemServer();
-        }
-    }
-
-    /**
-     * Retrieves the collection of schemas most recently successfully provided to {@link
-     * AppSearchSession#setSchema} for any types belonging to the requested package and database
-     * that the caller has been granted access to.
-     *
-     * <p>If the requested package/database combination does not exist or the caller has not been
-     * granted access to it, then an empty GetSchemaResponse will be returned.
-     *
-     * @param packageName  the package that owns the requested {@link AppSearchSchema} instances.
-     * @param databaseName the database that owns the requested {@link AppSearchSchema} instances.
-     * @return The pending {@link GetSchemaResponse} containing the schemas that the caller has
-     *         access to or an empty GetSchemaResponse if the request package and database does not
-     *         exist, has not set a schema or contains no schemas that are accessible to the caller.
-     */
-    // This call hits disk; async API prevents us from treating these calls as properties.
-    public void getSchema(
-            @NonNull String packageName,
-            @NonNull String databaseName,
-            @NonNull @CallbackExecutor Executor executor,
-            @NonNull Consumer<AppSearchResult<GetSchemaResponse>> callback) {
-        Objects.requireNonNull(packageName);
-        Objects.requireNonNull(databaseName);
-        Objects.requireNonNull(executor);
-        Objects.requireNonNull(callback);
-        Preconditions.checkState(!mIsClosed, "GlobalSearchSession has already been closed");
-        try {
-            mService.getSchema(
-                    mCallerAttributionSource,
-                    packageName,
-                    databaseName,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                    new IAppSearchResultCallback.Stub() {
-                        @Override
-                        public void onResult(AppSearchResultParcel resultParcel) {
-                            safeExecute(executor, callback, () -> {
-                                AppSearchResult<Bundle> result = resultParcel.getResult();
-                                if (result.isSuccess()) {
-                                    GetSchemaResponse response = new GetSchemaResponse(
-                                            Objects.requireNonNull(result.getResultValue()));
-                                    callback.accept(AppSearchResult.newSuccessfulResult(response));
-                                } else {
-                                    callback.accept(AppSearchResult.newFailedResult(result));
-                                }
-                            });
-                        }
-                    });
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -403,7 +323,7 @@ public class GlobalSearchSession implements Closeable {
                 resultParcel = mService.registerObserverCallback(
                         mCallerAttributionSource,
                         targetPackageName,
-                        spec.getBundle(),
+                        spec,
                         mUserHandle,
                         /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
                         stub);

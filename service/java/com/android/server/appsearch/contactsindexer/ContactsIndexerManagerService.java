@@ -21,6 +21,7 @@ import static android.os.Process.INVALID_UID;
 import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.UserIdInt;
+import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.util.LogUtil;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -28,7 +29,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
-import android.os.Binder;
 import android.os.CancellationSignal;
 import android.os.PatternMatcher;
 import android.os.UserHandle;
@@ -39,16 +39,9 @@ import android.util.SparseArray;
 
 import com.android.server.LocalManagerRegistry;
 import com.android.server.SystemService;
-import com.android.server.appsearch.AppSearchEnvironment;
-import com.android.server.appsearch.AppSearchEnvironmentFactory;
-import com.android.server.appsearch.AppSearchUserInstance;
-import com.android.server.appsearch.util.AdbDumpUtil;
-
-import com.google.android.icing.proto.DebugInfoProto;
-import com.google.android.icing.proto.DebugInfoVerbosity;
+import android.app.appsearch.AppSearchEnvironment;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
 import java.util.Objects;

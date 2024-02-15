@@ -18,6 +18,7 @@ package com.android.server.appsearch.stats;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.Context;
@@ -29,8 +30,8 @@ import android.util.SparseIntArray;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.server.appsearch.AppSearchConfig;
-import com.android.server.appsearch.external.localstorage.AppSearchLogger;
+import com.android.server.appsearch.InternalAppSearchLogger;
+import com.android.server.appsearch.FrameworkAppSearchConfig;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
@@ -58,21 +59,21 @@ import java.util.Random;
  *
  * @hide
  */
-public final class PlatformLogger implements AppSearchLogger {
+public final class PlatformLogger implements InternalAppSearchLogger {
     private static final String TAG = "AppSearchPlatformLogger";
 
     // Context of the user we're logging for.
     private final Context mUserContext;
 
     // Manager holding the configuration flags
-    private final AppSearchConfig mConfig;
+    private final FrameworkAppSearchConfig mConfig;
 
     private final Random mRng = new Random();
     private final Object mLock = new Object();
 
     /**
      * SparseArray to track how many stats we skipped due to
-     * {@link AppSearchConfig#getCachedMinTimeIntervalBetweenSamplesMillis()}.
+     * {@link FrameworkAppSearchConfig#getCachedMinTimeIntervalBetweenSamplesMillis()}.
      *
      * <p> We can have correct extrapolated number by adding those counts back when we log
      * the same type of stats next time. E.g. the true count of an event could be estimated as:
@@ -104,7 +105,7 @@ public final class PlatformLogger implements AppSearchLogger {
     /**
      * Record the last n API calls used by dumpsys to print debugging information about the
      * sequence of the API calls, where n is specified by
-     * {@link AppSearchConfig#getCachedApiCallStatsLimit()}.
+     * {@link FrameworkAppSearchConfig#getCachedApiCallStatsLimit()}.
      */
     @GuardedBy("mLock")
     private ArrayDeque<ApiCallRecord> mLastNCalls = new ArrayDeque<>();
@@ -132,7 +133,7 @@ public final class PlatformLogger implements AppSearchLogger {
      */
     public PlatformLogger(
             @NonNull Context userContext,
-            @NonNull AppSearchConfig config) {
+            @NonNull FrameworkAppSearchConfig config) {
         mUserContext = Objects.requireNonNull(userContext);
         mConfig = Objects.requireNonNull(config);
     }
@@ -226,13 +227,20 @@ public final class PlatformLogger implements AppSearchLogger {
         }
     }
 
+    @Override
+    public void removeCacheForPackage(@NonNull String packageName) {
+        removeCachedUidForPackage(packageName);
+    }
+
     /**
      * Removes cached UID for package.
      *
      * @return removed UID for the package, or {@code INVALID_UID} if package was not previously
      * cached.
      */
-    public int removeCachedUidForPackage(@NonNull String packageName) {
+    @CanIgnoreReturnValue
+    @VisibleForTesting
+    int removeCachedUidForPackage(@NonNull String packageName) {
         // TODO(b/173532925) This needs to be called when we get PACKAGE_REMOVED intent
         Objects.requireNonNull(packageName);
         synchronized (mLock) {
@@ -244,6 +252,7 @@ public final class PlatformLogger implements AppSearchLogger {
     /**
      * Return a copy of the recorded {@link ApiCallRecord}.
      */
+    @Override
     @NonNull
     public List<ApiCallRecord> getLastCalledApis() {
         synchronized (mLock) {
@@ -424,6 +433,7 @@ public final class PlatformLogger implements AppSearchLogger {
         String database = stats.getDatabase();
         try {
             int hashCodeForDatabase = calculateHashCodeMd5(database);
+            int hashCodeForSearchSourceLogTag = calculateHashCodeMd5(stats.getSearchSourceLogTag());
             AppSearchStatsLog.write(AppSearchStatsLog.APP_SEARCH_QUERY_STATS_REPORTED,
                     extraStats.mSamplingInterval,
                     extraStats.mSkippedSampleCount,
@@ -456,7 +466,8 @@ public final class PlatformLogger implements AppSearchLogger {
                     stats.getNativeToJavaJniLatencyMillis(),
                     stats.getJoinType(),
                     stats.getNumJoinedResultsCurrentPage(),
-                    stats.getJoinLatencyMillis());
+                    stats.getJoinLatencyMillis(),
+                    hashCodeForSearchSourceLogTag);
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
             // TODO(b/184204720) report hashing error to statsd
             //  We need to set a special value(e.g. 0xFFFFFFFF) for the hashing of the database,
@@ -521,7 +532,7 @@ public final class PlatformLogger implements AppSearchLogger {
 
     /**
      * This method will drop the earliest stats in the queue when the number of calls is at the
-     * capacity specified by {@link AppSearchConfig#getCachedApiCallStatsLimit()}.
+     * capacity specified by {@link FrameworkAppSearchConfig#getCachedApiCallStatsLimit()}.
      */
     @GuardedBy("mLock")
     private void trimExcessStatsQueueLocked() {
@@ -539,7 +550,7 @@ public final class PlatformLogger implements AppSearchLogger {
      * Record {@link ApiCallRecord} to {@link #mLastNCalls} for dumpsys.
      *
      * <p> This method will automatically drop the earliest stats when the number of calls is at the
-     * capacity specified by {@link AppSearchConfig#getCachedApiCallStatsLimit()}.
+     * capacity specified by {@link FrameworkAppSearchConfig#getCachedApiCallStatsLimit()}.
      */
     @GuardedBy("mLock")
     @VisibleForTesting
@@ -560,9 +571,6 @@ public final class PlatformLogger implements AppSearchLogger {
     static int calculateHashCodeMd5(@Nullable String str) throws
             NoSuchAlgorithmException, UnsupportedEncodingException {
         if (str == null) {
-            // Just return -1 if caller doesn't have database name
-            // For some stats like globalQuery, databaseName can be null.
-            // Since in atom it is an integer, we have to return something here.
             return -1;
         }
 
@@ -676,7 +684,7 @@ public final class PlatformLogger implements AppSearchLogger {
         return packageUid;
     }
 
-    /** Returns sampling ratio for stats type specified form {@link AppSearchConfig}. */
+    /** Returns sampling ratio for stats type specified form {@link FrameworkAppSearchConfig}. */
     private int getSamplingIntervalFromConfig(@CallStats.CallType int statsType) {
         switch (statsType) {
             case CallStats.CALL_TYPE_PUT_DOCUMENTS:

@@ -18,15 +18,24 @@ package com.android.server.appsearch.contactsindexer;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchSessionShim;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.testutil.AppSearchSessionShimImpl;
 import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.ContextWrapper;
-import android.test.ProviderTestCase2;
+import android.provider.ContactsContract;
+import android.test.mock.MockContentResolver;
 import android.util.Pair;
 
 import androidx.test.core.app.ApplicationProvider;
@@ -36,35 +45,32 @@ import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
 
 import com.google.common.collect.ImmutableList;
 
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
-public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvider> {
+public class ContactsIndexerImplTest extends FakeContactsProviderTestBase {
     // TODO(b/203605504) we could just use AppSearchHelper.
     private FakeAppSearchHelper mAppSearchHelper;
     private ContactsUpdateStats mUpdateStats;
 
-    public ContactsIndexerImplTest() {
-        super(FakeContactsProvider.class, FakeContactsProvider.AUTHORITY);
-    }
-
     @Override
+    @Before
     public void setUp() throws Exception {
         super.setUp();
-        Context context = ApplicationProvider.getApplicationContext();
-        mContext = new ContextWrapper(context) {
-            @Override
-            public ContentResolver getContentResolver() {
-                return getMockContentResolver();
-            }
-        };
         mAppSearchHelper = new FakeAppSearchHelper(mContext);
         mUpdateStats = new ContactsUpdateStats();
     }
 
     @Override
+    @After
     public void tearDown() throws Exception {
         // Wipe the data in AppSearchHelper.DATABASE_NAME.
         AppSearchManager.SearchContext searchContext =
@@ -74,6 +80,7 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         SetSchemaRequest setSchemaRequest = new SetSchemaRequest.Builder()
                 .setForceOverride(true).build();
         db.setSchemaAsync(setSchemaRequest).get();
+        super.tearDown();
     }
 
     /**
@@ -102,28 +109,33 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         lastDeletedTimestamp = ContactsProviderUtil.getDeletedContactIds(mContext,
                 lastDeletedTimestamp, unWantedContactIds, /*stats=*/ null);
         indexerImpl.updatePersonCorpusAsync(wantedContactIds, unWantedContactIds,
-                updateStats).get();
+                updateStats, /*shouldKeepUpdatingOnError=*/ true).get();
 
         return new Pair<>(lastUpdatedTimestamp, lastDeletedTimestamp);
     }
 
+    @Test
     public void testBatcher_noFlushBeforeReachingLimit() throws Exception {
         int batchSize = 5;
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
 
         for (int i = 0; i < batchSize - 1; ++i) {
             batcher.add(new PersonBuilderHelper(/*id=*/ String.valueOf(i),
-                    new Person.Builder("namespace", /*id=*/ String.valueOf(i), /*name=*/
-                            String.valueOf(i))).setCreationTimestampMillis(0), mUpdateStats);
+                            new Person.Builder("namespace", /*id=*/ String.valueOf(i), /*name=*/
+                                    String.valueOf(i))).setCreationTimestampMillis(0),
+                    mUpdateStats);
         }
         batcher.getCompositeFuture().get();
 
         assertThat(mAppSearchHelper.mIndexedContacts).isEmpty();
     }
 
+    @Test
     public void testBatcher_autoFlush() throws Exception {
         int batchSize = 5;
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
 
         for (int i = 0; i < batchSize; ++i) {
             batcher.add(
@@ -140,9 +152,11 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         assertThat(batcher.getPendingIndexContactsCount()).isEqualTo(0);
     }
 
+    @Test
     public void testBatcher_contactFingerprintSame_notIndexed() throws Exception {
         int batchSize = 2;
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
         PersonBuilderHelper builderHelper1 = new PersonBuilderHelper("id1",
                 new Person.Builder("namespace", "id1", "name1")
                         .setGivenName("given1")
@@ -164,9 +178,11 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         assertThat(batcher.getPendingIndexContactsCount()).isEqualTo(0);
     }
 
+    @Test
     public void testBatcher_contactFingerprintDifferent_notIndexedButBatched() throws Exception {
         int batchSize = 2;
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
         PersonBuilderHelper builderHelper1 = new PersonBuilderHelper("id1",
                 new Person.Builder("namespace", "id1", "name1")
                         .setGivenName("given1")
@@ -194,9 +210,11 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         assertThat(batcher.getPendingIndexContactsCount()).isEqualTo(1);
     }
 
+    @Test
     public void testBatcher_contactFingerprintDifferent_Indexed() throws Exception {
         int batchSize = 2;
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
         PersonBuilderHelper contact1 = new PersonBuilderHelper("id1",
                 new Person.Builder("namespace", "id1", "name1")
                         .setGivenName("given1")
@@ -242,11 +260,13 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         assertThat(batcher.getPendingIndexContactsCount()).isEqualTo(0);
     }
 
+    @Test
     public void testBatcher_contactFingerprintDifferent_IndexedWithOriginalCreationTimestamp()
             throws Exception {
         int batchSize = 2;
         long originalTs = System.currentTimeMillis();
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
         PersonBuilderHelper contact1 = new PersonBuilderHelper("id1",
                 new Person.Builder("namespace", "id1", "name1")
                         .setGivenName("given1")
@@ -307,9 +327,11 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
                 "id3").getCreationTimestampMillis()).isEqualTo(originalTs);
     }
 
+    @Test
     public void testBatcher_contactNew_notIndexedButBatched() throws Exception {
         int batchSize = 2;
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
         PersonBuilderHelper contact1 = new PersonBuilderHelper("id1",
                 new Person.Builder("namespace", "id1", "name1")
                         .setGivenName("given1")
@@ -332,9 +354,11 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         assertThat(batcher.getPendingIndexContactsCount()).isEqualTo(1);
     }
 
+    @Test
     public void testBatcher_contactNew_indexed() throws Exception {
         int batchSize = 2;
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
         PersonBuilderHelper contact1 = new PersonBuilderHelper("id1",
                 new Person.Builder("namespace", "id1", "name1")
                         .setGivenName("given1")).setCreationTimestampMillis(0);
@@ -368,9 +392,11 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         assertThat(batcher.getPendingIndexContactsCount()).isEqualTo(0);
     }
 
+    @Test
     public void testBatcher_batchedContactClearedAfterFlush() throws Exception {
         int batchSize = 5;
-        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize);
+        ContactsBatcher batcher = new ContactsBatcher(mAppSearchHelper, batchSize,
+                /*shouldKeepUpdatingOnError=*/ true);
 
         // First batch
         for (int i = 0; i < batchSize; ++i) {
@@ -403,6 +429,7 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
         assertThat(batcher.getPendingIndexContactsCount()).isEqualTo(0);
     }
 
+    @Test
     public void testContactsIndexerImpl_batchRemoveContacts_largerThanBatchSize() throws Exception {
         ContactsIndexerImpl contactsIndexerImpl = new ContactsIndexerImpl(mContext,
                 mAppSearchHelper);
@@ -412,12 +439,14 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
             removedIds.add(String.valueOf(i));
         }
 
-        contactsIndexerImpl.batchRemoveContactsAsync(removedIds, mUpdateStats).get();
+        contactsIndexerImpl.batchRemoveContactsAsync(removedIds,
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true).get();
 
         assertThat(mAppSearchHelper.mRemovedIds).hasSize(removedIds.size());
         assertThat(mAppSearchHelper.mRemovedIds).isEqualTo(removedIds);
     }
 
+    @Test
     public void testContactsIndexerImpl_batchRemoveContacts_smallerThanBatchSize()
             throws Exception {
         ContactsIndexerImpl contactsIndexerImpl = new ContactsIndexerImpl(mContext,
@@ -428,9 +457,187 @@ public class ContactsIndexerImplTest extends ProviderTestCase2<FakeContactsProvi
             removedIds.add(String.valueOf(i));
         }
 
-        contactsIndexerImpl.batchRemoveContactsAsync(removedIds, mUpdateStats).get();
+        contactsIndexerImpl.batchRemoveContactsAsync(removedIds,
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true).get();
 
         assertThat(mAppSearchHelper.mRemovedIds).hasSize(removedIds.size());
         assertThat(mAppSearchHelper.mRemovedIds).isEqualTo(removedIds);
+    }
+
+    @Test
+    public void testContactsIndexerImpl_batchUpdateContactsNullCursor_shouldContinueOnError()
+            throws Exception {
+        MockContentResolver spyContentResolver = spy(mMockContentResolver);
+        doCallRealMethod()
+                .doReturn(null)
+                .doCallRealMethod()
+                .when(spyContentResolver).query(any(), any(), any(), any(), any());
+        Context spyContext = new ContextWrapper(ApplicationProvider.getApplicationContext()) {
+            @Override
+            public ContentResolver getContentResolver() {
+                return spyContentResolver;
+            }
+        };
+        ContactsIndexerImpl contactsIndexerImpl = new ContactsIndexerImpl(spyContext,
+                mAppSearchHelper);
+
+        // Insert contacts
+        ContentResolver resolver = mContext.getContentResolver();
+        ContentValues dummyValues = new ContentValues();
+        int totalNum = 3 * ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2;
+        for (int i = 0; i < totalNum; i++) {
+            resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
+        }
+
+        // Index three batches of contacts
+        List<String> wantedIds = new ArrayList<>(totalNum);
+        for (int i = 0; i < totalNum; ++i) {
+            wantedIds.add(String.valueOf(i));
+        }
+        contactsIndexerImpl.batchUpdateContactsAsync(wantedIds,
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true).get();
+
+        // Contacts indexer should have failed on the second batch but continued to the third batch
+        List<String> ids = new ArrayList<>(
+                2 * ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2);
+        for (int i = 0; i < ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2; ++i) {
+            ids.add(String.valueOf(i));
+        }
+        for (int i = 2 * ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2; i < totalNum; ++i) {
+            ids.add(String.valueOf(i));
+        }
+        List<String> indexedIds = mAppSearchHelper.mIndexedContacts.stream().map(
+                Person::getId).collect(Collectors.toList());
+        assertThat(indexedIds).isEqualTo(ids);
+        verify(spyContentResolver, times(3)).query(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    public void testContactsIndexerImpl_batchUpdateContactsNullCursor_shouldNotContinueOnError() {
+        MockContentResolver spyContentResolver = spy(mMockContentResolver);
+        doCallRealMethod()
+                .doReturn(null)
+                .doCallRealMethod()
+                .when(spyContentResolver).query(any(), any(), any(), any(), any());
+        Context spyContext = new ContextWrapper(ApplicationProvider.getApplicationContext()) {
+            @Override
+            public ContentResolver getContentResolver() {
+                return spyContentResolver;
+            }
+        };
+        ContactsIndexerImpl contactsIndexerImpl = new ContactsIndexerImpl(spyContext,
+                mAppSearchHelper);
+
+        // Insert contacts
+        ContentResolver resolver = mContext.getContentResolver();
+        ContentValues dummyValues = new ContentValues();
+        int totalNum = 3 * ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2;
+        for (int i = 0; i < totalNum; i++) {
+            resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
+        }
+
+        // Index three batches of contacts
+        List<String> wantedIds = new ArrayList<>(totalNum);
+        for (int i = 0; i < totalNum; ++i) {
+            wantedIds.add(String.valueOf(i));
+        }
+        CompletableFuture<Void> future = contactsIndexerImpl.batchUpdateContactsAsync(wantedIds,
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ false);
+        ExecutionException thrown = assertThrows(ExecutionException.class, future::get);
+        assertThat(thrown).hasMessageThat().contains(
+                "Cursor was returned as null while querying CP2.");
+
+        // Contacts indexer should have stopped indexing on/before the second batch
+        assertThat(mAppSearchHelper.mIndexedContacts.size()).isAtMost(
+                ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2);
+        verify(spyContentResolver, times(2)).query(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    public void testContactsIndexerImpl_batchUpdateContactsThrows_shouldContinueOnError()
+            throws Exception {
+        MockContentResolver spyContentResolver = spy(mMockContentResolver);
+        doCallRealMethod()
+                .doThrow(new RuntimeException("mock exception"))
+                .doCallRealMethod()
+                .when(spyContentResolver).query(any(), any(), any(), any(), any());
+        Context spyContext = new ContextWrapper(ApplicationProvider.getApplicationContext()) {
+            @Override
+            public ContentResolver getContentResolver() {
+                return spyContentResolver;
+            }
+        };
+        ContactsIndexerImpl contactsIndexerImpl = new ContactsIndexerImpl(spyContext,
+                mAppSearchHelper);
+
+        // Insert contacts
+        ContentResolver resolver = mContext.getContentResolver();
+        ContentValues dummyValues = new ContentValues();
+        int totalNum = 3 * ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2;
+        for (int i = 0; i < totalNum; i++) {
+            resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
+        }
+
+        // Index three batches of contacts
+        List<String> wantedIds = new ArrayList<>(totalNum);
+        for (int i = 0; i < totalNum; ++i) {
+            wantedIds.add(String.valueOf(i));
+        }
+        contactsIndexerImpl.batchUpdateContactsAsync(wantedIds,
+                mUpdateStats, /*/*shouldKeepUpdatingOnError=*/ true).get();
+
+        // Contacts indexer should have failed on the second batch but continued to the third batch
+        List<String> ids = new ArrayList<>(
+                2 * ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2);
+        for (int i = 0; i < ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2; ++i) {
+            ids.add(String.valueOf(i));
+        }
+        for (int i = 2 * ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2; i < totalNum; ++i) {
+            ids.add(String.valueOf(i));
+        }
+        List<String> indexedIds = mAppSearchHelper.mIndexedContacts.stream().map(
+                Person::getId).collect(Collectors.toList());
+        assertThat(indexedIds).isEqualTo(ids);
+        verify(spyContentResolver, times(3)).query(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    public void testContactsIndexerImpl_batchUpdateContactsThrows_shouldNotContinueOnError() {
+        MockContentResolver spyContentResolver = spy(mMockContentResolver);
+        doCallRealMethod()
+                .doThrow(new RuntimeException("mock exception"))
+                .doCallRealMethod()
+                .when(spyContentResolver).query(any(), any(), any(), any(), any());
+        Context spyContext = new ContextWrapper(ApplicationProvider.getApplicationContext()) {
+            @Override
+            public ContentResolver getContentResolver() {
+                return spyContentResolver;
+            }
+        };
+        ContactsIndexerImpl contactsIndexerImpl = new ContactsIndexerImpl(spyContext,
+                mAppSearchHelper);
+
+        // Insert contacts
+        ContentResolver resolver = mContext.getContentResolver();
+        ContentValues dummyValues = new ContentValues();
+        int totalNum = 3 * ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2;
+        for (int i = 0; i < totalNum; i++) {
+            resolver.insert(ContactsContract.Contacts.CONTENT_URI, dummyValues);
+        }
+
+        // Index three batches of contacts
+        List<String> wantedIds = new ArrayList<>(totalNum);
+        for (int i = 0; i < totalNum; ++i) {
+            wantedIds.add(String.valueOf(i));
+        }
+        CompletableFuture<Void> future = contactsIndexerImpl.batchUpdateContactsAsync(wantedIds,
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ false);
+        ExecutionException thrown = assertThrows(ExecutionException.class, future::get);
+        assertThat(thrown).hasMessageThat().contains("mock exception");
+
+        // Contacts indexer should have stopped indexing on/before the second batch
+        assertThat(mAppSearchHelper.mIndexedContacts.size()).isAtMost(
+                ContactsIndexerImpl.NUM_CONTACTS_PER_BATCH_FOR_CP2);
+        verify(spyContentResolver, times(2)).query(any(), any(), any(), any(), any());
     }
 }
