@@ -175,6 +175,9 @@ public class EnterpriseSearchSpecTransformerTest {
         assertThat(transformedSpec.getJoinSpec().getNestedSearchSpec()
                 .getProjections().get(Person.SCHEMA_TYPE)).containsExactlyElementsIn(
                 PersonEnterpriseTransformer.PERSON_ACCESSIBLE_PROPERTIES_SET);
+        assertThat(transformedSpec.getJoinSpec().getNestedSearchSpec()
+                .getFilterProperties().get(Person.SCHEMA_TYPE)).containsExactlyElementsIn(
+                PersonEnterpriseTransformer.PERSON_ACCESSIBLE_PROPERTIES_SET);
     }
 
     private List<String> getIntersection(Collection<String> col1, Collection<String> col2) {
