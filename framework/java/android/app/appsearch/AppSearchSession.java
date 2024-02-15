@@ -31,6 +31,7 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
@@ -834,9 +835,10 @@ public final class AppSearchSession implements Closeable {
         if (mIsMutated && !mIsClosed) {
             try {
                 mService.persistToDisk(
-                        mCallerAttributionSource,
-                        mUserHandle,
-                        /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime());
+                        new PersistToDiskAidlRequest(
+                                mCallerAttributionSource,
+                                mUserHandle,
+                                /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()));
                 mIsClosed = true;
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to close the AppSearchSession", e);

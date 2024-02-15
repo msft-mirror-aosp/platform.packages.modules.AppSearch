@@ -27,6 +27,7 @@ import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
@@ -414,14 +415,10 @@ interface IAppSearchManager {
     /**
      * Persists all update/delete requests to the disk.
      *
-     * @param callerAttributionSource The permission identity of the package to persist to disk for
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link PersistToDiskAidlRequest} contains the input parameters for set schema
+     *     operation.
      */
-    void persistToDisk(
-        in AppSearchAttributionSource callerAttributionSource,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis) = 17;
+    void persistToDisk(in PersistToDiskAidlRequest request) = 17;
 
     /**
      * Adds an observer to monitor changes within the databases owned by {@code observedPackage} if
