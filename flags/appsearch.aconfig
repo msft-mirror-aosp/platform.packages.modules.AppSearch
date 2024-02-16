@@ -49,7 +49,7 @@ flag {
     name: "enable_set_publicly_visible_schema"
     namespace: "appsearch"
     description: "Enable setPubliclyVisibleSchema API in SetSchemaRequest."
-    bug: "275592563"
+    bug: "325262525"
     is_fixed_read_only: true
 }
 

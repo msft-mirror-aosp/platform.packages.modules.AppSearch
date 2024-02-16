@@ -1023,12 +1023,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
          *
          * @param searchSourceLogTag A String to indicate the source caller of this search. It is
          *     used to label the search statsd for performance analysis. It is not the tag we are
-         *     using in {@link android.util.Log}.
+         *     using in {@link android.util.Log}. The length of the teg should between 1 and 100.
          */
         @NonNull
         @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_SET_SEARCH_SOURCE_LOG_TAG)
         public Builder setSearchSourceLogTag(@NonNull String searchSourceLogTag) {
             Preconditions.checkStringNotEmpty(searchSourceLogTag);
+            Preconditions.checkArgument(
+                    searchSourceLogTag.length() <= 100,
+                    "The maximum supported tag length is 100. This tag is too long: "
+                            + searchSourceLogTag.length());
             resetIfBuilt();
             mSearchSourceLogTag = searchSourceLogTag;
             return this;
