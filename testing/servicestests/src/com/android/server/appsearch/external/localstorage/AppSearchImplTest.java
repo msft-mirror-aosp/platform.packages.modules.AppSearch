@@ -4767,19 +4767,22 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return callerAccess.getCallingPackageName().equals("visiblePackage");
-            }
+        VisibilityChecker mockVisibilityChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return callerAccess.getCallingPackageName().equals("visiblePackage");
+                    }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
 
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5345,19 +5348,22 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return prefixedSchema.endsWith("VisibleType");
-            }
+        VisibilityChecker mockVisibilityChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return prefixedSchema.endsWith("VisibleType");
+                    }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
 
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5420,25 +5426,29 @@ public class AppSearchImplTest {
                         "A", ImmutableSet.of("A"),
                         "B", ImmutableSet.of("A", "B"),
                         "C", ImmutableSet.of("A", "B", "C"));
-        final VisibilityChecker publicAclMockChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                InternalVisibilityConfig param = visibilityStore.getVisibility(prefixedSchema);
-                return packageCanSee
-                        .get(callerAccess.getCallingPackageName())
-                        .contains(
-                                param.getVisibilityConfig()
-                                        .getPubliclyVisibleTargetPackage()
-                                        .getPackageName());
-            }
+        final VisibilityChecker publicAclMockChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        InternalVisibilityConfig param =
+                                visibilityStore.getVisibility(prefixedSchema);
+                        return packageCanSee
+                                .get(callerAccess.getCallingPackageName())
+                                .contains(
+                                        param.getVisibilityConfig()
+                                                .getPubliclyVisibleTargetPackage()
+                                                .getPackageName());
+                    }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
 
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5521,25 +5531,29 @@ public class AppSearchImplTest {
                         "A", ImmutableSet.of("A"),
                         "B", ImmutableSet.of("A", "B"),
                         "C", ImmutableSet.of("A", "B", "C"));
-        final VisibilityChecker publicAclMockChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                InternalVisibilityConfig param = visibilityStore.getVisibility(prefixedSchema);
-                return packageCanSee
-                        .get(callerAccess.getCallingPackageName())
-                        .contains(
-                                param.getVisibilityConfig()
-                                        .getPubliclyVisibleTargetPackage()
-                                        .getPackageName());
-            }
+        final VisibilityChecker publicAclMockChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        InternalVisibilityConfig param =
+                                visibilityStore.getVisibility(prefixedSchema);
+                        return packageCanSee
+                                .get(callerAccess.getCallingPackageName())
+                                .contains(
+                                        param.getVisibilityConfig()
+                                                .getPubliclyVisibleTargetPackage()
+                                                .getPackageName());
+                    }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
 
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -5849,19 +5863,22 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.listening.package";
 
         // Make a visibility checker that allows only fakeListeningPackage.
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return callerAccess.getCallingPackageName().equals(fakeListeningPackage);
-            }
+        final VisibilityChecker visibilityChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return callerAccess.getCallingPackageName().equals(fakeListeningPackage);
+                    }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -6268,32 +6285,35 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.listening.package";
 
         // Make a fake visibility checker that actually looks at visibility store
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                if (!callerAccess.getCallingPackageName().equals(fakeListeningPackage)) {
-                    return false;
-                }
+        final VisibilityChecker visibilityChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        if (!callerAccess.getCallingPackageName().equals(fakeListeningPackage)) {
+                            return false;
+                        }
 
-                for (PackageIdentifier packageIdentifier :
-                        visibilityStore
-                                .getVisibility(prefixedSchema)
-                                .getVisibilityConfig()
-                                .getVisibleToPackages()) {
-                    if (packageIdentifier.getPackageName().equals(fakeListeningPackage)) {
-                        return true;
+                        for (PackageIdentifier packageIdentifier :
+                                visibilityStore
+                                        .getVisibility(prefixedSchema)
+                                        .getVisibilityConfig()
+                                        .getAllowedPackages()) {
+                            if (packageIdentifier.getPackageName().equals(fakeListeningPackage)) {
+                                return true;
+                            }
+                        }
+                        return false;
                     }
-                }
-                return false;
-            }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -6463,21 +6483,23 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.listening.package";
 
         // Make a visibility checker that allows fakeListeningPackage access only to Type2.
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return  callerAccess.getCallingPackageName().equals(fakeListeningPackage)
-                        && prefixedSchema.endsWith("Type2");
-            }
+        final VisibilityChecker visibilityChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return callerAccess.getCallingPackageName().equals(fakeListeningPackage)
+                                && prefixedSchema.endsWith("Type2");
+                    }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
-
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -6573,21 +6595,23 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.listening.package";
 
         // Make a visibility checker that allows fakeListeningPackage access only to Type2.
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                return  callerAccess.getCallingPackageName().equals(fakeListeningPackage)
-                        && prefixedSchema.endsWith("Type2");
-            }
+        final VisibilityChecker visibilityChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return callerAccess.getCallingPackageName().equals(fakeListeningPackage)
+                                && prefixedSchema.endsWith("Type2");
+                    }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
-
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
@@ -6669,30 +6693,32 @@ public class AppSearchImplTest {
 
         final String fakePackage2 = "com.fake.listening.package2";
 
-        final VisibilityChecker visibilityChecker = new VisibilityChecker() {
-            @Override
-            public boolean isSchemaSearchableByCaller(@NonNull CallerAccess callerAccess,
-                    @NonNull String packageName, @NonNull String prefixedSchema,
-                    @NonNull VisibilityStore visibilityStore) {
-                if (prefixedSchema.endsWith("Type1")) {
-                    return callerAccess.getCallingPackageName().equals(fakePackage1);
-                } else if (prefixedSchema.endsWith("Type2")) {
-                    return callerAccess.getCallingPackageName().equals(fakePackage2);
-                } else if (prefixedSchema.endsWith("Type3")) {
-                    return false;
-                } else if (prefixedSchema.endsWith("Type4")) {
-                    return true;
-                } else {
-                    throw new IllegalArgumentException(prefixedSchema);
-                }
-            }
+        final VisibilityChecker visibilityChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        if (prefixedSchema.endsWith("Type1")) {
+                            return callerAccess.getCallingPackageName().equals(fakePackage1);
+                        } else if (prefixedSchema.endsWith("Type2")) {
+                            return callerAccess.getCallingPackageName().equals(fakePackage2);
+                        } else if (prefixedSchema.endsWith("Type3")) {
+                            return false;
+                        } else if (prefixedSchema.endsWith("Type4")) {
+                            return true;
+                        } else {
+                            throw new IllegalArgumentException(prefixedSchema);
+                        }
+                    }
 
-            @Override
-            public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
-                return false;
-            }
-        };
-
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(

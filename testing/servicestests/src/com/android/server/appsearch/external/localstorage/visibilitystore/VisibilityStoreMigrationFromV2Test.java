@@ -185,9 +185,9 @@ public class VisibilityStoreMigrationFromV2Test {
                         /*androidVOverlayDocument=*/ null);
 
         assertThat(actualConfig.isNotDisplayedBySystem()).isTrue();
-        assertThat(actualConfig.getVisibilityConfig().getVisibleToPackages())
+        assertThat(actualConfig.getVisibilityConfig().getAllowedPackages())
                 .containsExactly(packageIdentifierFoo, packageIdentifierBar);
-        assertThat(actualConfig.getVisibilityConfig().getVisibleToPermissions())
+        assertThat(actualConfig.getVisibilityConfig().getRequiredPermissions())
                 .containsExactlyElementsIn(
                         ImmutableSet.of(
                                 ImmutableSet.of(
