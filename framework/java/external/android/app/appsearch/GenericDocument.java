@@ -1048,7 +1048,10 @@ public class GenericDocument {
          * Sets the ID of this document, changing the value provided in the constructor. No special
          * values are reserved or understood by the infrastructure.
          *
-         * <p>Document IDs are unique within a namespace.
+         * <p>Document IDs are unique within the combination of package, database, and namespace.
+         *
+         * <p>Setting a document with a duplicate id will overwrite the original document with the
+         * new document, enforcing uniqueness within the above constraint.
          */
         @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS)
         @CanIgnoreReturnValue
@@ -1289,6 +1292,12 @@ public class GenericDocument {
          * Clears the value for the property with the given name.
          *
          * <p>Note that this method does not support property paths.
+         *
+         * <p>You should check for the existence of the property in {@link #getPropertyNames} if you
+         * need to make sure the property being cleared actually exists.
+         *
+         * <p>If the string passed is an invalid or nonexistent property, no error message or
+         * behavior will be observed.
          *
          * @param name The name of the property to clear.
          */
