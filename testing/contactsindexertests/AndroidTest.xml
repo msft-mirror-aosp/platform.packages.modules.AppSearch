@@ -20,6 +20,7 @@
     <option name="config-descriptor:metadata" key="parameter" value="not_instant_app" />
     <option name="config-descriptor:metadata" key="parameter" value="not_multi_abi" />
     <option name="config-descriptor:metadata" key="parameter" value="secondary_user" />
+    <option name="config-descriptor:metadata" key="parameter" value="multiuser" />
 
     <target_preparer class="com.android.tradefed.targetprep.suite.SuiteApkInstaller">
         <option name="cleanup-apks" value="true"/>
@@ -28,6 +29,10 @@
 
     <test class="com.android.tradefed.testtype.AndroidJUnitTest">
         <option name="package" value="com.android.appsearch.contactsindexertests"/>
+        <option name="exclude-annotation"
+            value="com.android.bedstead.harrier.annotations.RequireRunOnWorkProfile" />
+        <option name="exclude-annotation"
+            value="com.android.bedstead.harrier.annotations.RequireRunOnSecondaryUser" />
     </test>
 
     <object type="module_controller"
