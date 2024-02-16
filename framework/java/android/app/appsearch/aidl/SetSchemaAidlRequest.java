@@ -16,6 +16,7 @@
 
 package android.app.appsearch.aidl;
 
+import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSession;
@@ -59,7 +60,7 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
     @Field(id = 7, getter = "getUserHandle")
     private final UserHandle mUserHandle;
     @Field(id = 8, getter = "getBinderCallStartTimeMillis")
-    private final long mBinderCallStartTimeMillis;
+    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
     @Field(id = 9, getter = "getSchemaMigrationCallType")
     private final int mSchemaMigrationCallType;
 
@@ -72,7 +73,7 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
             @Param(id = 5) boolean forceOverride,
             @Param(id = 6) int schemaVersion,
             @Param(id = 7) @NonNull UserHandle userHandle,
-            @Param(id = 8) long binderCallStartTimeMillis,
+            @Param(id = 8) @ElapsedRealtimeLong long binderCallStartTimeMillis,
             @Param(id = 9) int schemaMigrationCallType) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
         mDatabaseName = Objects.requireNonNull(databaseName);
@@ -118,6 +119,7 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
         return mUserHandle;
     }
 
+    @ElapsedRealtimeLong
     public long getBinderCallStartTimeMillis() {
         return mBinderCallStartTimeMillis;
     }

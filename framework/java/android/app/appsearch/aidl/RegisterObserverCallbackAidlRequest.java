@@ -18,6 +18,7 @@ package android.app.appsearch.aidl;
 
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
+import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
@@ -26,14 +27,14 @@ import android.os.UserHandle;
 import java.util.Objects;
 
 /**
- * Encapsulates a request to make a binder call to get the schema for a given database.
+ * Encapsulates a request to make a binder call to add an observer monitor changes in the database.
  * @hide
  */
-@SafeParcelable.Class(creator = "GetSchemaAidlRequestCreator")
-public class GetSchemaAidlRequest extends AbstractSafeParcelable {
+@SafeParcelable.Class(creator = "RegisterObserverCallbackAidlRequestCreator")
+public class RegisterObserverCallbackAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final GetSchemaAidlRequestCreator CREATOR =
-            new GetSchemaAidlRequestCreator();
+    public static final RegisterObserverCallbackAidlRequestCreator CREATOR =
+            new RegisterObserverCallbackAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
@@ -42,30 +43,26 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
     @Field(id = 2, getter = "getTargetPackageName")
     private final String mTargetPackageName;
     @NonNull
-    @Field(id = 3, getter = "getDatabaseName")
-    private final String mDatabaseName;
+    @Field(id = 3, getter = "getObserverSpec")
+    private final ObserverSpec mObserverSpec;
     @NonNull
     @Field(id = 4, getter = "getUserHandle")
     private final UserHandle mUserHandle;
     @Field(id = 5, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
-    @Field(id = 6, getter = "isForEnterprise")
-    private final boolean mIsForEnterprise;
 
     @Constructor
-    public GetSchemaAidlRequest(
+    public RegisterObserverCallbackAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
             @Param(id = 2) @NonNull String targetPackageName,
-            @Param(id = 3) @NonNull String databaseName,
+            @Param(id = 3) @NonNull ObserverSpec observerSpec,
             @Param(id = 4) @NonNull UserHandle userHandle,
-            @Param(id = 5) @ElapsedRealtimeLong long binderCallStartTimeMillis,
-            @Param(id = 6) boolean isForEnterprise) {
+            @Param(id = 5) @ElapsedRealtimeLong long binderCallStartTimeMillis) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
         mTargetPackageName = Objects.requireNonNull(targetPackageName);
-        mDatabaseName = Objects.requireNonNull(databaseName);
+        mObserverSpec = Objects.requireNonNull(observerSpec);
         mUserHandle = Objects.requireNonNull(userHandle);
         mBinderCallStartTimeMillis = binderCallStartTimeMillis;
-        mIsForEnterprise = isForEnterprise;
     }
 
     @NonNull
@@ -79,8 +76,8 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
     }
 
     @NonNull
-    public String getDatabaseName() {
-        return mDatabaseName;
+    public ObserverSpec getObserverSpec() {
+        return mObserverSpec;
     }
 
     @NonNull
@@ -93,12 +90,8 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
         return mBinderCallStartTimeMillis;
     }
 
-    public boolean isForEnterprise() {
-        return mIsForEnterprise;
-    }
-
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        GetSchemaAidlRequestCreator.writeToParcel(this, dest, flags);
+        RegisterObserverCallbackAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }

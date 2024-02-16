@@ -58,7 +58,9 @@ import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
+import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
@@ -2064,16 +2066,9 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public AppSearchResultParcel<Void> registerObserverCallback(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String targetPackageName,
-                @NonNull ObserverSpec observerSpec,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull RegisterObserverCallbackAidlRequest request,
                 @NonNull IAppSearchObserverProxy observerProxyStub) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(targetPackageName);
-            Objects.requireNonNull(observerSpec);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(observerProxyStub);
 
             @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -2086,12 +2081,12 @@ public class AppSearchManagerService extends SystemService {
             // AppSearch APIs
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
-                        callerAttributionSource, userHandle);
-                callingPackageName =
-                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                        request.getCallerAttributionSource(), request.getUserHandle());
+                callingPackageName = Objects.requireNonNull(
+                        request.getCallerAttributionSource().getPackageName());
                 if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                         CallStats.CALL_TYPE_REGISTER_OBSERVER_CALLBACK, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1)) {
                     return new AppSearchResultParcel<>(
                             AppSearchResult.newFailedResult(RESULT_DENIED, null));
@@ -2108,17 +2103,18 @@ public class AppSearchManagerService extends SystemService {
                     final AppSearchUserInstance finalInstance = instance;
                     observerProxyStub.asBinder().linkToDeath(
                             () -> finalInstance.getAppSearchImpl()
-                                    .unregisterObserverCallback(targetPackageName, observerProxy),
+                                    .unregisterObserverCallback(
+                                            request.getTargetPackageName(), observerProxy),
                             /* flags= */ 0);
 
                     // Register the observer.
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callingPackageName);
                     instance.getAppSearchImpl().registerObserverCallback(
-                            new FrameworkCallerAccess(callerAttributionSource,
+                            new FrameworkCallerAccess(request.getCallerAttributionSource(),
                                     callerHasSystemAccess, /*isForEnterprise=*/ false),
-                            targetPackageName,
-                            observerSpec,
+                            request.getTargetPackageName(),
+                            request.getObserverSpec(),
                             mExecutorManager.getOrCreateUserExecutor(targetUser),
                             new AppSearchObserverProxy(observerProxyStub));
                     ++operationSuccessCount;
@@ -2134,7 +2130,8 @@ public class AppSearchManagerService extends SystemService {
             } finally {
                 if (instance != null) {
                     int estimatedBinderLatencyMillis =
-                            2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                            2 * (int) (totalLatencyStartTimeMillis
+                                    - request.getBinderCallStartTimeMillis());
                     int totalLatencyMillis =
                             (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                     instance.getLogger().logStats(new CallStats.Builder()
@@ -2155,14 +2152,9 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public AppSearchResultParcel<Void> unregisterObserverCallback(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String observedPackage,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull UnregisterObserverCallbackAidlRequest request,
                 @NonNull IAppSearchObserverProxy observerProxyStub) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(observedPackage);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(observerProxyStub);
 
             @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -2174,12 +2166,12 @@ public class AppSearchManagerService extends SystemService {
             // AppSearch APIs
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
-                        callerAttributionSource, userHandle);
-                String callingPackageName =
-                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                        request.getCallerAttributionSource(), request.getUserHandle());
+                String callingPackageName = Objects.requireNonNull(
+                        request.getCallerAttributionSource().getPackageName());
                 if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                         CallStats.CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1)) {
                     return new AppSearchResultParcel<>(
                             AppSearchResult.newFailedResult(RESULT_DENIED, null));
@@ -2188,7 +2180,7 @@ public class AppSearchManagerService extends SystemService {
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     instance.getAppSearchImpl().unregisterObserverCallback(
-                            observedPackage,
+                            request.getObservedPackage(),
                             new AppSearchObserverProxy(observerProxyStub));
                     ++operationSuccessCount;
                     return new AppSearchResultParcel<>(AppSearchResult.newSuccessfulResult(null));
@@ -2203,10 +2195,12 @@ public class AppSearchManagerService extends SystemService {
             } finally {
                 if (instance != null) {
                     int estimatedBinderLatencyMillis =
-                            2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                            2 * (int) (totalLatencyStartTimeMillis
+                                    - request.getBinderCallStartTimeMillis());
                     int totalLatencyMillis =
                             (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
-                    String callingPackageName = callerAttributionSource.getPackageName();
+                    String callingPackageName = request.getCallerAttributionSource()
+                            .getPackageName();
                     instance.getLogger().logStats(new CallStats.Builder()
                             .setPackageName(callingPackageName)
                             .setStatusCode(statusCode)
