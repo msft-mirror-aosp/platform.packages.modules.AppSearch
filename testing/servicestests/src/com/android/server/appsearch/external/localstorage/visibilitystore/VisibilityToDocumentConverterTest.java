@@ -22,8 +22,8 @@ import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
+import android.app.appsearch.SchemaVisibilityConfig;
 import android.app.appsearch.SetSchemaRequest;
-import android.app.appsearch.VisibilityConfig;
 
 import com.android.server.appsearch.appsearch.proto.AndroidVOverlayProto;
 import com.android.server.appsearch.appsearch.proto.PackageIdentifierProto;
@@ -52,12 +52,12 @@ public class VisibilityToDocumentConverterTest {
         Arrays.fill(cert3, (byte) 3);
         Arrays.fill(cert4, (byte) 4);
 
-        VisibilityConfig visibleToConfig =
-                new VisibilityConfig.Builder()
-                        .addVisibleToPackage(new PackageIdentifier("com.example.test1", cert1))
+        SchemaVisibilityConfig visibleToConfig =
+                new SchemaVisibilityConfig.Builder()
+                        .addAllowedPackage(new PackageIdentifier("com.example.test1", cert1))
                         .setPubliclyVisibleTargetPackage(
                                 new PackageIdentifier("com.example.test2", cert2))
-                        .addVisibleToPermissions(ImmutableSet.of(1, 2))
+                        .addRequiredPermissions(ImmutableSet.of(1, 2))
                         .build();
         SetSchemaRequest setSchemaRequest =
                 new SetSchemaRequest.Builder()
@@ -257,17 +257,17 @@ public class VisibilityToDocumentConverterTest {
         // Check that the rebuild stayed the same
         assertThat(rebuild.getSchemaType()).isEqualTo("someSchema");
         assertThat(rebuild.isNotDisplayedBySystem()).isTrue();
-        assertThat(rebuild.getVisibilityConfig().getVisibleToPermissions())
+        assertThat(rebuild.getVisibilityConfig().getRequiredPermissions())
                 .containsExactly(ImmutableSet.of(3, 4));
-        assertThat(rebuild.getVisibilityConfig().getVisibleToPackages())
+        assertThat(rebuild.getVisibilityConfig().getAllowedPackages())
                 .containsExactly(new PackageIdentifier("com.example.test3", cert3));
         assertThat(rebuild.getVisibilityConfig().getPubliclyVisibleTargetPackage())
                 .isEqualTo(new PackageIdentifier("com.example.test4", cert4));
 
-        VisibilityConfig expectedVisibleToConfig =
-                new VisibilityConfig.Builder()
-                        .addVisibleToPermissions(ImmutableSet.of(1, 2))
-                        .addVisibleToPackage(new PackageIdentifier("com.example.test1", cert1))
+        SchemaVisibilityConfig expectedVisibleToConfig =
+                new SchemaVisibilityConfig.Builder()
+                        .addRequiredPermissions(ImmutableSet.of(1, 2))
+                        .addAllowedPackage(new PackageIdentifier("com.example.test1", cert1))
                         .setPubliclyVisibleTargetPackage(
                                 new PackageIdentifier("com.example.test2", cert2))
                         .build();
@@ -292,21 +292,21 @@ public class VisibilityToDocumentConverterTest {
         Arrays.fill(cert6, (byte) 6);
         Arrays.fill(cert7, (byte) 7);
 
-        VisibilityConfig config1 =
-                new VisibilityConfig.Builder()
-                        .addVisibleToPackage(new PackageIdentifier("com.example.test1", cert1))
+        SchemaVisibilityConfig config1 =
+                new SchemaVisibilityConfig.Builder()
+                        .addAllowedPackage(new PackageIdentifier("com.example.test1", cert1))
                         .setPubliclyVisibleTargetPackage(
                                 new PackageIdentifier("com.example.test2", cert2))
-                        .addVisibleToPermissions(ImmutableSet.of(1, 2))
+                        .addRequiredPermissions(ImmutableSet.of(1, 2))
                         .build();
-        VisibilityConfig config2 =
-                new VisibilityConfig.Builder()
-                        .addVisibleToPackage(new PackageIdentifier("com.example.test3", cert3))
-                        .addVisibleToPermissions(ImmutableSet.of(3, 4))
+        SchemaVisibilityConfig config2 =
+                new SchemaVisibilityConfig.Builder()
+                        .addAllowedPackage(new PackageIdentifier("com.example.test3", cert3))
+                        .addRequiredPermissions(ImmutableSet.of(3, 4))
                         .build();
-        VisibilityConfig config3 =
-                new VisibilityConfig.Builder()
-                        .addVisibleToPackage(new PackageIdentifier("com.example.test4", cert4))
+        SchemaVisibilityConfig config3 =
+                new SchemaVisibilityConfig.Builder()
+                        .addAllowedPackage(new PackageIdentifier("com.example.test4", cert4))
                         .setPubliclyVisibleTargetPackage(
                                 new PackageIdentifier("com.example.test5", cert5))
                         .build();

@@ -38,10 +38,7 @@ import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.Context;
-import android.content.ContextWrapper;
 import android.content.pm.UserInfo;
-import android.os.UserHandle;
 import android.provider.ContactsContract;
 
 import androidx.annotation.NonNull;
