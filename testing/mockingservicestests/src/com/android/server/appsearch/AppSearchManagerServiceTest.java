@@ -68,6 +68,8 @@ import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
@@ -527,9 +529,11 @@ public class AppSearchManagerServiceTest {
     public void testRemoveByDocumentIdStatsLogging() throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.removeByDocumentId(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByDocumentIdAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID);
@@ -539,9 +543,11 @@ public class AppSearchManagerServiceTest {
     public void testRemoveByQueryStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.removeByQuery(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByQueryAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH);
@@ -1408,17 +1414,21 @@ public class AppSearchManagerServiceTest {
     private void verifyRemoveByDocumentIdResult(int resultCode) throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.removeByDocumentId(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByDocumentIdAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID, callback.get());
     }
 
     private void verifyRemoveByQueryResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.removeByQuery(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
+                new RemoveByQueryAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME),
                 callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH,
                 callback.get());
