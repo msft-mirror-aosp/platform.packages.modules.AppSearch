@@ -26,7 +26,7 @@ import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
-import android.app.appsearch.VisibilityConfig;
+import android.app.appsearch.SchemaVisibilityConfig;
 import android.app.appsearch.VisibilityPermissionConfig;
 import android.app.appsearch.exceptions.AppSearchException;
 
@@ -228,10 +228,10 @@ public class VisibilityStoreTest {
     @Test
     public void testSetGetAndRemoveOverlayVisibility() throws Exception {
         String prefix = PrefixUtil.createPrefix("packageName", "databaseName");
-        VisibilityConfig nestedvisibilityConfig =
-                new VisibilityConfig.Builder()
-                        .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .addVisibleToPermissions(ImmutableSet.of(1, 2))
+        SchemaVisibilityConfig nestedvisibilityConfig =
+                new SchemaVisibilityConfig.Builder()
+                        .addAllowedPackage(new PackageIdentifier("pkgBar", new byte[32]))
+                        .addRequiredPermissions(ImmutableSet.of(1, 2))
                         .build();
 
         InternalVisibilityConfig visibilityConfig =
@@ -368,8 +368,8 @@ public class VisibilityStoreTest {
                 new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToConfig(
-                                new VisibilityConfig.Builder()
-                                        .addVisibleToPermissions(ImmutableSet.of(1))
+                                new SchemaVisibilityConfig.Builder()
+                                        .addRequiredPermissions(ImmutableSet.of(1))
                                         .build())
                         .build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityConfig));

@@ -25,7 +25,6 @@ import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.InternalVisibilityConfig;
-import android.app.appsearch.VisibilityConfig;
 import android.app.appsearch.VisibilityPermissionConfig;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.util.LogUtil;
@@ -48,10 +47,11 @@ import java.util.Set;
  * Stores all visibility settings for all databases that AppSearchImpl knows about. Persists the
  * visibility settings and reloads them on initialization.
  *
- * <p>The VisibilityStore creates a {@link VisibilityConfig} for each schema. This document holds
- * the visibility settings that apply to that schema. The VisibilityStore also creates a schema for
- * these documents and has its own package and database so that its data doesn't interfere with any
- * clients' data. It persists the document and schema through AppSearchImpl.
+ * <p>The VisibilityStore creates a {@link InternalVisibilityConfig} for each schema. This config
+ * holds the visibility settings that apply to that schema. The VisibilityStore also creates a
+ * schema and documents for these {@link InternalVisibilityConfig} and has its own package and
+ * database so that its data doesn't interfere with any clients' data. It persists the document and
+ * schema through AppSearchImpl.
  *
  * <p>These visibility settings won't be used in AppSearch Jetpack, we only store them for clients
  * to look up.
@@ -245,14 +245,14 @@ public class VisibilityStore {
         }
     }
 
-    /** Gets the {@link VisibilityConfig} for the given prefixed schema type. */
+    /** Gets the {@link InternalVisibilityConfig} for the given prefixed schema type. */
     @Nullable
     public InternalVisibilityConfig getVisibility(@NonNull String prefixedSchemaType) {
         return mVisibilityConfigMap.get(prefixedSchemaType);
     }
 
     /**
-     * Loads all stored latest {@link VisibilityConfig} from Icing, and put them into {@link
+     * Loads all stored latest {@link InternalVisibilityConfig} from Icing, and put them into {@link
      * #mVisibilityConfigMap}.
      */
     private void loadVisibilityConfigMap() throws AppSearchException {
@@ -510,7 +510,7 @@ public class VisibilityStore {
     }
 
     /**
-     * Whether the given {@link VisibilityConfig} contains Android V overlay settings.
+     * Whether the given {@link InternalVisibilityConfig} contains Android V overlay settings.
      *
      * <p>Android V overlay {@link VisibilityToDocumentConverter#ANDROID_V_OVERLAY_SCHEMA} contains
      * public acl and visible to config.
