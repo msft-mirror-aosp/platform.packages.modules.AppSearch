@@ -50,6 +50,8 @@ import android.app.appsearch.StorageInfo;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.GetSchemaAidlRequest;
+import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
@@ -468,44 +470,38 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getSchema(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String targetPackageName,
-                @NonNull String databaseName,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
-                boolean isForEnterprise,
+                @NonNull GetSchemaAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(targetPackageName);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
             String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    Objects.requireNonNull(request.getCallerAttributionSource().getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             // Get the enterprise user for enterprise calls
-            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(isForEnterprise, targetUser);
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(request.isForEnterprise(),
+                    targetUser);
             if (userToQuery == null) {
                 // Return an empty response if we tried to and couldn't get the enterprise user
                 invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(
                         new GetSchemaResponse.Builder().build()));
                 return;
             }
-            boolean global = isGlobalCall(callingPackageName, targetPackageName, isForEnterprise);
+            boolean global = isGlobalCall(callingPackageName, request.getTargetPackageName(),
+                    request.isForEnterprise());
             // We deny based on the calling package and calling database names. If the calling
             // package does not match the target package, then the call is global and the target
             // database is not a calling database.
-            String callingDatabaseName = global ? null : databaseName;
+            String callingDatabaseName = global ? null : request.getDatabaseName();
             int callType = global ? CallStats.CALL_TYPE_GLOBAL_GET_SCHEMA
                     : CallStats.CALL_TYPE_GET_SCHEMA;
             if (checkCallDenied(callingPackageName, callingDatabaseName, callType, callback,
-                    targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    targetUser, request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -522,10 +518,10 @@ public class AppSearchManagerService extends SystemService {
                             .doesCallerHaveSystemAccess(callingPackageName);
                     GetSchemaResponse response =
                             instance.getAppSearchImpl().getSchema(
-                                    targetPackageName,
-                                    databaseName,
-                                    new FrameworkCallerAccess(callerAttributionSource,
-                                            callerHasSystemAccess, isForEnterprise));
+                                    request.getTargetPackageName(),
+                                    request.getDatabaseName(),
+                                    new FrameworkCallerAccess(request.getCallerAttributionSource(),
+                                            callerHasSystemAccess, request.isForEnterprise()));
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback, AppSearchResult.newSuccessfulResult(response));
@@ -537,12 +533,13 @@ public class AppSearchManagerService extends SystemService {
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(callType)
@@ -558,34 +555,29 @@ public class AppSearchManagerService extends SystemService {
             });
             if (!callAccepted) {
                 logRateLimitedOrCallDeniedCallStats(callingPackageName, callingDatabaseName,
-                        callType, targetUser, binderCallStartTimeMillis,
+                        callType, targetUser, request.getBinderCallStartTimeMillis(),
                         totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void getNamespaces(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull GetNamespacesAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
             String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    Objects.requireNonNull(request.getCallerAttributionSource().getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_GET_NAMESPACES, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -599,7 +591,7 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     List<String> namespaces =
                             instance.getAppSearchImpl().getNamespaces(
-                                    callingPackageName, databaseName);
+                                    callingPackageName, request.getDatabaseName());
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback, AppSearchResult.newSuccessfulResult(namespaces));
@@ -611,12 +603,13 @@ public class AppSearchManagerService extends SystemService {
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_GET_NAMESPACES)
@@ -631,9 +624,10 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
-                        CallStats.CALL_TYPE_GET_NAMESPACES, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
+                        CallStats.CALL_TYPE_GET_NAMESPACES, targetUser,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                        /*numOperations=*/ 1, RESULT_RATE_LIMITED);
             }
         }
 
