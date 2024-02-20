@@ -34,6 +34,7 @@ import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.SearchAidlRequest;
 import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
@@ -149,22 +150,13 @@ interface IAppSearchManager {
     /**
      * Searches a document based on a given specifications.
      *
-     * @param callerAttributionSource The permission identity of the package to query over.
-     * @param databaseName The databaseName this query for.
-     * @param queryExpression String to search for
-     * @param searchSpec SearchSpec
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link QueryAidlRequest} that contains the input parameters for the search
+     *     operation
      * @param callback {@link AppSearchResult}&lt;{@link SearchResultPage}&gt; of performing this
-     *         operation.
+     *     operation.
      */
-    void query(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in String queryExpression,
-        in SearchSpec searchSpec,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+    void search(
+        in SearchAidlRequest request,
         in IAppSearchResultCallback callback) = 6;
 
     /**

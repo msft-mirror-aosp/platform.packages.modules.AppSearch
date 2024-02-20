@@ -73,6 +73,7 @@ import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
+import android.app.appsearch.aidl.SearchAidlRequest;
 import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
@@ -364,15 +365,15 @@ public class AppSearchManagerServiceTest {
     }
 
     @Test
-    public void testQueryStatsLogging() throws Exception {
+    public void testSearchStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.query(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+        mAppSearchManagerServiceStub.search(
+                new SearchAidlRequest(AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, /* searchExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME, CallStats.CALL_TYPE_SEARCH);
-        // query only logs SearchStats indirectly so we don't verify it
+        // search only logs SearchStats indirectly so we don't verify it
     }
 
     @Test
@@ -826,7 +827,7 @@ public class AppSearchManagerServiceTest {
         // Everything else
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetSchemaResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyWriteSearchResultsToFileResult(AppSearchResult.RESULT_OK);
@@ -889,7 +890,7 @@ public class AppSearchManagerServiceTest {
         // Set Schema call is rejected because of total capacity exceeded
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
         // Other calls should be fine
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
@@ -939,7 +940,7 @@ public class AppSearchManagerServiceTest {
                 false);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
@@ -980,7 +981,7 @@ public class AppSearchManagerServiceTest {
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
         // Some calls are rejected once rate limiting gets enabled
-        verifyQueryResult(RESULT_RATE_LIMITED);
+        verifySearchResult(RESULT_RATE_LIMITED);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
@@ -1014,7 +1015,7 @@ public class AppSearchManagerServiceTest {
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
@@ -1035,7 +1036,7 @@ public class AppSearchManagerServiceTest {
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
         verifySetSchemaResult(AppSearchResult.RESULT_OK);
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
@@ -1068,7 +1069,7 @@ public class AppSearchManagerServiceTest {
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
@@ -1083,12 +1084,12 @@ public class AppSearchManagerServiceTest {
         verifyInitializeResult(AppSearchResult.RESULT_OK);
         verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
 
-        // Query call should also get rejected after setting a lower limit
+        // Search call should also get rejected after setting a lower limit
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.5f),
                 false);
-        verifyQueryResult(RESULT_RATE_LIMITED);
+        verifySearchResult(RESULT_RATE_LIMITED);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
@@ -1197,7 +1198,7 @@ public class AppSearchManagerServiceTest {
         verifyGetNamespacesResult(resultCode);
         verifyPutDocumentsResult(resultCode);
         verifyLocalGetDocumentsResult(resultCode);
-        verifyQueryResult(resultCode);
+        verifySearchResult(resultCode);
         verifyLocalGetNextPageResult(resultCode);
         verifyWriteSearchResultsToFileResult(resultCode);
         verifyPutDocumentsFromFileResult(resultCode);
@@ -1302,12 +1303,12 @@ public class AppSearchManagerServiceTest {
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID, callback.get());
     }
 
-    private void verifyQueryResult(int resultCode) throws Exception {
+    private void verifySearchResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.query(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
-                callback);
+        mAppSearchManagerServiceStub.search(
+                new SearchAidlRequest(AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME,/* searchExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_SEARCH, callback.get());
     }
 

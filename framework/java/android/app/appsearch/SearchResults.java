@@ -28,6 +28,7 @@ import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
+import android.app.appsearch.aidl.SearchAidlRequest;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -125,9 +126,10 @@ public class SearchResults implements Closeable {
                             mSearchSpec, mUserHandle, binderCallStartTimeMillis,
                             mIsForEnterprise, wrapCallback(executor, callback));
                 } else {
-                    // Normal local query, pass in specified database.
-                    mService.query(mAttributionSource, mDatabaseName, mQueryExpression,
-                            mSearchSpec, mUserHandle, binderCallStartTimeMillis,
+                    // Normal local search, pass in specified database.
+                    mService.search(new SearchAidlRequest(mAttributionSource, mDatabaseName,
+                                    mQueryExpression, mSearchSpec, mUserHandle,
+                                    binderCallStartTimeMillis),
                             wrapCallback(executor, callback));
                 }
             } else {
