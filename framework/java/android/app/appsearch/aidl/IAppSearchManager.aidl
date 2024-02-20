@@ -24,6 +24,8 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.GetSchemaAidlRequest;
+import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
@@ -67,39 +69,25 @@ interface IAppSearchManager {
     /**
      * Retrieves the AppSearch schema for this database.
      *
-     * @param callerAttributionSource The permission identity of the package making this call.
-     * @param targetPackageName The name of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
+     * @param request {@link GetSchemaAidlRequest} contains the input parameters for get schema
+     *     operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Bundle}&gt; where the bundle is a GetSchemaResponse.
      */
     void getSchema(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String targetPackageName,
-        in String databaseName,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in boolean isForEnterprise,
+        in GetSchemaAidlRequest request,
         in IAppSearchResultCallback callback) = 2;
 
     /**
      * Retrieves the set of all namespaces in the current database with at least one document.
      *
-     * @param callerAttributionSource The permission identity of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link GetNamespacesAidlRequest} contains the input parameters for get
+     *     namespaces operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link List}&lt;{@link String}&gt;&gt;.
      */
     void getNamespaces(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+        in GetNamespacesAidlRequest request,
         in IAppSearchResultCallback callback) = 3;
 
     /**
