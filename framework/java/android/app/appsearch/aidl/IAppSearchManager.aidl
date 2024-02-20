@@ -27,6 +27,7 @@ import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
+import android.app.appsearch.aidl.GlobalSearchAidlRequest;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
@@ -167,25 +168,16 @@ interface IAppSearchManager {
         in IAppSearchResultCallback callback) = 6;
 
     /**
-     * Executes a global query, i.e. over all permitted databases, against the AppSearch index and
+     * Executes a global search, i.e. over all permitted databases, against the AppSearch index and
      * returns results.
      *
-     * @param callerAttributionSource The permission identity of the package making the query.
-     * @param queryExpression String to search for
-     * @param searchSpec SearchSpec
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
+     * @param request {@link GlobalSearchAidlRequest} that contains the input parameters for the
+     *     global search operation.
      * @param callback {@link AppSearchResult}&lt;{@link SearchResultPage}&gt; of performing this
-     *         operation.
+     *     operation.
      */
-    void globalQuery(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String queryExpression,
-        in SearchSpec searchSpec,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in boolean isForEnterprise,
+    void globalSearch(
+        in GlobalSearchAidlRequest request,
         in IAppSearchResultCallback callback) = 7;
 
     /**

@@ -25,6 +25,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
+import android.app.appsearch.aidl.GlobalSearchAidlRequest;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.os.RemoteException;
@@ -119,10 +120,11 @@ public class SearchResults implements Closeable {
             if (mIsFirstLoad) {
                 mIsFirstLoad = false;
                 if (mDatabaseName == null) {
-                    // Global query, there's no one package-database combination to check.
-                    mService.globalQuery(mAttributionSource, mQueryExpression,
-                            mSearchSpec, mUserHandle, binderCallStartTimeMillis,
-                            mIsForEnterprise, wrapCallback(executor, callback));
+                    // Global search, there's no one package-database combination to check.
+                    mService.globalSearch(
+                            new GlobalSearchAidlRequest(mAttributionSource, mQueryExpression,
+                                    mSearchSpec, mUserHandle, binderCallStartTimeMillis,
+                                    mIsForEnterprise), wrapCallback(executor, callback));
                 } else {
                     // Normal local query, pass in specified database.
                     mService.query(mAttributionSource, mDatabaseName, mQueryExpression,
