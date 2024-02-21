@@ -28,6 +28,7 @@ import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
 import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
@@ -215,22 +216,13 @@ interface IAppSearchManager {
         in IAppSearchResultCallback callback) = 8;
 
     /**
-     * Invalidates the next-page token so that no more results of the related query can be returned.
+     * Invalidates the next-page token so that no more results of the related search can be
+     * returned.
      *
-     * @param callerAttributionSource The permission identity of the package to persist to disk
-     *     for.
-     * @param nextPageToken The token of pre-loaded results of previously executed query to be
-     *                      Invalidated.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
+     * @param request {@link InvalidateNextPageTokenAidlRequest} that contains the input parameters
+     *     for the invalidate next-page token operation.
      */
-    void invalidateNextPageToken(
-        in AppSearchAttributionSource callerAttributionSource,
-        in long nextPageToken,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in boolean isForEnterprise) = 9;
+    void invalidateNextPageToken(in InvalidateNextPageTokenAidlRequest request) = 9;
 
     /**
     * Searches a document based on a given specifications.

@@ -67,6 +67,7 @@ import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
@@ -430,10 +431,10 @@ public class AppSearchManagerServiceTest {
 
     @Test
     public void testInvalidateNextPageTokenStatsLogging() throws Exception {
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false);
+                /* isForEnterprise= */ false));
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN);
     }
 
@@ -1179,10 +1180,10 @@ public class AppSearchManagerServiceTest {
     public void testEnterpriseInvalidateNextPageToken_noEnterpriseUser() throws Exception {
         // Even on devices with an enterprise user, this test will run properly, since we haven't
         // unlocked the enterprise user for our local instance of AppSearchManagerService
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ true);
+                /* isForEnterprise= */ true));
         // No CallStats logged since we returned early
         verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
@@ -1339,10 +1340,10 @@ public class AppSearchManagerServiceTest {
     }
 
     private void verifyInvalidateNextPageTokenResult(int resultCode) throws Exception {
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false);
+                /* isForEnterprise= */ false));
         verifyCallResult(resultCode, CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, /* result= */
                 null);
     }

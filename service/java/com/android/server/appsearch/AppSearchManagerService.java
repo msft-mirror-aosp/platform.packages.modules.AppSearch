@@ -58,6 +58,7 @@ import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
@@ -1214,31 +1215,25 @@ public class AppSearchManagerService extends SystemService {
         }
 
         @Override
-        public void invalidateNextPageToken(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                long nextPageToken,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
-                boolean isForEnterprise) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(userHandle);
+        public void invalidateNextPageToken(@NonNull InvalidateNextPageTokenAidlRequest request) {
+            Objects.requireNonNull(request);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
-                        callerAttributionSource, userHandle);
+                        request.getCallerAttributionSource(), request.getUserHandle());
                 // Get the enterprise user for enterprise calls
-                UserHandle userToQuery = mServiceImplHelper.getUserToQuery(isForEnterprise,
-                        targetUser);
+                UserHandle userToQuery = mServiceImplHelper.getUserToQuery(
+                        request.isForEnterprise(), targetUser);
                 if (userToQuery == null) {
                     // Return if we tried to and couldn't get the enterprise user
                     return;
                 }
-                String callingPackageName =
-                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                String callingPackageName = Objects.requireNonNull(
+                        request.getCallerAttributionSource().getPackageName());
                 if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                         CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1)) {
                     return;
                 }
@@ -1252,7 +1247,7 @@ public class AppSearchManagerService extends SystemService {
                     try {
                         instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                         instance.getAppSearchImpl().invalidateNextPageToken(
-                                callingPackageName, nextPageToken);
+                                callingPackageName, request.getNextPageToken());
                         operationSuccessCount++;
                     } catch (AppSearchException | RuntimeException e) {
                         ++operationFailureCount;
@@ -1263,7 +1258,7 @@ public class AppSearchManagerService extends SystemService {
                         if (instance != null) {
                             int estimatedBinderLatencyMillis =
                                     2 * (int) (totalLatencyStartTimeMillis
-                                            - binderCallStartTimeMillis);
+                                            - request.getBinderCallStartTimeMillis());
                             int totalLatencyMillis =
                                     (int) (SystemClock.elapsedRealtime()
                                             - totalLatencyStartTimeMillis);
@@ -1287,7 +1282,7 @@ public class AppSearchManagerService extends SystemService {
                     logRateLimitedOrCallDeniedCallStats(
                             callingPackageName, /* callingDatabaseName= */ null,
                             CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, targetUser,
-                            binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                            request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                             /* numOperations= */ 1, RESULT_RATE_LIMITED);
                 }
             } catch (RuntimeException e) {
