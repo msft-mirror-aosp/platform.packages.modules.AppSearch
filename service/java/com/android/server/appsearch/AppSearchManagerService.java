@@ -61,6 +61,7 @@ import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
@@ -1381,34 +1382,24 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void putDocumentsFromFile(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull ParcelFileDescriptor fileDescriptor,
-                @NonNull UserHandle userHandle,
-                @NonNull SchemaMigrationStats schemaMigrationStats,
-                @ElapsedRealtimeLong long totalLatencyStartTimeMillis,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull PutDocumentsFromFileAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(fileDescriptor);
-            Objects.requireNonNull(userHandle);
-            Objects.requireNonNull(schemaMigrationStats);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long callStatsTotalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
             String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    Objects.requireNonNull(request.getCallerAttributionSource().getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             // Since we don't read from the given file, we don't know the number of documents so we
             // just set numOperations to 1 instead
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, callback, targetUser,
-                    binderCallStartTimeMillis, callStatsTotalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), callStatsTotalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1420,14 +1411,14 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 SchemaMigrationStats.Builder schemaMigrationStatsBuilder = new SchemaMigrationStats
-                        .Builder(schemaMigrationStats);
+                        .Builder(request.getSchemaMigrationStats());
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
 
                     GenericDocument document;
                     ArrayList<MigrationFailure> migrationFailures = new ArrayList<>();
-                    try (DataInputStream inputStream = new DataInputStream(
-                            new FileInputStream(fileDescriptor.getFileDescriptor()))) {
+                    try (DataInputStream inputStream = new DataInputStream(new FileInputStream(
+                            request.getParcelFileDescriptor().getFileDescriptor()))) {
                         while (true) {
                             try {
                                 document = AppSearchMigrationHelper
@@ -1441,7 +1432,7 @@ public class AppSearchManagerService extends SystemService {
                                 // notifications are not dispatched.
                                 instance.getAppSearchImpl().putDocument(
                                         callingPackageName,
-                                        databaseName,
+                                        request.getDatabaseName(),
                                         document,
                                         /* sendChangeNotifications= */ false,
                                         /* logger= */ null);
@@ -1478,7 +1469,7 @@ public class AppSearchManagerService extends SystemService {
                                 SystemClock.elapsedRealtime();
                         int estimatedBinderLatencyMillis =
                                 2 * (int) (callStatsTotalLatencyStartTimeMillis
-                                        - binderCallStartTimeMillis);
+                                        - request.getBinderCallStartTimeMillis());
                         int callStatsTotalLatencyMillis =
                                 (int) (latencyEndTimeMillis - callStatsTotalLatencyStartTimeMillis);
                         // totalLatencyStartTimeMillis is captured in the SDK side, and
@@ -1486,13 +1477,13 @@ public class AppSearchManagerService extends SystemService {
                         // This should includes whole schema migration process.
                         // Like get old schema, first and second set schema, query old
                         // documents, transform documents and save migrated documents.
-                        int totalLatencyMillis =
-                                (int) (latencyEndTimeMillis - totalLatencyStartTimeMillis);
-                        int saveDocumentLatencyMillis =
-                                (int) (latencyEndTimeMillis - binderCallStartTimeMillis);
+                        int totalLatencyMillis = (int) (latencyEndTimeMillis
+                                - request.getTotalLatencyStartTimeMillis());
+                        int saveDocumentLatencyMillis = (int) (latencyEndTimeMillis
+                                - request.getBinderCallStartTimeMillis());
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(callStatsTotalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE)
@@ -1512,10 +1503,11 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
                         CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, targetUser,
-                        binderCallStartTimeMillis, callStatsTotalLatencyStartTimeMillis,
-                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+                        request.getBinderCallStartTimeMillis(),
+                        callStatsTotalLatencyStartTimeMillis, /* numOperations= */ 1,
+                        RESULT_RATE_LIMITED);
             }
         }
 

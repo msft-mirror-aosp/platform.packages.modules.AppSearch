@@ -70,6 +70,7 @@ import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
@@ -459,11 +460,11 @@ public class AppSearchManagerServiceTest {
         File tempFile = mTemporaryFolder.newFile();
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_RDONLY);
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.putDocumentsFromFile(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, new ParcelFileDescriptor(fd), mUserHandle,
+        mAppSearchManagerServiceStub.putDocumentsFromFile(new PutDocumentsFromFileAidlRequest(
+                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                new ParcelFileDescriptor(fd), mUserHandle,
                 new SchemaMigrationStats.Builder(mContext.getPackageName(), DATABASE_NAME).build(),
-                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME, callback);
+                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE);
@@ -1366,11 +1367,11 @@ public class AppSearchManagerServiceTest {
         File tempFile = mTemporaryFolder.newFile();
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_RDONLY);
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.putDocumentsFromFile(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, new ParcelFileDescriptor(fd), mUserHandle,
+        mAppSearchManagerServiceStub.putDocumentsFromFile(new PutDocumentsFromFileAidlRequest(
+                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                new ParcelFileDescriptor(fd), mUserHandle,
                 new SchemaMigrationStats.Builder(mContext.getPackageName(), DATABASE_NAME).build(),
-                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME, callback);
+                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, callback.get());
     }
 
