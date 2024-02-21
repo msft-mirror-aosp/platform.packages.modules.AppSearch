@@ -25,6 +25,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
+import android.app.appsearch.aidl.GetNextPageAidlRequest;
 import android.app.appsearch.aidl.GlobalSearchAidlRequest;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
@@ -142,9 +143,9 @@ public class SearchResults implements Closeable {
                         && !mSearchSpec.getJoinSpec().getChildPropertyExpression().isEmpty()) {
                     joinType = JOINABLE_VALUE_TYPE_QUALIFIED_ID;
                 }
-                mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken, joinType,
-                        mUserHandle, binderCallStartTimeMillis, mIsForEnterprise,
-                        wrapCallback(executor, callback));
+                mService.getNextPage(new GetNextPageAidlRequest(mAttributionSource, mDatabaseName,
+                        mNextPageToken, joinType, mUserHandle, binderCallStartTimeMillis,
+                        mIsForEnterprise), wrapCallback(executor, callback));
             }
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();

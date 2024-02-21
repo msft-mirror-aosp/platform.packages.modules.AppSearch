@@ -59,6 +59,7 @@ import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.GetNextPageAidlRequest;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
@@ -393,11 +394,11 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testLocalGetNextPageStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* nextPageToken= */ 0,
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
+                AppSearchAttributionSource.createAttributionSource(mContext),
+                DATABASE_NAME, /* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ false, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ false), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_GET_NEXT_PAGE);
@@ -415,11 +416,11 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testGlobalGetNextPageStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* databaseName= */ null, /* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ false, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ false), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE);
         // getNextPage also logs SearchStats
@@ -1167,11 +1168,11 @@ public class AppSearchManagerServiceTest {
         // Even on devices with an enterprise user, this test will run properly, since we haven't
         // unlocked the enterprise user for our local instance of AppSearchManagerService
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* databaseName= */ null,/* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ true, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ true), callback);
         AppSearchResult<SearchResultPage> result =
                 (AppSearchResult<SearchResultPage>) callback.get();
         assertThat(result.getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
@@ -1325,21 +1326,21 @@ public class AppSearchManagerServiceTest {
 
     private void verifyLocalGetNextPageResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
                 /* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ false, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ false), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_NEXT_PAGE, callback.get());
     }
 
     private void verifyGlobalGetNextPageResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* databaseName= */ null, /* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ false, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ false), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE, callback.get());
     }
 
