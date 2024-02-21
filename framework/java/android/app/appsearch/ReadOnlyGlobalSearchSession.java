@@ -25,6 +25,7 @@ import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -75,9 +76,10 @@ public abstract class ReadOnlyGlobalSearchSession {
             @NonNull Consumer<AppSearchResult<Void>> callback) {
         try {
             mService.initialize(
-                    mCallerAttributionSource,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new InitializeAidlRequest(
+                            mCallerAttributionSource,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {

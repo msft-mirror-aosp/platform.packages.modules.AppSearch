@@ -33,11 +33,11 @@ import java.util.Objects;
  * database.
  * @hide
  */
-@SafeParcelable.Class(creator = "SetSchemaBinderRequestCreator")
+@SafeParcelable.Class(creator = "SetSchemaAidlRequestCreator")
 public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final SetSchemaBinderRequestCreator CREATOR =
-            new SetSchemaBinderRequestCreator();
+    public static final SetSchemaAidlRequestCreator CREATOR =
+            new SetSchemaAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
@@ -128,6 +128,6 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        SetSchemaBinderRequestCreator.writeToParcel(this, dest, flags);
+        SetSchemaAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }

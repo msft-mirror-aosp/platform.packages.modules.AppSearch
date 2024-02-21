@@ -65,6 +65,8 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
@@ -232,8 +234,10 @@ public class AppSearchManagerServiceTest {
             // exist in there.
             TestResultCallback callback = new TestResultCallback();
             mAppSearchManagerServiceStub.initialize(
-                    AppSearchAttributionSource.createAttributionSource(mContext),
-                    testTargetUser, System.currentTimeMillis(), callback);
+                    new InitializeAidlRequest(
+                            AppSearchAttributionSource.createAttributionSource(mContext),
+                            testTargetUser, System.currentTimeMillis())
+                    , callback);
             assertThat(callback.get().isSuccess()).isFalse();
             assertThat(callback.get().getErrorMessage()).contains(
                     "SecurityException: Package: " + mContext.getPackageName()
@@ -555,8 +559,9 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testPersistToDiskStatsLogging() throws Exception {
         mAppSearchManagerServiceStub.persistToDisk(
-                AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
-                BINDER_CALL_START_TIME);
+                new PersistToDiskAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
+                        BINDER_CALL_START_TIME));
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_FLUSH);
     }
 
@@ -611,8 +616,10 @@ public class AppSearchManagerServiceTest {
     public void testInitializeStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.initialize(
-                AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new InitializeAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_INITIALIZE);
         // initialize only logs InitializeStats indirectly so we don't verify it
@@ -1422,8 +1429,9 @@ public class AppSearchManagerServiceTest {
 
     private void verifyPersistToDiskResult(int resultCode) throws Exception {
         mAppSearchManagerServiceStub.persistToDisk(
-                AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
-                BINDER_CALL_START_TIME);
+                new PersistToDiskAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
+                        BINDER_CALL_START_TIME));
         verifyCallResult(resultCode, CallStats.CALL_TYPE_FLUSH, /* result= */ null);
     }
 
@@ -1475,8 +1483,10 @@ public class AppSearchManagerServiceTest {
     private void verifyInitializeResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.initialize(
-                AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new InitializeAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         if (resultCode == RESULT_DENIED) {
             verify(mLogger, never()).logStats(any(CallStats.class));
         } else {
