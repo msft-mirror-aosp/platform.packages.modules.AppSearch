@@ -67,6 +67,7 @@ import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
@@ -321,12 +322,10 @@ public class AppSearchManagerServiceTest {
     public void testPutDocumentsStatsLogging() throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.putDocuments(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME,
-                new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
-                mUserHandle,
-                BINDER_CALL_START_TIME,
-                callback);
+                new PutDocumentsAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
+                        mUserHandle, BINDER_CALL_START_TIME), callback);
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS);
@@ -1267,12 +1266,10 @@ public class AppSearchManagerServiceTest {
     private void verifyPutDocumentsResult(int resultCode) throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.putDocuments(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME,
-                new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
-                mUserHandle,
-                BINDER_CALL_START_TIME,
-                callback);
+                new PutDocumentsAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
+                        mUserHandle, BINDER_CALL_START_TIME), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_PUT_DOCUMENTS, callback.get());
     }
 
