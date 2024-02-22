@@ -18,9 +18,6 @@ package android.app.appsearch.aidl;
 
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
-import android.app.appsearch.AppSearchSchema;
-import android.app.appsearch.AppSearchSession;
-import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
@@ -30,15 +27,14 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Encapsulates a request to make a binder call to update the schema of an {@link AppSearchSession}
- * database.
+ * Encapsulates a request to make a binder call to remove documents by id.
  * @hide
  */
-@SafeParcelable.Class(creator = "SetSchemaAidlRequestCreator")
-public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
+@SafeParcelable.Class(creator = "RemoveByDocumentIdAidlRequestCreator")
+public class RemoveByDocumentIdAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final SetSchemaAidlRequestCreator CREATOR =
-            new SetSchemaAidlRequestCreator();
+    public static final RemoveByDocumentIdAidlRequestCreator CREATOR =
+            new RemoveByDocumentIdAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
@@ -47,43 +43,31 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
     @Field(id = 2, getter = "getDatabaseName")
     private final String mDatabaseName;
     @NonNull
-    @Field(id = 3, getter = "getSchemas")
-    private final List<AppSearchSchema> mSchemas;
+    @Field(id = 3, getter = "getNamespace")
+    private final String mNamespace;
     @NonNull
-    @Field(id = 4, getter = "getVisibilityConfigs")
-    private final List<InternalVisibilityConfig> mVisibilityConfigs;
-    @Field(id = 5, getter = "isForceOverride")
-    private final boolean mForceOverride;
-    @Field(id = 6, getter = "getSchemaVersion")
-    private final int mSchemaVersion;
+    @Field(id = 4, getter = "getIds")
+    private final List<String> mIds;
     @NonNull
-    @Field(id = 7, getter = "getUserHandle")
+    @Field(id = 5, getter = "getUserHandle")
     private final UserHandle mUserHandle;
-    @Field(id = 8, getter = "getBinderCallStartTimeMillis")
+    @Field(id = 6, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
-    @Field(id = 9, getter = "getSchemaMigrationCallType")
-    private final int mSchemaMigrationCallType;
 
     @Constructor
-    public SetSchemaAidlRequest(
+    public RemoveByDocumentIdAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
             @Param(id = 2) @NonNull String databaseName,
-            @Param(id = 3) @NonNull List<AppSearchSchema> schemas,
-            @Param(id = 4) @NonNull List<InternalVisibilityConfig> visibilityConfigs,
-            @Param(id = 5) boolean forceOverride,
-            @Param(id = 6) int schemaVersion,
-            @Param(id = 7) @NonNull UserHandle userHandle,
-            @Param(id = 8) @ElapsedRealtimeLong long binderCallStartTimeMillis,
-            @Param(id = 9) int schemaMigrationCallType) {
+            @Param(id = 3) @NonNull String namespace,
+            @Param(id = 4) @NonNull List<String> ids,
+            @Param(id = 5) @NonNull UserHandle userHandle,
+            @Param(id = 6) @ElapsedRealtimeLong long binderCallStartTimeMillis) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
         mDatabaseName = Objects.requireNonNull(databaseName);
-        mSchemas = Objects.requireNonNull(schemas);
-        mVisibilityConfigs = Objects.requireNonNull(visibilityConfigs);
-        mForceOverride = forceOverride;
-        mSchemaVersion = schemaVersion;
+        mNamespace = Objects.requireNonNull(namespace);
+        mIds = Objects.requireNonNull(ids);
         mUserHandle = Objects.requireNonNull(userHandle);
         mBinderCallStartTimeMillis = binderCallStartTimeMillis;
-        mSchemaMigrationCallType = schemaMigrationCallType;
     }
 
     @NonNull
@@ -97,21 +81,13 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
     }
 
     @NonNull
-    public List<AppSearchSchema> getSchemas() {
-        return mSchemas;
+    public String getNamespace() {
+        return mNamespace;
     }
 
     @NonNull
-    public List<InternalVisibilityConfig> getVisibilityConfigs() {
-        return mVisibilityConfigs;
-    }
-
-    public boolean isForceOverride() {
-        return mForceOverride;
-    }
-
-    public int getSchemaVersion() {
-        return mSchemaVersion;
+    public List<String> getIds() {
+        return mIds;
     }
 
     @NonNull
@@ -124,12 +100,8 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
         return mBinderCallStartTimeMillis;
     }
 
-    public int getSchemaMigrationCallType() {
-        return mSchemaMigrationCallType;
-    }
-
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        SetSchemaAidlRequestCreator.writeToParcel(this, dest, flags);
+        RemoveByDocumentIdAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }
