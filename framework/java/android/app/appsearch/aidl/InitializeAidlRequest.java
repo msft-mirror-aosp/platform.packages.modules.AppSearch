@@ -45,6 +45,13 @@ public class InitializeAidlRequest extends AbstractSafeParcelable {
     @Field(id = 3, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
 
+    /**
+     * Creates and initializes AppSearchImpl for the calling app.
+     *
+     * @param callerAttributionSource The permission identity of the package to initialize for.
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     */
     @Constructor
     public InitializeAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,

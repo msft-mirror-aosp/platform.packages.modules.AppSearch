@@ -54,6 +54,16 @@ public class RemoveByDocumentIdAidlRequest extends AbstractSafeParcelable {
     @Field(id = 6, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
 
+    /**
+     * Removes documents by ID.
+     *
+     * @param callerAttributionSource The permission identity of the package the document is in.
+     * @param databaseName The databaseName the document is in.
+     * @param namespace    Namespace of the document to remove.
+     * @param ids The IDs of the documents to delete
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     */
     @Constructor
     public RemoveByDocumentIdAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,

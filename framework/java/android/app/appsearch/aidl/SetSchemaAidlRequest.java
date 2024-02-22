@@ -64,6 +64,22 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
     @Field(id = 9, getter = "getSchemaMigrationCallType")
     private final int mSchemaMigrationCallType;
 
+    /**
+     * Updates the AppSearch schema for this database.
+     *
+     * @param callerAttributionSource The permission identity of the package that owns this schema.
+     * @param databaseName  The name of the database where this schema lives.
+     * @param schemas List of {@link AppSearchSchema} objects.
+     * @param visibilityConfigs List of {@link InternalVisibilityConfig} objects defining the
+     *     visibility for the schema types.
+     * @param forceOverride Whether to apply the new schema even if it is incompatible. All
+     *     incompatible documents will be deleted.
+     * @param schemaVersion  The overall schema version number of the request.
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param schemaMigrationCallType Indicates how a SetSchema call relative to SchemaMigration
+     *     case.
+     */
     @Constructor
     public SetSchemaAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,

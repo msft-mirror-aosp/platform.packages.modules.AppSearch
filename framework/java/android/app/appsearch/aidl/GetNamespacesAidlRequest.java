@@ -46,6 +46,14 @@ public class GetNamespacesAidlRequest extends AbstractSafeParcelable {
     @Field(id = 4, getter = "getBinderCallStartTimeMillis")
     private final long mBinderCallStartTimeMillis;
 
+    /**
+     * Retrieves the set of all namespaces in the current database with at least one document.
+     *
+     * @param callerAttributionSource The permission identity of the package that owns the schema.
+     * @param databaseName  The name of the database to retrieve.
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     */
     @Constructor
     public GetNamespacesAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
