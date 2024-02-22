@@ -32,6 +32,9 @@ import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequestCreator;
+import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
@@ -700,12 +703,13 @@ public final class AppSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.removeByDocumentId(
-                    mCallerAttributionSource,
-                    mDatabaseName,
-                    request.getNamespace(),
-                    new ArrayList<>(request.getIds()),
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new RemoveByDocumentIdAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            request.getNamespace(),
+                            new ArrayList<>(request.getIds()),
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchBatchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchBatchResultParcel resultParcel) {
@@ -765,12 +769,13 @@ public final class AppSearchSession implements Closeable {
         }
         try {
             mService.removeByQuery(
-                    mCallerAttributionSource,
-                    mDatabaseName,
-                    queryExpression,
-                    searchSpec,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new RemoveByQueryAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            queryExpression,
+                            searchSpec,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {

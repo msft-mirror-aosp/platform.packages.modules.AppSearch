@@ -26,6 +26,8 @@ import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.DocumentChangeInfo;
 import android.app.appsearch.observer.ObserverCallback;
@@ -322,11 +324,12 @@ public class GlobalSearchSession extends ReadOnlyGlobalSearchSession implements 
             AppSearchResultParcel<Void> resultParcel;
             try {
                 resultParcel = mService.registerObserverCallback(
-                        mCallerAttributionSource,
-                        targetPackageName,
-                        spec,
-                        mUserHandle,
-                        /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                        new RegisterObserverCallbackAidlRequest(
+                                mCallerAttributionSource,
+                                targetPackageName,
+                                spec,
+                                mUserHandle,
+                                /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                         stub);
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();
@@ -388,10 +391,11 @@ public class GlobalSearchSession extends ReadOnlyGlobalSearchSession implements 
             AppSearchResultParcel<Void> resultParcel;
             try {
                 resultParcel = mService.unregisterObserverCallback(
-                        mCallerAttributionSource,
-                        targetPackageName,
-                        mUserHandle,
-                        /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                        new UnregisterObserverCallbackAidlRequest(
+                                mCallerAttributionSource,
+                                targetPackageName,
+                                mUserHandle,
+                                /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                         stub);
             } catch (RemoteException e) {
                 throw e.rethrowFromSystemServer();
