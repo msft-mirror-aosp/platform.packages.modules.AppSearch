@@ -67,7 +67,11 @@ import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
+import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.AttributionSource;
@@ -525,9 +529,11 @@ public class AppSearchManagerServiceTest {
     public void testRemoveByDocumentIdStatsLogging() throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.removeByDocumentId(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByDocumentIdAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID);
@@ -537,9 +543,11 @@ public class AppSearchManagerServiceTest {
     public void testRemoveByQueryStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.removeByQuery(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByQueryAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH);
@@ -569,10 +577,11 @@ public class AppSearchManagerServiceTest {
     public void testRegisterObserverCallbackStatsLogging() throws Exception {
         AppSearchResultParcel<Void> resultParcel =
                 mAppSearchManagerServiceStub.registerObserverCallback(
-                        AppSearchAttributionSource.createAttributionSource(mContext),
-                        mContext.getPackageName(),
-                        new ObserverSpec.Builder().build(),
-                        mUserHandle, BINDER_CALL_START_TIME,
+                        new RegisterObserverCallbackAidlRequest(
+                                AppSearchAttributionSource.createAttributionSource(mContext),
+                                mContext.getPackageName(),
+                                new ObserverSpec.Builder().build(),
+                                mUserHandle, BINDER_CALL_START_TIME),
                         new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
@@ -593,9 +602,11 @@ public class AppSearchManagerServiceTest {
     public void testUnregisterObserverCallbackStatsLogging() throws Exception {
         AppSearchResultParcel<Void> resultParcel =
                 mAppSearchManagerServiceStub.unregisterObserverCallback(
-                        AppSearchAttributionSource.createAttributionSource(mContext),
-                        mContext.getPackageName(), mUserHandle,
-                        BINDER_CALL_START_TIME, new IAppSearchObserverProxy.Stub() {
+                        new UnregisterObserverCallbackAidlRequest(
+                                AppSearchAttributionSource.createAttributionSource(mContext),
+                                mContext.getPackageName(), mUserHandle,
+                                BINDER_CALL_START_TIME),
+                        new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
                                     List<String> changedSchemaNames) throws RemoteException {
@@ -1403,17 +1414,21 @@ public class AppSearchManagerServiceTest {
     private void verifyRemoveByDocumentIdResult(int resultCode) throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.removeByDocumentId(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByDocumentIdAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID, callback.get());
     }
 
     private void verifyRemoveByQueryResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.removeByQuery(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
+                new RemoveByQueryAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME),
                 callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH,
                 callback.get());
@@ -1438,11 +1453,12 @@ public class AppSearchManagerServiceTest {
     private void verifyRegisterObserverCallbackResult(int resultCode) throws Exception {
         AppSearchResultParcel<Void> resultParcel =
                 mAppSearchManagerServiceStub.registerObserverCallback(
-                        AppSearchAttributionSource.createAttributionSource(mContext),
-                        mContext.getPackageName(),
-                        new ObserverSpec.Builder().build(),
-                        mUserHandle,
-                        BINDER_CALL_START_TIME,
+                        new RegisterObserverCallbackAidlRequest(
+                                AppSearchAttributionSource.createAttributionSource(mContext),
+                                mContext.getPackageName(),
+                                new ObserverSpec.Builder().build(),
+                                mUserHandle,
+                                BINDER_CALL_START_TIME),
                         new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
@@ -1462,9 +1478,11 @@ public class AppSearchManagerServiceTest {
     private void verifyUnregisterObserverCallbackResult(int resultCode) throws Exception {
         AppSearchResultParcel<Void> resultParcel =
                 mAppSearchManagerServiceStub.unregisterObserverCallback(
-                        AppSearchAttributionSource.createAttributionSource(mContext),
-                        mContext.getPackageName(), mUserHandle,
-                        BINDER_CALL_START_TIME, new IAppSearchObserverProxy.Stub() {
+                        new UnregisterObserverCallbackAidlRequest(
+                                AppSearchAttributionSource.createAttributionSource(mContext),
+                                mContext.getPackageName(), mUserHandle,
+                                BINDER_CALL_START_TIME),
+                        new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
                                     List<String> changedSchemaNames) throws RemoteException {

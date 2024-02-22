@@ -28,7 +28,11 @@ import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
+import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.AppSearchSchema;
@@ -349,12 +353,8 @@ interface IAppSearchManager {
     /**
      * Removes documents by ID.
      *
-     * @param callerAttributionSource The permission identity of the package the document is in.
-     * @param databaseName The databaseName the document is in.
-     * @param namespace    Namespace of the document to remove.
-     * @param ids The IDs of the documents to delete
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link RemoveByDocumentIdAidlRequest} contains the input parameters for remove
+     *     by id operation.
      * @param callback
      *     If the call fails to start, {@link IAppSearchBatchResultCallback#onSystemError}
      *     will be called with the cause throwable. Otherwise,
@@ -364,33 +364,19 @@ interface IAppSearchManager {
      *     failure where the {@code throwable} is {@code null}.
      */
     void removeByDocumentId(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in String namespace,
-        in List<String> ids,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+        in RemoveByDocumentIdAidlRequest request,
         in IAppSearchBatchResultCallback callback) = 14;
 
     /**
      * Removes documents by given query.
      *
-     * @param callerAttributionSource The permission identity of the package to query over.
-     * @param databaseName The databaseName this query for.
-     * @param queryExpression String to search for
-     * @param searchSpec SearchSpec
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link RemoveByQueryAidlRequest} contains the input parameters for remove by
+     *     query operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Void}&gt;.
      */
     void removeByQuery(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in String queryExpression,
-        in SearchSpec searchSpec,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+        in RemoveByQueryAidlRequest request,
         in IAppSearchResultCallback callback) = 15;
 
     /**
@@ -424,38 +410,25 @@ interface IAppSearchManager {
      * Adds an observer to monitor changes within the databases owned by {@code observedPackage} if
      * they match the given ObserverSpec.
      *
-     * @param callerAttributionSource The permission identity of the package which is registering
-     *     an observer.
-     * @param targetPackageName Package whose changes to monitor
-     * @param observerSpecBundle ObserverSpec showing what types of changes to listen for
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link RegisterObserverCallbackAidlRequest} contains the input parameters
+     *     for register observer operation.
      * @param observerProxy Callback to trigger when a schema or document changes
      * @return the success or failure of this operation
      */
     AppSearchResultParcel registerObserverCallback(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String targetPackageName,
-        in ObserverSpec observerSpec,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+        in RegisterObserverCallbackAidlRequest request,
         in IAppSearchObserverProxy observerProxy) = 18;
 
     /**
      * Removes previously registered {@link ObserverCallback} instances from the system.
      *
-     * @param callerAttributionSource The permission identity of the package that owns the observer
-     * @param observedPackage Package whose changes are being monitored
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link UnregisterObserverCallbackAidlRequest} contains the input parameters
+     *     for unregister observer operation.
      * @param observerProxy Observer callback to remove
      * @return the success or failure of this operation
      */
     AppSearchResultParcel unregisterObserverCallback(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String observedPackage,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+        in UnregisterObserverCallbackAidlRequest request,
         in IAppSearchObserverProxy observerProxy) = 19;
 
     // next function transaction ID = 20;
