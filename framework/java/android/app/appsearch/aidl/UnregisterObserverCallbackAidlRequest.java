@@ -18,6 +18,7 @@ package android.app.appsearch.aidl;
 
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
+import android.app.appsearch.observer.ObserverCallback;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
@@ -47,6 +48,14 @@ public class UnregisterObserverCallbackAidlRequest extends AbstractSafeParcelabl
     @Field(id = 4, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
 
+    /**
+     * Removes previously registered {@link ObserverCallback} instances from the system.
+     *
+     * @param callerAttributionSource The permission identity of the package that owns the observer
+     * @param observedPackage Package whose changes are being monitored
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     */
     @Constructor
     public UnregisterObserverCallbackAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,

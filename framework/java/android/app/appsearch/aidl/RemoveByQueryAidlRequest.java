@@ -55,6 +55,16 @@ public class RemoveByQueryAidlRequest extends AbstractSafeParcelable {
     @Field(id = 6, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
 
+    /**
+     * Removes documents by given query.
+     *
+     * @param callerAttributionSource The permission identity of the package to query over.
+     * @param databaseName The databaseName this query for.
+     * @param queryExpression String to search for
+     * @param searchSpec SearchSpec
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     */
     @Constructor
     public RemoveByQueryAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,

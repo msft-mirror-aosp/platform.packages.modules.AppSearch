@@ -51,6 +51,16 @@ public class RegisterObserverCallbackAidlRequest extends AbstractSafeParcelable 
     @Field(id = 5, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
 
+    /**
+     * Creates and initializes AppSearchImpl for the calling app.
+     *
+     * @param callerAttributionSource The permission identity of the package which is registering
+     *     an observer.
+     * @param targetPackageName Package whose changes to monitor
+     * @param observerSpec ObserverSpec showing what types of changes to listen for
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     */
     @Constructor
     public RegisterObserverCallbackAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,

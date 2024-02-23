@@ -52,6 +52,15 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
     @Field(id = 6, getter = "isForEnterprise")
     private final boolean mIsForEnterprise;
 
+    /**
+     * Retrieves the AppSearch schema for this database.
+     *
+     * @param callerAttributionSource The permission identity of the package making this call.
+     * @param targetPackageName The name of the package that owns the schema.
+     * @param databaseName  The name of the database to retrieve.
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     */
     @Constructor
     public GetSchemaAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
