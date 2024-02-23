@@ -32,6 +32,7 @@ import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequestCreator;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
@@ -331,9 +332,11 @@ public final class AppSearchSession implements Closeable {
                 toGenericDocumentParcels(request.getGenericDocuments()),
                 toGenericDocumentParcels(request.getTakenActionGenericDocuments()));
         try {
-            mService.putDocuments(mCallerAttributionSource, mDatabaseName, documentsParcel,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+            mService.putDocuments(
+                    new PutDocumentsAidlRequest(
+                            mCallerAttributionSource, mDatabaseName, documentsParcel,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchBatchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchBatchResultParcel resultParcel) {

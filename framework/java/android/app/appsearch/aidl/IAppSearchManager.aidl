@@ -28,6 +28,7 @@ import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
@@ -96,12 +97,8 @@ interface IAppSearchManager {
     /**
      * Inserts documents into the index.
      *
-     * @param callerAttributionSource The permission identity of the package that owns this
-     *     document.
-     * @param databaseName  The name of the database where this document lives.
-     * @param documentsParcel Parcelable object contains a list of GenericDocument.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link PutDocumentsAidlRequest} contains the input parameters for
+     *     put documents operation.
      * @param callback
      *     If the call fails to start, {@link IAppSearchBatchResultCallback#onSystemError}
      *     will be called with the cause throwable. Otherwise,
@@ -110,11 +107,7 @@ interface IAppSearchManager {
      *     where the keys are document IDs, and the values are {@code null}.
      */
     void putDocuments(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in DocumentsParcel documentsParcel,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+        in PutDocumentsAidlRequest request,
         in IAppSearchBatchResultCallback callback) = 4;
 
     /**
