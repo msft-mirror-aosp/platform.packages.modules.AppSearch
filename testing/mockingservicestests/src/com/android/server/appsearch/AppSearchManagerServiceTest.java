@@ -61,6 +61,7 @@ import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
+import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
@@ -71,6 +72,7 @@ import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
+import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
@@ -479,9 +481,11 @@ public class AppSearchManagerServiceTest {
             new SearchSuggestionSpec.Builder(/*maximumResultCount=*/1).build();
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.searchSuggestion(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+                new SearchSuggestionAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
+                        mUserHandle, BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_SEARCH_SUGGESTION);
@@ -556,8 +560,10 @@ public class AppSearchManagerServiceTest {
     public void testGetStorageInfoStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getStorageInfo(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+                new GetStorageInfoAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        mUserHandle, BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_GET_STORAGE_INFO);
@@ -1370,9 +1376,11 @@ public class AppSearchManagerServiceTest {
             new SearchSuggestionSpec.Builder(/*maximumResultCount=*/1).build();
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.searchSuggestion(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+                new SearchSuggestionAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
+                        mUserHandle, BINDER_CALL_START_TIME),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_SEARCH_SUGGESTION, callback.get());
     }
 
@@ -1434,8 +1442,10 @@ public class AppSearchManagerServiceTest {
     private void verifyGetStorageInfoResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getStorageInfo(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+                new GetStorageInfoAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        mUserHandle, BINDER_CALL_START_TIME),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_STORAGE_INFO, callback.get());
     }
 
