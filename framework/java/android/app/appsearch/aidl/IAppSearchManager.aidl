@@ -26,12 +26,14 @@ import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
+import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
@@ -288,22 +290,13 @@ interface IAppSearchManager {
     /**
      * Retrieves suggested Strings that could be used as {@code queryExpression} in search API.
      *
-     * @param callerAttributionSource The permission identity of the package to suggest over.
-     * @param databaseName The databaseName this suggest is for.
-     * @param suggestionQueryExpression the non empty query string to search suggestions
-     * @param searchSuggestionSpec SearchSuggestionSpec describing what to suggest
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link SearchSuggestionAidlRequest} contains the input parameters to retrieve
+     *     suggested Strings for search.
      * @param callback {@link AppSearchResult}&lt;List&lt;{@link SearchSuggestionResult}&gt; of
      *   performing this operation.
      */
     void searchSuggestion(
-            in AppSearchAttributionSource callerAttributionSource,
-            in String databaseName,
-            in String suggestionQueryExpression,
-            in SearchSuggestionSpec searchSuggestionSpec,
-            in UserHandle userHandle,
-            in long binderCallStartTimeMillis,
+            in SearchSuggestionAidlRequest request,
             in IAppSearchResultCallback callback) = 12;
 
     /**
@@ -375,20 +368,14 @@ interface IAppSearchManager {
     /**
      * Gets the storage info.
      *
-     * @param callerAttributionSource The permission identity of the package to get the storage
-     *     info for.
-     * @param databaseName The databaseName to get the storage info for.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link GetStorageInfoAidlRequest} contains the input parameters to get
+     *     storage info operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Bundle}&gt;, where the value is a
      *     {@link StorageInfo}.
      */
     void getStorageInfo(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+        in GetStorageInfoAidlRequest request,
         in IAppSearchResultCallback callback) = 16;
 
     /**
