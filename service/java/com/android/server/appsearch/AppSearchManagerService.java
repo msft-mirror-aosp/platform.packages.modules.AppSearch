@@ -51,6 +51,7 @@ import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
+import android.app.appsearch.aidl.GlobalSearchAidlRequest;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
@@ -1000,30 +1001,23 @@ public class AppSearchManagerService extends SystemService {
         }
 
         @Override
-        public void globalQuery(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String queryExpression,
-                @NonNull SearchSpec searchSpec,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
-                boolean isForEnterprise,
+        public void globalSearch(
+                @NonNull GlobalSearchAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(queryExpression);
-            Objects.requireNonNull(searchSpec);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
             String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    Objects.requireNonNull(request.getCallerAttributionSource().getPackageName());
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             // Get the enterprise user for enterprise calls
-            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(isForEnterprise, targetUser);
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(request.isForEnterprise(),
+                    targetUser);
             if (userToQuery == null) {
                 // Return an empty result if we tried to and couldn't get the enterprise user
                 invokeCallbackOnResult(callback,
@@ -1032,7 +1026,7 @@ public class AppSearchManagerService extends SystemService {
             }
             if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                     CallStats.CALL_TYPE_GLOBAL_SEARCH, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1046,16 +1040,16 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callingPackageName);
-                    SearchSpec querySearchSpec =
-                            isForEnterprise ? EnterpriseSearchSpecTransformer.transformSearchSpec(
-                                    searchSpec) : searchSpec;
+                    SearchSpec querySearchSpec = request.isForEnterprise()
+                            ? EnterpriseSearchSpecTransformer.transformSearchSpec(
+                            request.getSearchSpec()) : request.getSearchSpec();
                     SearchResultPage searchResultPage = instance.getAppSearchImpl().globalQuery(
-                            queryExpression,
+                            request.getSearchExpression(),
                             querySearchSpec,
-                            new FrameworkCallerAccess(callerAttributionSource,
-                                    callerHasSystemAccess, isForEnterprise),
+                            new FrameworkCallerAccess(request.getCallerAttributionSource(),
+                                    callerHasSystemAccess, request.isForEnterprise()),
                             instance.getLogger());
-                    if (isForEnterprise) {
+                    if (request.isForEnterprise()) {
                         searchResultPage =
                                 EnterpriseSearchResultPageTransformer.transformSearchResultPage(
                                         searchResultPage);
@@ -1071,8 +1065,8 @@ public class AppSearchManagerService extends SystemService {
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
                     if (instance != null) {
-                        int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                        int estimatedBinderLatencyMillis = 2 * (int) (totalLatencyStartTimeMillis
+                                - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
@@ -1093,8 +1087,8 @@ public class AppSearchManagerService extends SystemService {
             if (!callAccepted) {
                 logRateLimitedOrCallDeniedCallStats(callingPackageName,
                         /* callingDatabaseName= */ null, CallStats.CALL_TYPE_GLOBAL_SEARCH,
-                        targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
-                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+                        targetUser, request.getBinderCallStartTimeMillis(),
+                        totalLatencyStartTimeMillis, /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
         }
 
