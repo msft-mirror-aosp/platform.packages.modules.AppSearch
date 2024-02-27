@@ -32,6 +32,7 @@ import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
@@ -223,33 +224,20 @@ interface IAppSearchManager {
         in IAppSearchResultCallback callback) = 10;
 
     /**
-    * Inserts documents from the given file into the index.
-    *
-    * <p>This method does not dispatch change notifications for the individual documents being
-    * inserted, so it is only appropriate to use for batch upload situations where a broader change
-    * notification will indicate what has changed, like schema migration.
-    *
-    * @param callerAttributionSource The permission identity of the package that owns this
-    *     document.
-    * @param databaseName  The name of the database where this document lives.
-    * @param fileDescriptor The ParcelFileDescriptor where documents should be read from.
-    * @param userHandle Handle of the calling user.
-    * @param schemaMigrationStats the Parcelable contains SchemaMigrationStats information.
-    * @param totalLatencyStartTimeMillis start timestamp to calculate total migration latency in
-    *     Millis
-    * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-    * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
-    *     {@link AppSearchResult}&lt;{@link List}&lt;{@link Bundle}&gt;&gt;, where the value are
-    *     MigrationFailure bundles.
-    */
+     * Inserts documents from the given file into the index.
+     *
+     * <p>This method does not dispatch change notifications for the individual documents being
+     * inserted, so it is only appropriate to use for batch upload situations where a broader change
+     * notification will indicate what has changed, like schema migration.
+     *
+     * @param request {@link PutDocumentsFromFileAidlRequest} that contains the input parameters to
+     *     put documents from a file.
+     * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
+     *     {@link AppSearchResult}&lt;{@link List}&lt;{@link Bundle}&gt;&gt;, where the value are
+     *     MigrationFailure bundles.
+     */
     void putDocumentsFromFile(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in ParcelFileDescriptor fileDescriptor,
-        in UserHandle userHandle,
-        in SchemaMigrationStats schemaMigrationStats,
-        in long totalLatencyStartTimeMillis,
-        in long binderCallStartTimeMillis,
+        in PutDocumentsFromFileAidlRequest request,
         in IAppSearchResultCallback callback) = 11;
 
     /**
