@@ -27,6 +27,7 @@ import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -150,9 +151,10 @@ public class SearchResults implements Closeable {
     public void close() {
         if (!mIsClosed) {
             try {
-                mService.invalidateNextPageToken(mAttributionSource, mNextPageToken,
-                        mUserHandle, /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                        mIsForEnterprise);
+                mService.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
+                        mAttributionSource, mNextPageToken, mUserHandle,
+                        /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                        mIsForEnterprise));
                 mIsClosed = true;
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to close the SearchResults", e);

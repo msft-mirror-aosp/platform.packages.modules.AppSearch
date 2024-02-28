@@ -67,6 +67,7 @@ import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
@@ -75,6 +76,7 @@ import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.AttributionSource;
@@ -430,23 +432,23 @@ public class AppSearchManagerServiceTest {
 
     @Test
     public void testInvalidateNextPageTokenStatsLogging() throws Exception {
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false);
+                /* isForEnterprise= */ false));
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN);
     }
 
     @Test
-    public void testWriteQueryResultsToFileStatsLogging() throws Exception {
+    public void testWriteSearchResultsToFileStatsLogging() throws Exception {
         File tempFile = mTemporaryFolder.newFile();
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_WRONLY);
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.writeQueryResultsToFile(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, new ParcelFileDescriptor(fd), /* queryExpression= */ "",
-                EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
-                callback);
+        mAppSearchManagerServiceStub.writeSearchResultsToFile(
+                new WriteSearchResultsToFileAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        new ParcelFileDescriptor(fd), /* searchExpression= */ "", EMPTY_SEARCH_SPEC,
+                        mUserHandle, BINDER_CALL_START_TIME), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE);
@@ -827,7 +829,7 @@ public class AppSearchManagerServiceTest {
         verifyQueryResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetSchemaResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
-        verifyWriteQueryResultsToFileResult(AppSearchResult.RESULT_OK);
+        verifyWriteSearchResultsToFileResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsFromFileResult(AppSearchResult.RESULT_OK);
         verifySearchSuggestionResult(AppSearchResult.RESULT_OK);
         verifyLocalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -1179,10 +1181,10 @@ public class AppSearchManagerServiceTest {
     public void testEnterpriseInvalidateNextPageToken_noEnterpriseUser() throws Exception {
         // Even on devices with an enterprise user, this test will run properly, since we haven't
         // unlocked the enterprise user for our local instance of AppSearchManagerService
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ true);
+                /* isForEnterprise= */ true));
         // No CallStats logged since we returned early
         verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
@@ -1197,7 +1199,7 @@ public class AppSearchManagerServiceTest {
         verifyLocalGetDocumentsResult(resultCode);
         verifyQueryResult(resultCode);
         verifyLocalGetNextPageResult(resultCode);
-        verifyWriteQueryResultsToFileResult(resultCode);
+        verifyWriteSearchResultsToFileResult(resultCode);
         verifyPutDocumentsFromFileResult(resultCode);
         verifySearchSuggestionResult(resultCode);
         verifyLocalReportUsageResult(resultCode);
@@ -1339,22 +1341,23 @@ public class AppSearchManagerServiceTest {
     }
 
     private void verifyInvalidateNextPageTokenResult(int resultCode) throws Exception {
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false);
+                /* isForEnterprise= */ false));
         verifyCallResult(resultCode, CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, /* result= */
                 null);
     }
 
-    private void verifyWriteQueryResultsToFileResult(int resultCode) throws Exception {
+    private void verifyWriteSearchResultsToFileResult(int resultCode) throws Exception {
         File tempFile = mTemporaryFolder.newFile();
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_WRONLY);
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.writeQueryResultsToFile(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, new ParcelFileDescriptor(fd), /* queryExpression= */ "",
-                EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME, callback);
+        mAppSearchManagerServiceStub.writeSearchResultsToFile(
+                new WriteSearchResultsToFileAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        new ParcelFileDescriptor(fd), /* searchExpression= */ "", EMPTY_SEARCH_SPEC,
+                        mUserHandle, BINDER_CALL_START_TIME), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE,
                 callback.get());
     }
