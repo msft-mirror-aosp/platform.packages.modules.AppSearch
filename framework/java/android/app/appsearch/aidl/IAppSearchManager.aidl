@@ -28,6 +28,7 @@ import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
 import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
 import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
@@ -36,7 +37,7 @@ import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
-import android.app.appsearch.observer.ObserverSpec;
+import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.InternalVisibilityConfig;
@@ -215,46 +216,26 @@ interface IAppSearchManager {
         in IAppSearchResultCallback callback) = 8;
 
     /**
-     * Invalidates the next-page token so that no more results of the related query can be returned.
+     * Invalidates the next-page token so that no more results of the related search can be
+     * returned.
      *
-     * @param callerAttributionSource The permission identity of the package to persist to disk
-     *     for.
-     * @param nextPageToken The token of pre-loaded results of previously executed query to be
-     *                      Invalidated.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
+     * @param request {@link InvalidateNextPageTokenAidlRequest} that contains the input parameters
+     *     for the invalidate next-page token operation.
      */
-    void invalidateNextPageToken(
-        in AppSearchAttributionSource callerAttributionSource,
-        in long nextPageToken,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in boolean isForEnterprise) = 9;
+    void invalidateNextPageToken(in InvalidateNextPageTokenAidlRequest request) = 9;
 
     /**
-    * Searches a document based on a given specifications.
-    *
-    * <p>Documents will be save to the given ParcelFileDescriptor
-    *
-    * @param callerAttributionSource The permission identity of the package to query over.
-    * @param databaseName The databaseName this query for.
-    * @param fileDescriptor The ParcelFileDescriptor where documents should be written to.
-    * @param queryExpression String to search for.
-    * @param searchSpec SearchSpec
-    * @param userHandle Handle of the calling user.
-    * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-    * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
-    *        {@link AppSearchResult}&lt;{@code Void}&gt;.
-    */
-    void writeQueryResultsToFile(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in ParcelFileDescriptor fileDescriptor,
-        in String queryExpression,
-        in SearchSpec searchSpec,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
+     * Searches a document based on a given specifications.
+     *
+     * <p>Documents will be save to the given ParcelFileDescriptor
+     *
+     * @param request {@link WriteSearchResultsToFileAidlRequest} that contains the input parameters
+     *     to write search results to a file.
+     * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
+     *     {@link AppSearchResult}&lt;{@code Void}&gt;.
+     */
+    void writeSearchResultsToFile(
+        in WriteSearchResultsToFileAidlRequest request,
         in IAppSearchResultCallback callback) = 10;
 
     /**
