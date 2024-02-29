@@ -25,8 +25,12 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
+import android.app.appsearch.aidl.GetNextPageAidlRequest;
+import android.app.appsearch.aidl.GlobalSearchAidlRequest;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
+import android.app.appsearch.aidl.SearchAidlRequest;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -119,14 +123,16 @@ public class SearchResults implements Closeable {
             if (mIsFirstLoad) {
                 mIsFirstLoad = false;
                 if (mDatabaseName == null) {
-                    // Global query, there's no one package-database combination to check.
-                    mService.globalQuery(mAttributionSource, mQueryExpression,
-                            mSearchSpec, mUserHandle, binderCallStartTimeMillis,
-                            mIsForEnterprise, wrapCallback(executor, callback));
+                    // Global search, there's no one package-database combination to check.
+                    mService.globalSearch(
+                            new GlobalSearchAidlRequest(mAttributionSource, mQueryExpression,
+                                    mSearchSpec, mUserHandle, binderCallStartTimeMillis,
+                                    mIsForEnterprise), wrapCallback(executor, callback));
                 } else {
-                    // Normal local query, pass in specified database.
-                    mService.query(mAttributionSource, mDatabaseName, mQueryExpression,
-                            mSearchSpec, mUserHandle, binderCallStartTimeMillis,
+                    // Normal local search, pass in specified database.
+                    mService.search(new SearchAidlRequest(mAttributionSource, mDatabaseName,
+                                    mQueryExpression, mSearchSpec, mUserHandle,
+                                    binderCallStartTimeMillis),
                             wrapCallback(executor, callback));
                 }
             } else {
@@ -137,9 +143,9 @@ public class SearchResults implements Closeable {
                         && !mSearchSpec.getJoinSpec().getChildPropertyExpression().isEmpty()) {
                     joinType = JOINABLE_VALUE_TYPE_QUALIFIED_ID;
                 }
-                mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken, joinType,
-                        mUserHandle, binderCallStartTimeMillis, mIsForEnterprise,
-                        wrapCallback(executor, callback));
+                mService.getNextPage(new GetNextPageAidlRequest(mAttributionSource, mDatabaseName,
+                        mNextPageToken, joinType, mUserHandle, binderCallStartTimeMillis,
+                        mIsForEnterprise), wrapCallback(executor, callback));
             }
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -150,9 +156,10 @@ public class SearchResults implements Closeable {
     public void close() {
         if (!mIsClosed) {
             try {
-                mService.invalidateNextPageToken(mAttributionSource, mNextPageToken,
-                        mUserHandle, /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                        mIsForEnterprise);
+                mService.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
+                        mAttributionSource, mNextPageToken, mUserHandle,
+                        /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                        mIsForEnterprise));
                 mIsClosed = true;
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to close the SearchResults", e);

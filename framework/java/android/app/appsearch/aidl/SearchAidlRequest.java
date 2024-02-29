@@ -18,6 +18,7 @@ package android.app.appsearch.aidl;
 
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
+import android.app.appsearch.SearchSpec;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
@@ -26,55 +27,57 @@ import android.os.UserHandle;
 import java.util.Objects;
 
 /**
- * Encapsulates a request to make a binder call to get the schema for a given database.
+ * Encapsulates a request to make a binder call to search for documents based on given
+ * specifications.
  * @hide
  */
-@SafeParcelable.Class(creator = "GetSchemaAidlRequestCreator")
-public class GetSchemaAidlRequest extends AbstractSafeParcelable {
+@SafeParcelable.Class(creator = "SearchAidlRequestCreator")
+public class SearchAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final GetSchemaAidlRequestCreator CREATOR =
-            new GetSchemaAidlRequestCreator();
+    public static final SearchAidlRequestCreator CREATOR = new SearchAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
     @NonNull
-    @Field(id = 2, getter = "getTargetPackageName")
-    private final String mTargetPackageName;
-    @NonNull
-    @Field(id = 3, getter = "getDatabaseName")
+    @Field(id = 2, getter = "getDatabaseName")
     private final String mDatabaseName;
     @NonNull
-    @Field(id = 4, getter = "getUserHandle")
+    @Field(id = 3, getter = "getSearchExpression")
+    private final String mSearchExpression;
+    @NonNull
+    @Field(id = 4, getter = "getSearchSpec")
+    private final SearchSpec mSearchSpec;
+    @NonNull
+    @Field(id = 5, getter = "getUserHandle")
     private final UserHandle mUserHandle;
-    @Field(id = 5, getter = "getBinderCallStartTimeMillis")
+    @Field(id = 6, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
-    @Field(id = 6, getter = "isForEnterprise")
-    private final boolean mIsForEnterprise;
 
     /**
-     * Retrieves the AppSearch schema for this database.
+     * Searches a document based on a given specifications.
      *
-     * @param callerAttributionSource The permission identity of the package making this call.
-     * @param targetPackageName The name of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
+     * @param callerAttributionSource The permission identity of the package to search over.
+     * @param databaseName The databaseName this search is for.
+     * @param searchExpression String to search for
+     * @param searchSpec SearchSpec
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      */
     @Constructor
-    public GetSchemaAidlRequest(
+    public SearchAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
-            @Param(id = 2) @NonNull String targetPackageName,
-            @Param(id = 3) @NonNull String databaseName,
-            @Param(id = 4) @NonNull UserHandle userHandle,
-            @Param(id = 5) @ElapsedRealtimeLong long binderCallStartTimeMillis,
-            @Param(id = 6) boolean isForEnterprise) {
+            @Param(id = 2) @NonNull String databaseName,
+            @Param(id = 3) @NonNull String searchExpression,
+            @Param(id = 4) @NonNull SearchSpec searchSpec,
+            @Param(id = 5) @NonNull UserHandle userHandle,
+            @Param(id = 6) @ElapsedRealtimeLong long binderCallStartTimeMillis) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
-        mTargetPackageName = Objects.requireNonNull(targetPackageName);
         mDatabaseName = Objects.requireNonNull(databaseName);
+        mSearchExpression = Objects.requireNonNull(searchExpression);
+        mSearchSpec = Objects.requireNonNull(searchSpec);
         mUserHandle = Objects.requireNonNull(userHandle);
         mBinderCallStartTimeMillis = binderCallStartTimeMillis;
-        mIsForEnterprise = isForEnterprise;
     }
 
     @NonNull
@@ -83,13 +86,18 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
     }
 
     @NonNull
-    public String getTargetPackageName() {
-        return mTargetPackageName;
+    public String getDatabaseName() {
+        return mDatabaseName;
     }
 
     @NonNull
-    public String getDatabaseName() {
-        return mDatabaseName;
+    public String getSearchExpression() {
+        return mSearchExpression;
+    }
+
+    @NonNull
+    public SearchSpec getSearchSpec() {
+        return mSearchSpec;
     }
 
     @NonNull
@@ -102,12 +110,8 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
         return mBinderCallStartTimeMillis;
     }
 
-    public boolean isForEnterprise() {
-        return mIsForEnterprise;
-    }
-
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        GetSchemaAidlRequestCreator.writeToParcel(this, dest, flags);
+        SearchAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }

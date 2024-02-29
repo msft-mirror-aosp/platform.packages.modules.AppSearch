@@ -26,52 +26,50 @@ import android.os.UserHandle;
 import java.util.Objects;
 
 /**
- * Encapsulates a request to make a binder call to get the schema for a given database.
+ * Encapsulates a request to make a binder call to invalidate the next-page token so that no more
+ * results of the related search can be returned.
  * @hide
  */
-@SafeParcelable.Class(creator = "GetSchemaAidlRequestCreator")
-public class GetSchemaAidlRequest extends AbstractSafeParcelable {
+@SafeParcelable.Class(creator = "InvalidateNextPageTokenAidlRequestCreator")
+public class InvalidateNextPageTokenAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final GetSchemaAidlRequestCreator CREATOR =
-            new GetSchemaAidlRequestCreator();
+    public static final InvalidateNextPageTokenAidlRequestCreator CREATOR =
+            new InvalidateNextPageTokenAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+    @Field(id = 2, getter = "getNextPageToken")
+    private final long mNextPageToken;
     @NonNull
-    @Field(id = 2, getter = "getTargetPackageName")
-    private final String mTargetPackageName;
-    @NonNull
-    @Field(id = 3, getter = "getDatabaseName")
-    private final String mDatabaseName;
-    @NonNull
-    @Field(id = 4, getter = "getUserHandle")
+    @Field(id = 3, getter = "getUserHandle")
     private final UserHandle mUserHandle;
-    @Field(id = 5, getter = "getBinderCallStartTimeMillis")
+    @Field(id = 4, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
-    @Field(id = 6, getter = "isForEnterprise")
+    @Field(id = 5, getter = "isForEnterprise")
     private final boolean mIsForEnterprise;
 
     /**
-     * Retrieves the AppSearch schema for this database.
+     * Invalidates the next-page token so that no more results of the related search can be
+     * returned.
      *
-     * @param callerAttributionSource The permission identity of the package making this call.
-     * @param targetPackageName The name of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
+     * @param callerAttributionSource The permission identity of the package to persist to disk
+     *     for.
+     * @param nextPageToken The token of pre-loaded results of previously executed search to be
+     *                      invalidated.
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param isForEnterprise Whether to user the user's enterprise profile AppSearch instance
      */
     @Constructor
-    public GetSchemaAidlRequest(
+    public InvalidateNextPageTokenAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
-            @Param(id = 2) @NonNull String targetPackageName,
-            @Param(id = 3) @NonNull String databaseName,
-            @Param(id = 4) @NonNull UserHandle userHandle,
-            @Param(id = 5) @ElapsedRealtimeLong long binderCallStartTimeMillis,
-            @Param(id = 6) boolean isForEnterprise) {
+            @Param(id = 2) long nextPageToken,
+            @Param(id = 3) @NonNull UserHandle userHandle,
+            @Param(id = 4) @ElapsedRealtimeLong long binderCallStartTimeMillis,
+            @Param(id = 5) boolean isForEnterprise) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
-        mTargetPackageName = Objects.requireNonNull(targetPackageName);
-        mDatabaseName = Objects.requireNonNull(databaseName);
+        mNextPageToken = nextPageToken;
         mUserHandle = Objects.requireNonNull(userHandle);
         mBinderCallStartTimeMillis = binderCallStartTimeMillis;
         mIsForEnterprise = isForEnterprise;
@@ -82,14 +80,8 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
         return mCallerAttributionSource;
     }
 
-    @NonNull
-    public String getTargetPackageName() {
-        return mTargetPackageName;
-    }
-
-    @NonNull
-    public String getDatabaseName() {
-        return mDatabaseName;
+    public long getNextPageToken() {
+        return mNextPageToken;
     }
 
     @NonNull
@@ -108,6 +100,6 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        GetSchemaAidlRequestCreator.writeToParcel(this, dest, flags);
+        InvalidateNextPageTokenAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }

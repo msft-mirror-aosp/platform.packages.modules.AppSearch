@@ -18,6 +18,8 @@ package android.app.appsearch.aidl;
 
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
+import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
@@ -26,52 +28,60 @@ import android.os.UserHandle;
 import java.util.Objects;
 
 /**
- * Encapsulates a request to make a binder call to get the schema for a given database.
+ * Encapsulates a request to make a binder call to fetch the next page of results of a previously
+ * executed search.
  * @hide
  */
-@SafeParcelable.Class(creator = "GetSchemaAidlRequestCreator")
-public class GetSchemaAidlRequest extends AbstractSafeParcelable {
+@SafeParcelable.Class(creator = "GetNextPageAidlRequestCreator")
+public class GetNextPageAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final GetSchemaAidlRequestCreator CREATOR =
-            new GetSchemaAidlRequestCreator();
+    public static final GetNextPageAidlRequestCreator CREATOR = new GetNextPageAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
-    @NonNull
-    @Field(id = 2, getter = "getTargetPackageName")
-    private final String mTargetPackageName;
-    @NonNull
-    @Field(id = 3, getter = "getDatabaseName")
+    @Nullable
+    @Field(id = 2, getter = "getDatabaseName")
     private final String mDatabaseName;
+    @Field(id = 3, getter = "getNextPageToken")
+    private final long mNextPageToken;
+    @Field(id = 4, getter = "getJoinType")
+    private final @AppSearchSchema.StringPropertyConfig.JoinableValueType int mJoinType;
     @NonNull
-    @Field(id = 4, getter = "getUserHandle")
+    @Field(id = 5, getter = "getUserHandle")
     private final UserHandle mUserHandle;
-    @Field(id = 5, getter = "getBinderCallStartTimeMillis")
+    @Field(id = 6, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
-    @Field(id = 6, getter = "isForEnterprise")
+    @Field(id = 7, getter = "isForEnterprise")
     private final boolean mIsForEnterprise;
 
     /**
-     * Retrieves the AppSearch schema for this database.
+     * Fetches the next page of results of a previously executed search. Results can be empty if
+     * next-page token is invalid or all pages have been returned.
      *
-     * @param callerAttributionSource The permission identity of the package making this call.
-     * @param targetPackageName The name of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
+     * @param callerAttributionSource The permission identity of the package to persist to disk
+     *     for.
+     * @param databaseName The nullable databaseName this search for. The databaseName will be null
+     *                     if the search is a global search.
+     * @param nextPageToken The token of pre-loaded results of previously executed search.
+     * @param joinType the type of join performed. 0 if no join is performed
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param isForEnterprise Whether to use the user's enterprise profile AppSearch instance
      */
     @Constructor
-    public GetSchemaAidlRequest(
+    public GetNextPageAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
-            @Param(id = 2) @NonNull String targetPackageName,
-            @Param(id = 3) @NonNull String databaseName,
-            @Param(id = 4) @NonNull UserHandle userHandle,
-            @Param(id = 5) @ElapsedRealtimeLong long binderCallStartTimeMillis,
-            @Param(id = 6) boolean isForEnterprise) {
+            @Param(id = 2) @Nullable String databaseName,
+            @Param(id = 3) long nextPageToken,
+            @Param(id = 4) @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinType,
+            @Param(id = 5) @NonNull UserHandle userHandle,
+            @Param(id = 6) @ElapsedRealtimeLong long binderCallStartTimeMillis,
+            @Param(id = 7) boolean isForEnterprise) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
-        mTargetPackageName = Objects.requireNonNull(targetPackageName);
-        mDatabaseName = Objects.requireNonNull(databaseName);
+        mDatabaseName = databaseName;
+        mNextPageToken = nextPageToken;
+        mJoinType = joinType;
         mUserHandle = Objects.requireNonNull(userHandle);
         mBinderCallStartTimeMillis = binderCallStartTimeMillis;
         mIsForEnterprise = isForEnterprise;
@@ -82,14 +92,18 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
         return mCallerAttributionSource;
     }
 
-    @NonNull
-    public String getTargetPackageName() {
-        return mTargetPackageName;
-    }
-
-    @NonNull
+    @Nullable
     public String getDatabaseName() {
         return mDatabaseName;
+    }
+
+    public long getNextPageToken() {
+        return mNextPageToken;
+    }
+
+    @AppSearchSchema.StringPropertyConfig.JoinableValueType
+    public int getJoinType() {
+        return mJoinType;
     }
 
     @NonNull
@@ -108,6 +122,6 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        GetSchemaAidlRequestCreator.writeToParcel(this, dest, flags);
+        GetNextPageAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }

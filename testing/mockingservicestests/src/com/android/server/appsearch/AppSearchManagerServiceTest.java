@@ -59,13 +59,28 @@ import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.GetNextPageAidlRequest;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.GetNamespacesAidlRequest;
+import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
+import android.app.appsearch.aidl.GlobalSearchAidlRequest;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
+import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
+import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
+import android.app.appsearch.aidl.SearchAidlRequest;
+import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
+import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.AttributionSource;
@@ -232,8 +247,10 @@ public class AppSearchManagerServiceTest {
             // exist in there.
             TestResultCallback callback = new TestResultCallback();
             mAppSearchManagerServiceStub.initialize(
-                    AppSearchAttributionSource.createAttributionSource(mContext),
-                    testTargetUser, System.currentTimeMillis(), callback);
+                    new InitializeAidlRequest(
+                            AppSearchAttributionSource.createAttributionSource(mContext),
+                            testTargetUser, System.currentTimeMillis())
+                    , callback);
             assertThat(callback.get().isSuccess()).isFalse();
             assertThat(callback.get().getErrorMessage()).contains(
                     "SecurityException: Package: " + mContext.getPackageName()
@@ -313,12 +330,10 @@ public class AppSearchManagerServiceTest {
     public void testPutDocumentsStatsLogging() throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.putDocuments(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME,
-                new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
-                mUserHandle,
-                BINDER_CALL_START_TIME,
-                callback);
+                new PutDocumentsAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
+                        mUserHandle, BINDER_CALL_START_TIME), callback);
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS);
@@ -353,37 +368,37 @@ public class AppSearchManagerServiceTest {
     }
 
     @Test
-    public void testQueryStatsLogging() throws Exception {
+    public void testSearchStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.query(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+        mAppSearchManagerServiceStub.search(
+                new SearchAidlRequest(AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, /* searchExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME, CallStats.CALL_TYPE_SEARCH);
-        // query only logs SearchStats indirectly so we don't verify it
+        // search only logs SearchStats indirectly so we don't verify it
     }
 
     @Test
-    public void testGlobalQueryStatsLogging() throws Exception {
+    public void testGlobalSearchStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.globalQuery(
+        mAppSearchManagerServiceStub.globalSearch(new GlobalSearchAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false, callback);
+                /* searchExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
+                /* isForEnterprise= */ false), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_GLOBAL_SEARCH);
-        // globalQuery only logs SearchStats indirectly so we don't verify it
+        // globalSearch only logs SearchStats indirectly so we don't verify it
     }
 
     @Test
     public void testLocalGetNextPageStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* nextPageToken= */ 0,
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
+                AppSearchAttributionSource.createAttributionSource(mContext),
+                DATABASE_NAME, /* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ false, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ false), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_GET_NEXT_PAGE);
@@ -401,11 +416,11 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testGlobalGetNextPageStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* databaseName= */ null, /* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ false, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ false), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE);
         // getNextPage also logs SearchStats
@@ -421,23 +436,23 @@ public class AppSearchManagerServiceTest {
 
     @Test
     public void testInvalidateNextPageTokenStatsLogging() throws Exception {
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false);
+                /* isForEnterprise= */ false));
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN);
     }
 
     @Test
-    public void testWriteQueryResultsToFileStatsLogging() throws Exception {
+    public void testWriteSearchResultsToFileStatsLogging() throws Exception {
         File tempFile = mTemporaryFolder.newFile();
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_WRONLY);
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.writeQueryResultsToFile(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, new ParcelFileDescriptor(fd), /* queryExpression= */ "",
-                EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
-                callback);
+        mAppSearchManagerServiceStub.writeSearchResultsToFile(
+                new WriteSearchResultsToFileAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        new ParcelFileDescriptor(fd), /* searchExpression= */ "", EMPTY_SEARCH_SPEC,
+                        mUserHandle, BINDER_CALL_START_TIME), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE);
@@ -448,11 +463,11 @@ public class AppSearchManagerServiceTest {
         File tempFile = mTemporaryFolder.newFile();
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_RDONLY);
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.putDocumentsFromFile(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, new ParcelFileDescriptor(fd), mUserHandle,
+        mAppSearchManagerServiceStub.putDocumentsFromFile(new PutDocumentsFromFileAidlRequest(
+                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                new ParcelFileDescriptor(fd), mUserHandle,
                 new SchemaMigrationStats.Builder(mContext.getPackageName(), DATABASE_NAME).build(),
-                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME, callback);
+                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME), callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE);
@@ -472,9 +487,11 @@ public class AppSearchManagerServiceTest {
             new SearchSuggestionSpec.Builder(/*maximumResultCount=*/1).build();
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.searchSuggestion(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+                new SearchSuggestionAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
+                        mUserHandle, BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_SEARCH_SUGGESTION);
@@ -521,9 +538,11 @@ public class AppSearchManagerServiceTest {
     public void testRemoveByDocumentIdStatsLogging() throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.removeByDocumentId(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByDocumentIdAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID);
@@ -533,9 +552,11 @@ public class AppSearchManagerServiceTest {
     public void testRemoveByQueryStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.removeByQuery(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByQueryAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH);
@@ -545,8 +566,10 @@ public class AppSearchManagerServiceTest {
     public void testGetStorageInfoStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getStorageInfo(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+                new GetStorageInfoAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        mUserHandle, BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), DATABASE_NAME,
                 CallStats.CALL_TYPE_GET_STORAGE_INFO);
@@ -555,8 +578,9 @@ public class AppSearchManagerServiceTest {
     @Test
     public void testPersistToDiskStatsLogging() throws Exception {
         mAppSearchManagerServiceStub.persistToDisk(
-                AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
-                BINDER_CALL_START_TIME);
+                new PersistToDiskAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
+                        BINDER_CALL_START_TIME));
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_FLUSH);
     }
 
@@ -564,10 +588,11 @@ public class AppSearchManagerServiceTest {
     public void testRegisterObserverCallbackStatsLogging() throws Exception {
         AppSearchResultParcel<Void> resultParcel =
                 mAppSearchManagerServiceStub.registerObserverCallback(
-                        AppSearchAttributionSource.createAttributionSource(mContext),
-                        mContext.getPackageName(),
-                        new ObserverSpec.Builder().build(),
-                        mUserHandle, BINDER_CALL_START_TIME,
+                        new RegisterObserverCallbackAidlRequest(
+                                AppSearchAttributionSource.createAttributionSource(mContext),
+                                mContext.getPackageName(),
+                                new ObserverSpec.Builder().build(),
+                                mUserHandle, BINDER_CALL_START_TIME),
                         new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
@@ -588,9 +613,11 @@ public class AppSearchManagerServiceTest {
     public void testUnregisterObserverCallbackStatsLogging() throws Exception {
         AppSearchResultParcel<Void> resultParcel =
                 mAppSearchManagerServiceStub.unregisterObserverCallback(
-                        AppSearchAttributionSource.createAttributionSource(mContext),
-                        mContext.getPackageName(), mUserHandle,
-                        BINDER_CALL_START_TIME, new IAppSearchObserverProxy.Stub() {
+                        new UnregisterObserverCallbackAidlRequest(
+                                AppSearchAttributionSource.createAttributionSource(mContext),
+                                mContext.getPackageName(), mUserHandle,
+                                BINDER_CALL_START_TIME),
+                        new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
                                     List<String> changedSchemaNames) throws RemoteException {
@@ -611,8 +638,10 @@ public class AppSearchManagerServiceTest {
     public void testInitializeStatsLogging() throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.initialize(
-                AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new InitializeAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         assertThat(callback.get().getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
         verifyCallStats(mContext.getPackageName(), CallStats.CALL_TYPE_INITIALIZE);
         // initialize only logs InitializeStats indirectly so we don't verify it
@@ -801,10 +830,10 @@ public class AppSearchManagerServiceTest {
         // Everything else
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetSchemaResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
-        verifyWriteQueryResultsToFileResult(AppSearchResult.RESULT_OK);
+        verifyWriteSearchResultsToFileResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsFromFileResult(AppSearchResult.RESULT_OK);
         verifySearchSuggestionResult(AppSearchResult.RESULT_OK);
         verifyLocalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -812,7 +841,7 @@ public class AppSearchManagerServiceTest {
         verifyRemoveByQueryResult(AppSearchResult.RESULT_OK);
         verifyGetStorageInfoResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalSearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
         verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -864,12 +893,12 @@ public class AppSearchManagerServiceTest {
         // Set Schema call is rejected because of total capacity exceeded
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
         // Other calls should be fine
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalSearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
         verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -914,12 +943,12 @@ public class AppSearchManagerServiceTest {
                 false);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalSearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
         verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -955,14 +984,14 @@ public class AppSearchManagerServiceTest {
                 "localSearch:6;localSetSchema:9;localGetSchema:15",
                 false);
         // Some calls are rejected once rate limiting gets enabled
-        verifyQueryResult(RESULT_RATE_LIMITED);
+        verifySearchResult(RESULT_RATE_LIMITED);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalSearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
         verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -989,12 +1018,12 @@ public class AppSearchManagerServiceTest {
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalSearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
         verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -1010,12 +1039,12 @@ public class AppSearchManagerServiceTest {
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
         verifySetSchemaResult(AppSearchResult.RESULT_OK);
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalSearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
         verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -1043,12 +1072,12 @@ public class AppSearchManagerServiceTest {
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
-        verifyQueryResult(AppSearchResult.RESULT_OK);
+        verifySearchResult(AppSearchResult.RESULT_OK);
         verifyPutDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalSearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
         verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -1058,12 +1087,12 @@ public class AppSearchManagerServiceTest {
         verifyInitializeResult(AppSearchResult.RESULT_OK);
         verifyGlobalCallsResults(AppSearchResult.RESULT_OK);
 
-        // Query call should also get rejected after setting a lower limit
+        // Search call should also get rejected after setting a lower limit
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
                 Float.toString(0.5f),
                 false);
-        verifyQueryResult(RESULT_RATE_LIMITED);
+        verifySearchResult(RESULT_RATE_LIMITED);
         verifySetSchemaResult(RESULT_RATE_LIMITED);
         verifyLocalGetSchemaResult(RESULT_RATE_LIMITED);
 
@@ -1071,7 +1100,7 @@ public class AppSearchManagerServiceTest {
         verifyLocalGetDocumentsResult(AppSearchResult.RESULT_OK);
         verifyLocalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetDocumentsResult(AppSearchResult.RESULT_OK);
-        verifyGlobalQueryResult(AppSearchResult.RESULT_OK);
+        verifyGlobalSearchResult(AppSearchResult.RESULT_OK);
         verifyGlobalGetNextPageResult(AppSearchResult.RESULT_OK);
         verifyInvalidateNextPageTokenResult(AppSearchResult.RESULT_OK);
         verifyGlobalReportUsageResult(AppSearchResult.RESULT_OK);
@@ -1118,14 +1147,14 @@ public class AppSearchManagerServiceTest {
     }
 
     @Test
-    public void testEnterpriseGlobalQuery_noEnterpriseUser_emptyResult() throws Exception {
+    public void testEnterpriseGlobalSearch_noEnterpriseUser_emptyResult() throws Exception {
         // Even on devices with an enterprise user, this test will run properly, since we haven't
         // unlocked the enterprise user for our local instance of AppSearchManagerService
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.globalQuery(
+        mAppSearchManagerServiceStub.globalSearch(new GlobalSearchAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ true, callback);
+                /* searchExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
+                /* isForEnterprise= */ true), callback);
         AppSearchResult<SearchResultPage> result =
                 (AppSearchResult<SearchResultPage>) callback.get();
         assertThat(result.getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
@@ -1139,11 +1168,11 @@ public class AppSearchManagerServiceTest {
         // Even on devices with an enterprise user, this test will run properly, since we haven't
         // unlocked the enterprise user for our local instance of AppSearchManagerService
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* databaseName= */ null,/* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ true, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ true), callback);
         AppSearchResult<SearchResultPage> result =
                 (AppSearchResult<SearchResultPage>) callback.get();
         assertThat(result.getResultCode()).isEqualTo(AppSearchResult.RESULT_OK);
@@ -1156,10 +1185,10 @@ public class AppSearchManagerServiceTest {
     public void testEnterpriseInvalidateNextPageToken_noEnterpriseUser() throws Exception {
         // Even on devices with an enterprise user, this test will run properly, since we haven't
         // unlocked the enterprise user for our local instance of AppSearchManagerService
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ true);
+                /* isForEnterprise= */ true));
         // No CallStats logged since we returned early
         verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
@@ -1172,9 +1201,9 @@ public class AppSearchManagerServiceTest {
         verifyGetNamespacesResult(resultCode);
         verifyPutDocumentsResult(resultCode);
         verifyLocalGetDocumentsResult(resultCode);
-        verifyQueryResult(resultCode);
+        verifySearchResult(resultCode);
         verifyLocalGetNextPageResult(resultCode);
-        verifyWriteQueryResultsToFileResult(resultCode);
+        verifyWriteSearchResultsToFileResult(resultCode);
         verifyPutDocumentsFromFileResult(resultCode);
         verifySearchSuggestionResult(resultCode);
         verifyLocalReportUsageResult(resultCode);
@@ -1189,7 +1218,7 @@ public class AppSearchManagerServiceTest {
         // package
         verifyGlobalGetSchemaResult(resultCode);
         verifyGlobalGetDocumentsResult(resultCode);
-        verifyGlobalQueryResult(resultCode);
+        verifyGlobalSearchResult(resultCode);
         verifyGlobalGetNextPageResult(resultCode);
         verifyInvalidateNextPageTokenResult(resultCode);
         verifyGlobalReportUsageResult(resultCode);
@@ -1249,12 +1278,10 @@ public class AppSearchManagerServiceTest {
     private void verifyPutDocumentsResult(int resultCode) throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.putDocuments(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME,
-                new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
-                mUserHandle,
-                BINDER_CALL_START_TIME,
-                callback);
+                new PutDocumentsAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        new DocumentsParcel(Collections.emptyList(), Collections.emptyList()),
+                        mUserHandle, BINDER_CALL_START_TIME), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_PUT_DOCUMENTS, callback.get());
     }
 
@@ -1279,61 +1306,62 @@ public class AppSearchManagerServiceTest {
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID, callback.get());
     }
 
-    private void verifyQueryResult(int resultCode) throws Exception {
+    private void verifySearchResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.query(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
-                callback);
+        mAppSearchManagerServiceStub.search(
+                new SearchAidlRequest(AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME,/* searchExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_SEARCH, callback.get());
     }
 
-    private void verifyGlobalQueryResult(int resultCode) throws Exception {
+    private void verifyGlobalSearchResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.globalQuery(
+        mAppSearchManagerServiceStub.globalSearch(new GlobalSearchAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false, callback);
+                /* searchExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
+                /* isForEnterprise= */ false), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_SEARCH, callback.get());
     }
 
     private void verifyLocalGetNextPageResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
                 /* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ false, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ false), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_NEXT_PAGE, callback.get());
     }
 
     private void verifyGlobalGetNextPageResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.getNextPage(
+        mAppSearchManagerServiceStub.getNextPage(new GetNextPageAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* databaseName= */ null, /* nextPageToken= */ 0,
                 AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID, mUserHandle,
-                BINDER_CALL_START_TIME, /* isForEnterprise= */ false, callback);
+                BINDER_CALL_START_TIME, /* isForEnterprise= */ false), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE, callback.get());
     }
 
     private void verifyInvalidateNextPageTokenResult(int resultCode) throws Exception {
-        mAppSearchManagerServiceStub.invalidateNextPageToken(
+        mAppSearchManagerServiceStub.invalidateNextPageToken(new InvalidateNextPageTokenAidlRequest(
                 AppSearchAttributionSource.createAttributionSource(mContext),
                 /* nextPageToken= */ 0, mUserHandle, BINDER_CALL_START_TIME,
-                /* isForEnterprise= */ false);
+                /* isForEnterprise= */ false));
         verifyCallResult(resultCode, CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, /* result= */
                 null);
     }
 
-    private void verifyWriteQueryResultsToFileResult(int resultCode) throws Exception {
+    private void verifyWriteSearchResultsToFileResult(int resultCode) throws Exception {
         File tempFile = mTemporaryFolder.newFile();
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_WRONLY);
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.writeQueryResultsToFile(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, new ParcelFileDescriptor(fd), /* queryExpression= */ "",
-                EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME, callback);
+        mAppSearchManagerServiceStub.writeSearchResultsToFile(
+                new WriteSearchResultsToFileAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        new ParcelFileDescriptor(fd), /* searchExpression= */ "", EMPTY_SEARCH_SPEC,
+                        mUserHandle, BINDER_CALL_START_TIME), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE,
                 callback.get());
     }
@@ -1342,11 +1370,11 @@ public class AppSearchManagerServiceTest {
         File tempFile = mTemporaryFolder.newFile();
         FileDescriptor fd = IoBridge.open(tempFile.getPath(), O_RDONLY);
         TestResultCallback callback = new TestResultCallback();
-        mAppSearchManagerServiceStub.putDocumentsFromFile(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, new ParcelFileDescriptor(fd), mUserHandle,
+        mAppSearchManagerServiceStub.putDocumentsFromFile(new PutDocumentsFromFileAidlRequest(
+                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                new ParcelFileDescriptor(fd), mUserHandle,
                 new SchemaMigrationStats.Builder(mContext.getPackageName(), DATABASE_NAME).build(),
-                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME, callback);
+                /* totalLatencyStartTimeMillis= */ 0, BINDER_CALL_START_TIME), callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, callback.get());
     }
 
@@ -1355,9 +1383,11 @@ public class AppSearchManagerServiceTest {
             new SearchSuggestionSpec.Builder(/*maximumResultCount=*/1).build();
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.searchSuggestion(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+                new SearchSuggestionAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, /* suggestionQueryExpression= */ "foo", searchSuggestionSpec,
+                        mUserHandle, BINDER_CALL_START_TIME),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_SEARCH_SUGGESTION, callback.get());
     }
 
@@ -1396,17 +1426,21 @@ public class AppSearchManagerServiceTest {
     private void verifyRemoveByDocumentIdResult(int resultCode) throws Exception {
         TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
         mAppSearchManagerServiceStub.removeByDocumentId(
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new RemoveByDocumentIdAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext),
+                        DATABASE_NAME, NAMESPACE, /* ids= */ Collections.emptyList(), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID, callback.get());
     }
 
     private void verifyRemoveByQueryResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.removeByQuery(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle, BINDER_CALL_START_TIME,
+                new RemoveByQueryAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        /* queryExpression= */ "", EMPTY_SEARCH_SPEC, mUserHandle,
+                        BINDER_CALL_START_TIME),
                 callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH,
                 callback.get());
@@ -1415,26 +1449,30 @@ public class AppSearchManagerServiceTest {
     private void verifyGetStorageInfoResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.getStorageInfo(
-                AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
-                mUserHandle, BINDER_CALL_START_TIME, callback);
+                new GetStorageInfoAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), DATABASE_NAME,
+                        mUserHandle, BINDER_CALL_START_TIME),
+                callback);
         verifyCallResult(resultCode, CallStats.CALL_TYPE_GET_STORAGE_INFO, callback.get());
     }
 
     private void verifyPersistToDiskResult(int resultCode) throws Exception {
         mAppSearchManagerServiceStub.persistToDisk(
-                AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
-                BINDER_CALL_START_TIME);
+                new PersistToDiskAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
+                        BINDER_CALL_START_TIME));
         verifyCallResult(resultCode, CallStats.CALL_TYPE_FLUSH, /* result= */ null);
     }
 
     private void verifyRegisterObserverCallbackResult(int resultCode) throws Exception {
         AppSearchResultParcel<Void> resultParcel =
                 mAppSearchManagerServiceStub.registerObserverCallback(
-                        AppSearchAttributionSource.createAttributionSource(mContext),
-                        mContext.getPackageName(),
-                        new ObserverSpec.Builder().build(),
-                        mUserHandle,
-                        BINDER_CALL_START_TIME,
+                        new RegisterObserverCallbackAidlRequest(
+                                AppSearchAttributionSource.createAttributionSource(mContext),
+                                mContext.getPackageName(),
+                                new ObserverSpec.Builder().build(),
+                                mUserHandle,
+                                BINDER_CALL_START_TIME),
                         new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
@@ -1454,9 +1492,11 @@ public class AppSearchManagerServiceTest {
     private void verifyUnregisterObserverCallbackResult(int resultCode) throws Exception {
         AppSearchResultParcel<Void> resultParcel =
                 mAppSearchManagerServiceStub.unregisterObserverCallback(
-                        AppSearchAttributionSource.createAttributionSource(mContext),
-                        mContext.getPackageName(), mUserHandle,
-                        BINDER_CALL_START_TIME, new IAppSearchObserverProxy.Stub() {
+                        new UnregisterObserverCallbackAidlRequest(
+                                AppSearchAttributionSource.createAttributionSource(mContext),
+                                mContext.getPackageName(), mUserHandle,
+                                BINDER_CALL_START_TIME),
+                        new IAppSearchObserverProxy.Stub() {
                             @Override
                             public void onSchemaChanged(String packageName, String databaseName,
                                     List<String> changedSchemaNames) throws RemoteException {
@@ -1475,8 +1515,10 @@ public class AppSearchManagerServiceTest {
     private void verifyInitializeResult(int resultCode) throws Exception {
         TestResultCallback callback = new TestResultCallback();
         mAppSearchManagerServiceStub.initialize(
-                AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
-                BINDER_CALL_START_TIME, callback);
+                new InitializeAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext), mUserHandle,
+                        BINDER_CALL_START_TIME),
+                callback);
         if (resultCode == RESULT_DENIED) {
             verify(mLogger, never()).logStats(any(CallStats.class));
         } else {

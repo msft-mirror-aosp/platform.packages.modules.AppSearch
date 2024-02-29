@@ -16,6 +16,7 @@
 
 package android.app.appsearch.aidl;
 
+import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSession;
@@ -33,11 +34,11 @@ import java.util.Objects;
  * database.
  * @hide
  */
-@SafeParcelable.Class(creator = "SetSchemaBinderRequestCreator")
+@SafeParcelable.Class(creator = "SetSchemaAidlRequestCreator")
 public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final SetSchemaBinderRequestCreator CREATOR =
-            new SetSchemaBinderRequestCreator();
+    public static final SetSchemaAidlRequestCreator CREATOR =
+            new SetSchemaAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
@@ -59,10 +60,26 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
     @Field(id = 7, getter = "getUserHandle")
     private final UserHandle mUserHandle;
     @Field(id = 8, getter = "getBinderCallStartTimeMillis")
-    private final long mBinderCallStartTimeMillis;
+    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
     @Field(id = 9, getter = "getSchemaMigrationCallType")
     private final int mSchemaMigrationCallType;
 
+    /**
+     * Updates the AppSearch schema for this database.
+     *
+     * @param callerAttributionSource The permission identity of the package that owns this schema.
+     * @param databaseName  The name of the database where this schema lives.
+     * @param schemas List of {@link AppSearchSchema} objects.
+     * @param visibilityConfigs List of {@link InternalVisibilityConfig} objects defining the
+     *     visibility for the schema types.
+     * @param forceOverride Whether to apply the new schema even if it is incompatible. All
+     *     incompatible documents will be deleted.
+     * @param schemaVersion  The overall schema version number of the request.
+     * @param userHandle Handle of the calling user
+     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param schemaMigrationCallType Indicates how a SetSchema call relative to SchemaMigration
+     *     case.
+     */
     @Constructor
     public SetSchemaAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
@@ -72,7 +89,7 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
             @Param(id = 5) boolean forceOverride,
             @Param(id = 6) int schemaVersion,
             @Param(id = 7) @NonNull UserHandle userHandle,
-            @Param(id = 8) long binderCallStartTimeMillis,
+            @Param(id = 8) @ElapsedRealtimeLong long binderCallStartTimeMillis,
             @Param(id = 9) int schemaMigrationCallType) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
         mDatabaseName = Objects.requireNonNull(databaseName);
@@ -118,6 +135,7 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
         return mUserHandle;
     }
 
+    @ElapsedRealtimeLong
     public long getBinderCallStartTimeMillis() {
         return mBinderCallStartTimeMillis;
     }
@@ -128,6 +146,6 @@ public final class SetSchemaAidlRequest extends AbstractSafeParcelable {
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        SetSchemaBinderRequestCreator.writeToParcel(this, dest, flags);
+        SetSchemaAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }

@@ -17,12 +17,12 @@
 package android.app.appsearch.aidl;
 
 import android.annotation.NonNull;
-import android.app.appsearch.ParcelableUtil;
+import android.annotation.Nullable;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.ParcelableUtil;
+import android.app.appsearch.safeparcel.AbstractSafeParcelable;
+import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
-import android.os.Parcelable;
-
-import java.util.Objects;
 
 /**
  * Parcelable wrapper around {@link AppSearchResult}.
@@ -35,40 +35,75 @@ import java.util.Objects;
  * @param <ValueType> The type of result object for successful calls. Must be a parcelable type.
  * @hide
  */
-public final class AppSearchResultParcel<ValueType> implements Parcelable {
-    private final AppSearchResult<ValueType> mResult;
+@SafeParcelable.Class(creator = "AppSearchResultParcelCreator", creatorIsFinal = false)
+public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelable {
 
-    /** Creates a new {@link AppSearchResultParcel} from the given result. */
-    public AppSearchResultParcel(@NonNull AppSearchResult<ValueType> result) {
-        mResult = Objects.requireNonNull(result);
-    }
+    @NonNull
+    public static final AppSearchResultParcelCreator CREATOR =
+            new AppSearchResultParcelCreator() {
+                @Override
+                public AppSearchResultParcel createFromParcel(Parcel in) {
+                    // We pass the result we get from ParcelableUtil#readBlob to
+                    // AppSearchResultParcelCreator to decode.
+                    byte[] dataBlob = ParcelableUtil.readBlob(in);
+                    // Create a parcel object to un-serialize the byte array we are reading from
+                    // Parcel.readBlob(). Parcel.WriteBlob() could take care of whether to pass
+                    // data via binder directly or Android shared memory if the data is large.
+                    Parcel unmarshallParcel = Parcel.obtain();
+                    try {
+                        unmarshallParcel.unmarshall(dataBlob, 0, dataBlob.length);
+                        unmarshallParcel.setDataPosition(0);
+                        return super.createFromParcel(unmarshallParcel);
+                    } finally {
+                        unmarshallParcel.recycle();
+                    }
+                }
+            };
 
-    private AppSearchResultParcel(@NonNull Parcel in) {
-        byte[] dataBlob = Objects.requireNonNull(ParcelableUtil.readBlob(in));
-        Parcel data = Parcel.obtain();
-        try {
-            data.unmarshall(dataBlob, 0, dataBlob.length);
-            data.setDataPosition(0);
-            mResult = (AppSearchResult<ValueType>) directlyReadFromParcel(data);
-        } finally {
-            data.recycle();
+    @NonNull
+    private static final AppSearchResultParcelCreator CREATOR_WITHOUT_BLOB =
+            new AppSearchResultParcelCreator();
+
+    @Field(id = 1)
+    final int mResultCode;
+    @Field(id = 2)
+    @Nullable final ValueParcel mValue;
+    @Field(id = 3)
+    @Nullable final String mErrorMessage;
+
+    @NonNull AppSearchResult<ValueType> mResultCached;
+
+    @Constructor
+    AppSearchResultParcel(
+            @Param(id = 1) @AppSearchResult.ResultCode int resultCode,
+            @Param(id = 2) @Nullable ValueParcel<ValueType> value,
+            @Param(id = 3) @Nullable String errorMessage) {
+        mResultCode = resultCode;
+        mValue = value;
+        mErrorMessage = errorMessage;
+        if (mResultCode == AppSearchResult.RESULT_OK) {
+            mResultCached = AppSearchResult.newSuccessfulResult((ValueType) mValue.getValue());
+        } else {
+            mResultCached = AppSearchResult.newFailedResult(mResultCode, mErrorMessage);
         }
     }
 
-    static AppSearchResult directlyReadFromParcel(@NonNull Parcel data) {
-        int resultCode = data.readInt();
-        Object resultValue = data.readValue(/*loader=*/ null);
-        String errorMessage = data.readString();
-        if (resultCode == AppSearchResult.RESULT_OK) {
-            return AppSearchResult.newSuccessfulResult(resultValue);
+    /** Creates a new {@link AppSearchResultParcel} from the given result. */
+    public AppSearchResultParcel(@NonNull AppSearchResult<ValueType> result) {
+        mResultCached = result;
+        mResultCode = result.getResultCode();
+        if (mResultCode == AppSearchResult.RESULT_OK) {
+            mValue = new ValueParcel<>(result.getResultValue());
+            mErrorMessage = null;
         } else {
-            return AppSearchResult.newFailedResult(resultCode, errorMessage);
+            mErrorMessage = result.getErrorMessage();
+            mValue = null;
         }
     }
 
     @NonNull
     public AppSearchResult<ValueType> getResult() {
-        return mResult;
+        return mResultCached;
     }
 
     /** @hide */
@@ -80,7 +115,8 @@ public final class AppSearchResultParcel<ValueType> implements Parcelable {
         byte[] bytes;
         Parcel data = Parcel.obtain();
         try {
-            directlyWriteToParcel(data, mResult);
+            // We pass encoded result from AppSearchResultParcelCreator to ParcelableUtil#writeBlob.
+            directlyWriteToParcel(this, data, flags);
             bytes = data.marshall();
         } finally {
             data.recycle();
@@ -88,36 +124,12 @@ public final class AppSearchResultParcel<ValueType> implements Parcelable {
         ParcelableUtil.writeBlob(dest, bytes);
     }
 
-    static void directlyWriteToParcel(@NonNull Parcel data, @NonNull AppSearchResult result) {
-        data.writeInt(result.getResultCode());
-        if (result.isSuccess()) {
-            data.writeValue(result.getResultValue());
-        } else {
-            data.writeValue(null);
-        }
-        data.writeString(result.getErrorMessage());
+    static void directlyWriteToParcel(@NonNull AppSearchResultParcel result, @NonNull Parcel data,
+            int flags) {
+        AppSearchResultParcelCreator.writeToParcel(result, data, flags);
     }
 
-    /** @hide */
-    @Override
-    public int describeContents() {
-        return 0;
+    static AppSearchResultParcel directlyReadFromParcel(@NonNull Parcel data) {
+        return CREATOR_WITHOUT_BLOB.createFromParcel(data);
     }
-
-    /** @hide */
-    @NonNull
-    public static final Creator<AppSearchResultParcel<?>> CREATOR =
-            new Creator<AppSearchResultParcel<?>>() {
-                @NonNull
-                @Override
-                public AppSearchResultParcel<?> createFromParcel(@NonNull Parcel in) {
-                    return new AppSearchResultParcel<>(in);
-                }
-
-                @NonNull
-                @Override
-                public AppSearchResultParcel<?>[] newArray(int size) {
-                    return new AppSearchResultParcel<?>[size];
-                }
-            };
 }

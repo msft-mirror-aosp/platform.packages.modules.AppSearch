@@ -18,6 +18,7 @@ package android.app.appsearch.aidl;
 
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
+import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
@@ -26,55 +27,42 @@ import android.os.UserHandle;
 import java.util.Objects;
 
 /**
- * Encapsulates a request to make a binder call to get the schema for a given database.
+ * Encapsulates a request to make a binder call to insert documents into the index.
  * @hide
  */
-@SafeParcelable.Class(creator = "GetSchemaAidlRequestCreator")
-public class GetSchemaAidlRequest extends AbstractSafeParcelable {
+@SafeParcelable.Class(creator = "PutDocumentsAidlRequestCreator")
+public class PutDocumentsAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final GetSchemaAidlRequestCreator CREATOR =
-            new GetSchemaAidlRequestCreator();
+    public static final PutDocumentsAidlRequestCreator CREATOR =
+            new PutDocumentsAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
     @NonNull
-    @Field(id = 2, getter = "getTargetPackageName")
-    private final String mTargetPackageName;
-    @NonNull
-    @Field(id = 3, getter = "getDatabaseName")
+    @Field(id = 2, getter = "getDatabaseName")
     private final String mDatabaseName;
+    @NonNull
+    @Field(id = 3, getter = "getDocumentsParcel")
+    private final DocumentsParcel mDocumentsParcel;
     @NonNull
     @Field(id = 4, getter = "getUserHandle")
     private final UserHandle mUserHandle;
     @Field(id = 5, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
-    @Field(id = 6, getter = "isForEnterprise")
-    private final boolean mIsForEnterprise;
 
-    /**
-     * Retrieves the AppSearch schema for this database.
-     *
-     * @param callerAttributionSource The permission identity of the package making this call.
-     * @param targetPackageName The name of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     */
     @Constructor
-    public GetSchemaAidlRequest(
+    public PutDocumentsAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
-            @Param(id = 2) @NonNull String targetPackageName,
-            @Param(id = 3) @NonNull String databaseName,
+            @Param(id = 2) @NonNull String databaseName,
+            @Param(id = 3) @NonNull DocumentsParcel documentsParcel,
             @Param(id = 4) @NonNull UserHandle userHandle,
-            @Param(id = 5) @ElapsedRealtimeLong long binderCallStartTimeMillis,
-            @Param(id = 6) boolean isForEnterprise) {
+            @Param(id = 5) @ElapsedRealtimeLong long binderCallStartTimeMillis) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
-        mTargetPackageName = Objects.requireNonNull(targetPackageName);
         mDatabaseName = Objects.requireNonNull(databaseName);
+        mDocumentsParcel = Objects.requireNonNull(documentsParcel);
         mUserHandle = Objects.requireNonNull(userHandle);
         mBinderCallStartTimeMillis = binderCallStartTimeMillis;
-        mIsForEnterprise = isForEnterprise;
     }
 
     @NonNull
@@ -83,13 +71,13 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
     }
 
     @NonNull
-    public String getTargetPackageName() {
-        return mTargetPackageName;
+    public String getDatabaseName() {
+        return mDatabaseName;
     }
 
     @NonNull
-    public String getDatabaseName() {
-        return mDatabaseName;
+    public DocumentsParcel getDocumentsParcel() {
+        return mDocumentsParcel;
     }
 
     @NonNull
@@ -102,12 +90,8 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
         return mBinderCallStartTimeMillis;
     }
 
-    public boolean isForEnterprise() {
-        return mIsForEnterprise;
-    }
-
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        GetSchemaAidlRequestCreator.writeToParcel(this, dest, flags);
+        PutDocumentsAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }

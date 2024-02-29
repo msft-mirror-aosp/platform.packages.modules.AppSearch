@@ -28,6 +28,8 @@ import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
+import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.stats.SchemaMigrationStats;
@@ -128,15 +130,16 @@ public class AppSearchMigrationHelper implements Closeable {
                      ParcelFileDescriptor.open(queryFile, MODE_WRITE_ONLY)) {
             CountDownLatch latch = new CountDownLatch(1);
             AtomicReference<AppSearchResult<Void>> resultReference = new AtomicReference<>();
-            mService.writeQueryResultsToFile(mCallerAttributionSource, mDatabaseName,
-                    fileDescriptor,
-                    /*queryExpression=*/ "",
-                    new SearchSpec.Builder()
-                            .addFilterSchemas(schemaType)
-                            .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
-                            .build(),
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+            mService.writeSearchResultsToFile(
+                    new WriteSearchResultsToFileAidlRequest(mCallerAttributionSource, mDatabaseName,
+                            fileDescriptor,
+                            /*searchExpression=*/ "",
+                            new SearchSpec.Builder()
+                                    .addFilterSchemas(schemaType)
+                                    .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
+                                    .build(),
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -187,11 +190,13 @@ public class AppSearchMigrationHelper implements Closeable {
             CountDownLatch latch = new CountDownLatch(1);
             AtomicReference<AppSearchResult<List<MigrationFailure>>> resultReference =
                     new AtomicReference<>();
-            mService.putDocumentsFromFile(mCallerAttributionSource, mDatabaseName, fileDescriptor,
-                    mUserHandle,
-                    schemaMigrationStatsBuilder.build(),
-                    totalLatencyStartTimeMillis,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+            mService.putDocumentsFromFile(
+                    new PutDocumentsFromFileAidlRequest(mCallerAttributionSource, mDatabaseName,
+                            fileDescriptor,
+                            mUserHandle,
+                            schemaMigrationStatsBuilder.build(),
+                            totalLatencyStartTimeMillis,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {

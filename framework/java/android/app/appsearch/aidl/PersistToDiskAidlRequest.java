@@ -17,6 +17,7 @@
 package android.app.appsearch.aidl;
 
 import android.annotation.NonNull;
+import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
@@ -25,43 +26,37 @@ import android.os.UserHandle;
 import java.util.Objects;
 
 /**
- * Encapsulates a request to make a binder call to retrieve all namespaces in given database.
+ * Encapsulates a request to make a binder call to persist all update/delete requests to the disk.
  * @hide
  */
-@SafeParcelable.Class(creator = "GetNamespacesAidlRequestCreator")
-public class GetNamespacesAidlRequest extends AbstractSafeParcelable {
+@SafeParcelable.Class(creator = "PersistToDiskAidlRequestCreator")
+public class PersistToDiskAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final GetNamespacesAidlRequestCreator CREATOR =
-            new GetNamespacesAidlRequestCreator();
+    public static final PersistToDiskAidlRequestCreator CREATOR =
+            new PersistToDiskAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
     @NonNull
-    @Field(id = 2, getter = "getDatabaseName")
-    private final String mDatabaseName;
-    @NonNull
-    @Field(id = 3, getter = "getUserHandle")
+    @Field(id = 2, getter = "getUserHandle")
     private final UserHandle mUserHandle;
-    @Field(id = 4, getter = "getBinderCallStartTimeMillis")
+    @Field(id = 3, getter = "getBinderCallStartTimeMillis")
     private final long mBinderCallStartTimeMillis;
 
     /**
-     * Retrieves the set of all namespaces in the current database with at least one document.
+     * Creates and initializes AppSearchImpl for the calling app.
      *
-     * @param callerAttributionSource The permission identity of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
+     * @param callerAttributionSource The permission identity of the package to initialize for.
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      */
     @Constructor
-    public GetNamespacesAidlRequest(
+    public PersistToDiskAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
-            @Param(id = 2) @NonNull String databaseName,
-            @Param(id = 3) @NonNull UserHandle userHandle,
-            @Param(id = 4) long binderCallStartTimeMillis) {
+            @Param(id = 2) @NonNull UserHandle userHandle,
+            @Param(id = 3) @NonNull long binderCallStartTimeMillis) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
-        mDatabaseName = Objects.requireNonNull(databaseName);
         mUserHandle = Objects.requireNonNull(userHandle);
         mBinderCallStartTimeMillis = binderCallStartTimeMillis;
     }
@@ -69,11 +64,6 @@ public class GetNamespacesAidlRequest extends AbstractSafeParcelable {
     @NonNull
     public AppSearchAttributionSource getCallerAttributionSource() {
         return mCallerAttributionSource;
-    }
-
-    @NonNull
-    public String getDatabaseName() {
-        return mDatabaseName;
     }
 
     @NonNull
@@ -87,6 +77,6 @@ public class GetNamespacesAidlRequest extends AbstractSafeParcelable {
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        GetNamespacesAidlRequestCreator.writeToParcel(this, dest, flags);
+        PersistToDiskAidlRequestCreator.writeToParcel(this, dest, flags);
     }
 }
