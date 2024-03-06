@@ -28,6 +28,7 @@ import com.android.server.appsearch.contactsindexer.ContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerMaintenanceService;
 import com.android.server.appsearch.contactsindexer.FrameworkContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerManagerService;
+import com.android.server.appsearch.util.ExceptionUtil;
 
 import java.io.PrintWriter;
 import java.util.Objects;
@@ -51,10 +52,11 @@ public class AppSearchModule {
 
             try {
                 mAppSearchManagerService.onStart();
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 Log.e(TAG, "Failed to start AppSearch service", e);
                 // If AppSearch service fails to start, skip starting ContactsIndexer service
                 // since it indexes CP2 contacts into AppSearch builtin:Person corpus
+                ExceptionUtil.handleException(e);
                 return;
             }
 

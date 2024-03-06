@@ -217,6 +217,12 @@ public class AppSearchHelper {
         return mAppSearchSessionFuture.get();
     }
 
+    @VisibleForTesting
+    void setAppSearchSessionFutureForTesting(
+            CompletableFuture<AppSearchSession> appSearchSessionFuture) {
+        mAppSearchSessionFuture = appSearchSessionFuture;
+    }
+
     /**
      * Returns if the data is likely being wiped during initialization of this {@link
      * AppSearchHelper}.
@@ -243,10 +249,17 @@ public class AppSearchHelper {
      *                    big, otherwise binder {@link android.os.TransactionTooLargeException} will
      *                    be thrown.
      * @param updateStats to hold the counters for the update.
+     * @param shouldKeepUpdatingOnError ContactsIndexer flag controlling whether or not updates
+     *                                  should continue after encountering errors. When true, the
+     *                                  returned future completes normally even when contacts have
+     *                                  failed to be added. AppSearchResult#RESULT_OUT_OF_SPACE
+     *                                  failures are an exception to this however and will still
+     *                                  complete exceptionally.
      */
     @NonNull
     public CompletableFuture<Void> indexContactsAsync(@NonNull Collection<Person> contacts,
-            @NonNull ContactsUpdateStats updateStats) {
+            @NonNull ContactsUpdateStats updateStats,
+            boolean shouldKeepUpdatingOnError) {
         Objects.requireNonNull(contacts);
         Objects.requireNonNull(updateStats);
 
@@ -258,39 +271,61 @@ public class AppSearchHelper {
                 .build();
         return mAppSearchSessionFuture.thenCompose(appSearchSession -> {
             CompletableFuture<Void> future = new CompletableFuture<>();
-            appSearchSession.put(request, mExecutor, new BatchResultCallback<String, Void>() {
+            appSearchSession.put(request, mExecutor, new BatchResultCallback<>() {
                 @Override
                 public void onResult(AppSearchBatchResult<String, Void> result) {
                     int numDocsSucceeded = result.getSuccesses().size();
                     int numDocsFailed = result.getFailures().size();
                     updateStats.mContactsUpdateSucceededCount += numDocsSucceeded;
-                    updateStats.mContactsUpdateFailedCount += numDocsFailed;
                     if (result.isSuccess()) {
                         if (LogUtil.DEBUG) {
-                            Log.v(TAG,
-                                    numDocsSucceeded
-                                            + " documents successfully added in AppSearch.");
+                            Log.v(TAG, numDocsSucceeded
+                                    + " documents successfully added in AppSearch.");
                         }
                         future.complete(null);
                     } else {
                         Map<String, AppSearchResult<Void>> failures = result.getFailures();
                         AppSearchResult<Void> firstFailure = null;
                         for (AppSearchResult<Void> failure : failures.values()) {
+                            int errorCode = failure.getResultCode();
                             if (firstFailure == null) {
-                                firstFailure = failure;
+                                if (shouldKeepUpdatingOnError) {
+                                    // Still complete exceptionally (and abort further indexing) if
+                                    // AppSearchResult#RESULT_OUT_OF_SPACE
+                                    if (errorCode == AppSearchResult.RESULT_OUT_OF_SPACE) {
+                                        firstFailure = failure;
+                                    }
+                                } else {
+                                    firstFailure = failure;
+                                }
                             }
-                            updateStats.mUpdateStatuses.add(failure.getResultCode());
+                            updateStats.mUpdateStatuses.add(errorCode);
                         }
-                        Log.w(TAG, numDocsFailed + " documents failed to be added in AppSearch.");
-                        future.completeExceptionally(new AppSearchException(
-                                firstFailure.getResultCode(), firstFailure.getErrorMessage()));
+                        if (firstFailure == null) {
+                            future.complete(null);
+                        } else {
+                            Log.w(TAG,
+                                    numDocsFailed + " documents failed to be added in AppSearch.");
+                            future.completeExceptionally(
+                                    new AppSearchException(firstFailure.getResultCode(),
+                                            firstFailure.getErrorMessage()));
+                        }
                     }
                 }
 
                 @Override
                 public void onSystemError(Throwable throwable) {
-                    updateStats.mUpdateStatuses.add(AppSearchResult.RESULT_UNKNOWN_ERROR);
-                    future.completeExceptionally(throwable);
+                    Log.e(TAG, "Failed to add contacts", throwable);
+                    // Log a combined status code; ranges of the codes do not overlap 10100 + 0-99
+                    updateStats.mUpdateStatuses.add(
+                            ContactsUpdateStats.ERROR_CODE_APP_SEARCH_SYSTEM_ERROR
+                                    + AppSearchResult.throwableToFailedResult(
+                                    throwable).getResultCode());
+                    if (shouldKeepUpdatingOnError) {
+                        future.complete(null);
+                    } else {
+                        future.completeExceptionally(throwable);
+                    }
                 }
             });
             return future;
@@ -305,10 +340,15 @@ public class AppSearchHelper {
      *                    big, otherwise binder {@link android.os.TransactionTooLargeException}
      *                    will be thrown.
      * @param updateStats to hold the counters for the update.
+     * @param shouldKeepUpdatingOnError ContactsIndexer flag controlling whether or not updates
+     *                                  should continue after encountering errors. When enabled,
+     *                                  the returned future completes normally even when contacts
+     *                                  have failed to be removed.
      */
     @NonNull
     public CompletableFuture<Void> removeContactsByIdAsync(@NonNull Collection<String> ids,
-            @NonNull ContactsUpdateStats updateStats) {
+            @NonNull ContactsUpdateStats updateStats,
+            boolean shouldKeepUpdatingOnError) {
         Objects.requireNonNull(ids);
         Objects.requireNonNull(updateStats);
 
@@ -320,57 +360,80 @@ public class AppSearchHelper {
                 .build();
         return mAppSearchSessionFuture.thenCompose(appSearchSession -> {
             CompletableFuture<Void> future = new CompletableFuture<>();
-            appSearchSession.remove(request, mExecutor, new BatchResultCallback<String, Void>() {
+            appSearchSession.remove(request, mExecutor, new BatchResultCallback<>() {
                 @Override
                 public void onResult(AppSearchBatchResult<String, Void> result) {
                     int numSuccesses = result.getSuccesses().size();
-                    int numFailures = 0;
-                    AppSearchResult<Void> firstFailure = null;
-                    for (AppSearchResult<Void> failedResult : result.getFailures().values()) {
-                        // Ignore document not found errors.
-                        int errorCode = failedResult.getResultCode();
-                        if (errorCode != AppSearchResult.RESULT_NOT_FOUND) {
-                            numFailures++;
-                            updateStats.mDeleteStatuses.add(errorCode);
-                            if (firstFailure == null) {
+                    int numFailures = result.getFailures().size();
+                    int numNotFound = 0;
+                    updateStats.mContactsDeleteSucceededCount += numSuccesses;
+                    if (result.isSuccess()) {
+                        if (LogUtil.DEBUG) {
+                            Log.v(TAG, numSuccesses
+                                    + " documents successfully deleted from AppSearch.");
+                        }
+                        future.complete(null);
+                    } else {
+                        AppSearchResult<Void> firstFailure = null;
+                        for (AppSearchResult<Void> failedResult : result.getFailures().values()) {
+                            // Ignore failures if the error code is AppSearchResult#RESULT_NOT_FOUND
+                            // or if shouldKeepUpdatingOnError is true
+                            int errorCode = failedResult.getResultCode();
+                            if (errorCode == AppSearchResult.RESULT_NOT_FOUND) {
+                                numNotFound++;
+                            } else if (firstFailure == null
+                                    && !shouldKeepUpdatingOnError) {
                                 firstFailure = failedResult;
                             }
+                            updateStats.mDeleteStatuses.add(errorCode);
+                        }
+                        updateStats.mContactsDeleteNotFoundCount += numNotFound;
+                        if (firstFailure == null) {
+                            future.complete(null);
+                        } else {
+                            Log.w(TAG,
+                                    "Failed to delete " + numFailures + " contacts from AppSearch");
+                            future.completeExceptionally(
+                                    new AppSearchException(firstFailure.getResultCode(),
+                                            firstFailure.getErrorMessage()));
                         }
                     }
-                    updateStats.mContactsDeleteSucceededCount += numSuccesses;
-                    updateStats.mContactsDeleteFailedCount += numFailures;
-                    if (firstFailure != null) {
-                        Log.w(TAG, "Failed to delete "
-                                + numFailures + " contacts from AppSearch");
-                        future.completeExceptionally(new AppSearchException(
-                                firstFailure.getResultCode(), firstFailure.getErrorMessage()));
-                        return;
-                    }
-                    if (LogUtil.DEBUG && numSuccesses > 0) {
-                        Log.v(TAG,
-                                numSuccesses + " documents successfully deleted from AppSearch.");
-                    }
-                    future.complete(null);
                 }
 
                 @Override
                 public void onSystemError(Throwable throwable) {
-                    updateStats.mDeleteStatuses.add(AppSearchResult.RESULT_UNKNOWN_ERROR);
-                    future.completeExceptionally(throwable);
+                    Log.e(TAG, "Failed to delete contacts", throwable);
+                    // Log a combined status code; ranges of the codes do not overlap 10100 + 0-99
+                    updateStats.mDeleteStatuses.add(
+                            ContactsUpdateStats.ERROR_CODE_APP_SEARCH_SYSTEM_ERROR
+                                    + AppSearchResult.throwableToFailedResult(
+                                    throwable).getResultCode());
+                    if (shouldKeepUpdatingOnError) {
+                        future.complete(null);
+                    } else {
+                        future.completeExceptionally(throwable);
+                    }
                 }
             });
             return future;
         });
     }
 
+    /**
+     * @param shouldKeepUpdatingOnError ContactsIndexer flag controlling whether or not updates
+     *                                  should continue after encountering errors. When enabled, the
+     *                                  returned future completes normally even when contacts could
+     *                                  not be retrieved.
+     */
     @NonNull
     private CompletableFuture<AppSearchBatchResult> getContactsByIdAsync(
-            @NonNull GetByDocumentIdRequest request) {
+            @NonNull GetByDocumentIdRequest request, boolean shouldKeepUpdatingOnError,
+            @NonNull ContactsUpdateStats updateStats) {
         Objects.requireNonNull(request);
         return mAppSearchSessionFuture.thenCompose(appSearchSession -> {
             CompletableFuture<AppSearchBatchResult> future = new CompletableFuture<>();
             appSearchSession.getByDocumentId(request, mExecutor,
-                    new BatchResultCallback<String, GenericDocument>() {
+                    new BatchResultCallback<>() {
                         @Override
                         public void onResult(AppSearchBatchResult<String, GenericDocument> result) {
                             future.complete(result);
@@ -378,7 +441,18 @@ public class AppSearchHelper {
 
                         @Override
                         public void onSystemError(Throwable throwable) {
-                            future.completeExceptionally(throwable);
+                            Log.e(TAG, "Failed to get contacts", throwable);
+                            // Log a combined status code; ranges of the codes do not overlap
+                            // 10100 + 0-99
+                            updateStats.mUpdateStatuses.add(
+                                    ContactsUpdateStats.ERROR_CODE_APP_SEARCH_SYSTEM_ERROR
+                                            + AppSearchResult.throwableToFailedResult(
+                                            throwable).getResultCode());
+                            if (shouldKeepUpdatingOnError) {
+                                future.complete(new AppSearchBatchResult.Builder<>().build());
+                            } else {
+                                future.completeExceptionally(throwable);
+                            }
                         }
                     });
             return future;
@@ -414,13 +488,16 @@ public class AppSearchHelper {
     /**
      * Gets {@link GenericDocument}s with only fingerprints projected for the requested contact ids.
      *
+     * @param shouldKeepUpdatingOnError ContactsIndexer flag controlling whether or not updates
+     *                                  should continue after encountering errors.
      * @return A list containing the corresponding {@link GenericDocument} for the requested contact
-     * ids in order. The entry is {@code null} if the requested contact id is not found in
-     * AppSearch.
+     *         ids in order. The entry is {@code null} if the requested contact id is not found in
+     *         AppSearch.
      */
     @NonNull
     public CompletableFuture<List<GenericDocument>> getContactsWithFingerprintsAsync(
-            @NonNull List<String> ids) {
+            @NonNull List<String> ids, boolean shouldKeepUpdatingOnError,
+            @NonNull ContactsUpdateStats updateStats) {
         Objects.requireNonNull(ids);
         GetByDocumentIdRequest request = new GetByDocumentIdRequest.Builder(
                 AppSearchHelper.NAMESPACE_NAME)
@@ -428,22 +505,22 @@ public class AppSearchHelper {
                         Collections.singletonList(Person.PERSON_PROPERTY_FINGERPRINT))
                 .addIds(ids)
                 .build();
-        return getContactsByIdAsync(request).thenCompose(
-                appSearchBatchResult -> {
-                    Map<String, GenericDocument> contactsExistInAppSearch =
-                            appSearchBatchResult.getSuccesses();
-                    List<GenericDocument> docsWithFingerprints = new ArrayList<>(ids.size());
-                    for (int i = 0; i < ids.size(); ++i) {
-                        docsWithFingerprints.add(contactsExistInAppSearch.get(ids.get(i)));
-                    }
-                    return CompletableFuture.completedFuture(docsWithFingerprints);
-                });
+        return getContactsByIdAsync(request, shouldKeepUpdatingOnError,
+                updateStats).thenCompose(appSearchBatchResult -> {
+            Map<String, GenericDocument> contactsExistInAppSearch =
+                    appSearchBatchResult.getSuccesses();
+            List<GenericDocument> docsWithFingerprints = new ArrayList<>(ids.size());
+            for (int i = 0; i < ids.size(); ++i) {
+                docsWithFingerprints.add(contactsExistInAppSearch.get(ids.get(i)));
+            }
+            return CompletableFuture.completedFuture(docsWithFingerprints);
+        });
     }
 
     /**
      * Recursively pages through all search results and collects document IDs into given list.
      *
-     * @param results Iterator for paging through the search results.
+     * @param results    Iterator for paging through the search results.
      * @param contactIds List for collecting and returning document IDs.
      * @return A future indicating if more results might be available.
      */

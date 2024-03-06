@@ -115,8 +115,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -173,7 +173,10 @@ public class AppSearchImplTest {
                                         .build())
                         .build();
         SchemaTypeConfigProto schemaTypeConfigProto3 =
-                SchemaTypeConfigProto.newBuilder().setSchemaType("RefType").build();
+                SchemaTypeConfigProto.newBuilder()
+                        .setSchemaType("RefType")
+                        .addParentTypes("Foo")
+                        .build();
         SchemaProto newSchema =
                 SchemaProto.newBuilder()
                         .addTypes(schemaTypeConfigProto1)
@@ -256,6 +259,7 @@ public class AppSearchImplTest {
                         .addTypes(
                                 SchemaTypeConfigProto.newBuilder()
                                         .setSchemaType("package$newDatabase/RefType")
+                                        .addParentTypes("package$newDatabase/Foo")
                                         .build())
                         .build();
 
@@ -580,8 +584,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -815,6 +819,394 @@ public class AppSearchImplTest {
                         new CallerAccess(/*callingPackageName=*/ ""),
                         /*logger=*/ null);
         assertThat(searchResultPage.getResults()).isEmpty();
+    }
+
+    @Test
+    public void testGlobalQuery_withJoin_packageFilter() throws Exception {
+        // Create a new mAppSearchImpl with a mock Visibility Checker
+        mAppSearchImpl.close();
+        File tempFolder = mTemporaryFolder.newFolder();
+        // We need to share across packages
+        VisibilityChecker mockVisibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
+        mAppSearchImpl =
+                AppSearchImpl.create(
+                        tempFolder,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                        /*initStatsBuilder=*/ null,
+                        ALWAYS_OPTIMIZE,
+                        mockVisibilityChecker);
+
+        // Insert package1 schema
+        List<AppSearchSchema> personSchema =
+                ImmutableList.of(new AppSearchSchema.Builder("personSchema").build());
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        "package1",
+                        "database1",
+                        personSchema,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+
+        AppSearchSchema.StringPropertyConfig personField =
+                new AppSearchSchema.StringPropertyConfig.Builder("personId")
+                        .setJoinableValueType(
+                                AppSearchSchema.StringPropertyConfig
+                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                        .build();
+        // Insert package2 schema
+        List<AppSearchSchema> callSchema =
+                ImmutableList.of(
+                        new AppSearchSchema.Builder("callSchema").addProperty(personField).build());
+        internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        "package2",
+                        "database2",
+                        callSchema,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ true,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+
+        List<AppSearchSchema> textSchema =
+                ImmutableList.of(
+                        new AppSearchSchema.Builder("textSchema").addProperty(personField).build());
+        internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        "package3",
+                        "database3",
+                        textSchema,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ true,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+
+        // Insert package1 document
+        GenericDocument person =
+                new GenericDocument.Builder<>("namespace", "id", "personSchema").build();
+        mAppSearchImpl.putDocument(
+                "package1",
+                "database1",
+                person,
+                /*sendChangeNotifications=*/ false,
+                /*logger=*/ null);
+
+        // Insert package2 document
+        GenericDocument call =
+                new GenericDocument.Builder<>("namespace", "id", "callSchema")
+                        .setPropertyString("personId", "package1$database1/namespace#id")
+                        .build();
+        mAppSearchImpl.putDocument(
+                "package2",
+                "database2",
+                call,
+                /*sendChangeNotifications=*/ false,
+                /*logger=*/ null);
+
+        // Insert package3 document
+        GenericDocument text =
+                new GenericDocument.Builder<>("namespace", "id", "textSchema")
+                        .setPropertyString("personId", "package1$database1/namespace#id")
+                        .build();
+        mAppSearchImpl.putDocument(
+                "package3",
+                "database3",
+                text,
+                /*sendChangeNotifications=*/ false,
+                /*logger=*/ null);
+
+        // Filter on parent spec only
+        SearchSpec nested =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .build();
+        JoinSpec join = new JoinSpec.Builder("personId").setNestedSearch("", nested).build();
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .addFilterPackageNames("package1")
+                        .setJoinSpec(join)
+                        .build();
+        SearchResultPage searchResultPage =
+                mAppSearchImpl.globalQuery(
+                        "", searchSpec, new CallerAccess("package1"), /*logger=*/ null);
+        assertThat(searchResultPage.getResults()).hasSize(1);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        SearchResult result = searchResultPage.getResults().get(0);
+        assertThat(result.getJoinedResults()).hasSize(2);
+
+        // Filter on neither
+        searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .setJoinSpec(join)
+                        .build();
+        searchResultPage =
+                mAppSearchImpl.globalQuery(
+                        "", searchSpec, new CallerAccess("package1"), /*logger=*/ null);
+        assertThat(searchResultPage.getResults()).hasSize(3);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        assertThat(searchResultPage.getResults().get(1).getGenericDocument()).isEqualTo(call);
+        assertThat(searchResultPage.getResults().get(2).getGenericDocument()).isEqualTo(text);
+        result = searchResultPage.getResults().get(0);
+        assertThat(result.getJoinedResults()).hasSize(2);
+
+        // Filter on child spec only
+        nested = new SearchSpec.Builder().addFilterPackageNames("package2").build();
+        join = new JoinSpec.Builder("personId").setNestedSearch("", nested).build();
+
+        searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .setJoinSpec(join)
+                        .build();
+        searchResultPage =
+                mAppSearchImpl.globalQuery(
+                        "", searchSpec, new CallerAccess("package1"), /*logger=*/ null);
+        assertThat(searchResultPage.getResults()).hasSize(3);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        assertThat(searchResultPage.getResults().get(1).getGenericDocument()).isEqualTo(call);
+        assertThat(searchResultPage.getResults().get(2).getGenericDocument()).isEqualTo(text);
+        result = searchResultPage.getResults().get(0);
+        assertThat(result.getJoinedResults()).hasSize(1);
+        assertThat(result.getJoinedResults().get(0).getGenericDocument()).isEqualTo(call);
+
+        // Filter on both
+        searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .addFilterPackageNames("package1")
+                        .setJoinSpec(join)
+                        .build();
+        searchResultPage =
+                mAppSearchImpl.globalQuery(
+                        "", searchSpec, new CallerAccess("package1"), /*logger=*/ null);
+        assertThat(searchResultPage.getResults()).hasSize(1);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        result = searchResultPage.getResults().get(0);
+        assertThat(result.getJoinedResults()).hasSize(1);
+        assertThat(result.getJoinedResults().get(0).getGenericDocument()).isEqualTo(call);
+    }
+
+    @Test
+    public void testQueryInvalidPackages_withJoin() throws Exception {
+        // Make sure that local queries with joinspecs including package filters don't access
+        // other packages.
+
+        // Create a new mAppSearchImpl with a mock Visibility Checker
+        mAppSearchImpl.close();
+        File tempFolder = mTemporaryFolder.newFolder();
+        // We need to share across packages
+        VisibilityChecker mockVisibilityChecker =
+                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
+        mAppSearchImpl =
+                AppSearchImpl.create(
+                        tempFolder,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                        /*initStatsBuilder=*/ null,
+                        ALWAYS_OPTIMIZE,
+                        mockVisibilityChecker);
+
+        AppSearchSchema.StringPropertyConfig personField =
+                new AppSearchSchema.StringPropertyConfig.Builder("personId")
+                        .setJoinableValueType(
+                                AppSearchSchema.StringPropertyConfig
+                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                        .build();
+
+        // Insert package1 schema
+        List<AppSearchSchema> personAndCallSchema =
+                ImmutableList.of(
+                        new AppSearchSchema.Builder("personSchema").build(),
+                        new AppSearchSchema.Builder("callSchema").addProperty(personField).build());
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        "package1",
+                        "database1",
+                        personAndCallSchema,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+
+        // Insert package2 schema
+        List<AppSearchSchema> callSchema =
+                ImmutableList.of(
+                        new AppSearchSchema.Builder("callSchema").addProperty(personField).build());
+        internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        "package2",
+                        "database2",
+                        callSchema,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ true,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+
+        // Insert package1 document
+        GenericDocument person =
+                new GenericDocument.Builder<>("namespace", "person", "personSchema").build();
+        mAppSearchImpl.putDocument(
+                "package1",
+                "database1",
+                person,
+                /*sendChangeNotifications=*/ false,
+                /*logger=*/ null);
+
+        GenericDocument call1 =
+                new GenericDocument.Builder<>("namespace", "id1", "callSchema")
+                        .setPropertyString("personId", "package1$database1/namespace#person")
+                        .build();
+        GenericDocument call2 =
+                new GenericDocument.Builder<>("namespace", "id2", "callSchema")
+                        .setPropertyString("personId", "package1$database1/namespace#person")
+                        .build();
+
+        // Insert package1 action document
+        mAppSearchImpl.putDocument(
+                "package1",
+                "database1",
+                call1,
+                /*sendChangeNotifications=*/ false,
+                /*logger=*/ null);
+
+        // Insert package2 action document
+        mAppSearchImpl.putDocument(
+                "package2",
+                "database2",
+                call2,
+                /*sendChangeNotifications=*/ false,
+                /*logger=*/ null);
+
+        // Invalid parent spec filter
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .addFilterPackageNames("package1", "package2")
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .build();
+        SearchResultPage searchResultPage =
+                mAppSearchImpl.query("package1", "database1", "", searchSpec, /*logger=*/ null);
+        // Only package1 documents should be returned
+        assertThat(searchResultPage.getResults()).hasSize(2);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        assertThat(searchResultPage.getResults().get(1).getGenericDocument()).isEqualTo(call1);
+
+        // Valid parent spec filter with invalid child spec filter
+        SearchSpec nested =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .addFilterPackageNames("package1", "package2")
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .build();
+        JoinSpec join = new JoinSpec.Builder("personId").setNestedSearch("", nested).build();
+        searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .addFilterPackageNames("package1")
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .setJoinSpec(join)
+                        .build();
+        searchResultPage =
+                mAppSearchImpl.query("package1", "database1", "", searchSpec, /*logger=*/ null);
+
+        // Only package1 documents should be returned, for both the outer and nested searches
+        assertThat(searchResultPage.getResults()).hasSize(2);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        assertThat(searchResultPage.getResults().get(1).getGenericDocument()).isEqualTo(call1);
+        SearchResult result = searchResultPage.getResults().get(0);
+        assertThat(result.getJoinedResults()).hasSize(1);
+        assertThat(result.getJoinedResults().get(0).getGenericDocument()).isEqualTo(call1);
+
+        // Valid parent spec, but child spec package filters only contain other packages
+        nested =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .addFilterPackageNames("package2", "package3")
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .build();
+        join = new JoinSpec.Builder("personId").setNestedSearch("", nested).build();
+        searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .addFilterPackageNames("package1")
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .setJoinSpec(join)
+                        .build();
+        searchResultPage =
+                mAppSearchImpl.query("package1", "database1", "", searchSpec, /*logger=*/ null);
+
+        // Package1 documents should be returned, but no packages should be joined
+        assertThat(searchResultPage.getResults()).hasSize(2);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        assertThat(searchResultPage.getResults().get(1).getGenericDocument()).isEqualTo(call1);
+        result = searchResultPage.getResults().get(0);
+        assertThat(result.getJoinedResults()).isEmpty();
+
+        // Valid parent spec, empty child spec package filters
+        nested =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .build();
+        join = new JoinSpec.Builder("personId").setNestedSearch("", nested).build();
+        searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .addFilterPackageNames("package1")
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .setJoinSpec(join)
+                        .build();
+        searchResultPage =
+                mAppSearchImpl.query("package1", "database1", "", searchSpec, /*logger=*/ null);
+
+        // Only package1 documents should be returned, for both the outer and nested searches
+        assertThat(searchResultPage.getResults()).hasSize(2);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        assertThat(searchResultPage.getResults().get(1).getGenericDocument()).isEqualTo(call1);
+        result = searchResultPage.getResults().get(0);
+        assertThat(result.getJoinedResults()).hasSize(1);
+        assertThat(result.getJoinedResults().get(0).getGenericDocument()).isEqualTo(call1);
+
+        // Valid parent spec filter with valid child spec filter
+        nested = new SearchSpec.Builder().build();
+        join = new JoinSpec.Builder("personId").setNestedSearch("", nested).build();
+        searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(TermMatchType.Code.PREFIX_VALUE)
+                        .addFilterPackageNames("package1")
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_CREATION_TIMESTAMP)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .setJoinSpec(join)
+                        .build();
+        searchResultPage =
+                mAppSearchImpl.query("package1", "database1", "", searchSpec, /*logger=*/ null);
+        // Should work as expected
+        assertThat(searchResultPage.getResults()).hasSize(2);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(person);
+        assertThat(searchResultPage.getResults().get(1).getGenericDocument()).isEqualTo(call1);
+        result = searchResultPage.getResults().get(0);
+        assertThat(result.getJoinedResults()).hasSize(1);
+        assertThat(result.getJoinedResults().get(0).getGenericDocument()).isEqualTo(call1);
     }
 
     @Test
@@ -2147,7 +2539,6 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder("schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
 
         // Insert schema for package A and B.
@@ -2197,13 +2588,11 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder("packageA$database/schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         VisibilityDocument expectedVisibilityDocumentB =
                 new VisibilityDocument.Builder("packageB$database/schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility("packageA$database/schema"))
                 .isEqualTo(expectedVisibilityDocumentA);
@@ -2874,8 +3263,8 @@ public class AppSearchImplTest {
         AppSearchImpl appSearchImpl2 =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -2950,8 +3339,8 @@ public class AppSearchImplTest {
         AppSearchImpl appSearchImpl2 =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3043,8 +3432,8 @@ public class AppSearchImplTest {
         AppSearchImpl appSearchImpl2 =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3159,23 +3548,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return 80;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return 80;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 1;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 1;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3254,23 +3644,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return 80;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return 80;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 1;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 1;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3320,23 +3711,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return 80;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return 80;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 1;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 1;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3365,23 +3757,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return Integer.MAX_VALUE;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 3;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 3;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3503,23 +3896,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return Integer.MAX_VALUE;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 2;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 2;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3612,23 +4006,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return Integer.MAX_VALUE;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 2;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 2;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3683,23 +4078,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return Integer.MAX_VALUE;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 3;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 3;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3863,23 +4259,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return Integer.MAX_VALUE;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 2;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 2;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -3957,23 +4354,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return Integer.MAX_VALUE;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 2;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 2;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4021,23 +4419,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return Integer.MAX_VALUE;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return 2;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return 2;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return Integer.MAX_VALUE;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4076,23 +4475,24 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new LimitConfig() {
-                            @Override
-                            public int getMaxDocumentSizeBytes() {
-                                return Integer.MAX_VALUE;
-                            }
+                        new AppSearchConfigImpl(
+                                new LimitConfig() {
+                                    @Override
+                                    public int getMaxDocumentSizeBytes() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxDocumentCount() {
-                                return Integer.MAX_VALUE;
-                            }
+                                    @Override
+                                    public int getMaxDocumentCount() {
+                                        return Integer.MAX_VALUE;
+                                    }
 
-                            @Override
-                            public int getMaxSuggestionCount() {
-                                return 2;
-                            }
-                        },
-                        new DefaultIcingOptionsConfig(),
+                                    @Override
+                                    public int getMaxSuggestionCount() {
+                                        return 2;
+                                    }
+                                },
+                                new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4202,8 +4602,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4258,8 +4658,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4310,8 +4710,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4366,8 +4766,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4433,7 +4833,6 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         List<AppSearchSchema> schemas =
                 Collections.singletonList(new AppSearchSchema.Builder("Email").build());
@@ -4456,19 +4855,19 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Email",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Email",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument).isEqualTo(expectedDocument);
     }
 
@@ -4479,7 +4878,6 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder("Email1")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         List<AppSearchSchema> schemas1 =
                 Collections.singletonList(new AppSearchSchema.Builder("Email1").build());
@@ -4502,19 +4900,19 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder(prefix1 + "Email1")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix1 + "Email1"))
                 .isEqualTo(expectedDocument1);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument1 =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix1 + "Email1",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix1 + "Email1",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
 
         // Create Visibility Document for Email2
@@ -4522,7 +4920,6 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder("Email2")
                         .setNotDisplayedBySystem(false)
                         .addVisibleToPackage(new PackageIdentifier("pkgFoo", new byte[32]))
-                        .setCreationTimestampMillis(54321L)
                         .build();
         List<AppSearchSchema> schemas2 =
                 Collections.singletonList(new AppSearchSchema.Builder("Email2").build());
@@ -4545,19 +4942,19 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder(prefix2 + "Email2")
                         .setNotDisplayedBySystem(false)
                         .addVisibleToPackage(new PackageIdentifier("pkgFoo", new byte[32]))
-                        .setCreationTimestampMillis(54321)
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix2 + "Email2"))
                 .isEqualTo(expectedDocument2);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument2 =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix2 + "Email2",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix2 + "Email2",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument2).isEqualTo(expectedDocument2);
 
         // Check the existing visibility document retains.
@@ -4565,13 +4962,14 @@ public class AppSearchImplTest {
                 .isEqualTo(expectedDocument1);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         actualDocument1 =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix1 + "Email1",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix1 + "Email1",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
     }
 
@@ -4582,7 +4980,6 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
 
         List<AppSearchSchema> schemas =
@@ -4604,19 +5001,19 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Email",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Email",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // Set schema Email and its all-default visibility document to AppSearch database1
@@ -4655,7 +5052,6 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
 
         List<AppSearchSchema> schemas =
@@ -4675,19 +5071,19 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Email",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Email",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // remove the schema and visibility setting from AppSearch
@@ -4734,7 +5130,6 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
         List<AppSearchSchema> schemas =
                 Collections.singletonList(new AppSearchSchema.Builder("Email").build());
@@ -4754,8 +5149,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4765,20 +5160,20 @@ public class AppSearchImplTest {
                 new VisibilityDocument.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
-                        .setCreationTimestampMillis(12345L)
                         .build();
 
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Email",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Email",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // remove schema and visibility document
@@ -4798,8 +5193,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -4834,8 +5229,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -4939,8 +5334,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         mockVisibilityChecker);
@@ -5031,8 +5426,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         rejectChecker);
@@ -5136,8 +5531,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
@@ -5199,8 +5594,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         rejectChecker);
@@ -5555,8 +5950,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
@@ -5728,8 +6123,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
@@ -5827,8 +6222,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
@@ -5922,8 +6317,8 @@ public class AppSearchImplTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
-                        new DefaultIcingOptionsConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         visibilityChecker);
