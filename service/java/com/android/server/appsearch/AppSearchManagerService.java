@@ -45,6 +45,7 @@ import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.SetSchemaResponse;
 import android.app.appsearch.StorageInfo;
 import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
@@ -55,7 +56,6 @@ import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.LogUtil;
-import android.content.AttributionSource;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -67,6 +67,7 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
+import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.util.ArraySet;
@@ -81,10 +82,10 @@ import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
-import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.AdbDumpUtil;
+import com.android.server.appsearch.util.ApiCallRecord;
+import com.android.server.appsearch.util.ExceptionUtil;
 import com.android.server.appsearch.util.ExecutorManager;
-import com.android.server.appsearch.util.RateLimitedExecutor;
 import com.android.server.appsearch.util.ServiceImplHelper;
 import com.android.server.appsearch.visibilitystore.FrameworkCallerAccess;
 import com.android.server.usage.StorageStatsManagerLocal;
@@ -100,6 +101,7 @@ import java.io.EOFException;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -129,7 +131,7 @@ public class AppSearchManagerService extends SystemService {
     private final Context mContext;
     private final ExecutorManager mExecutorManager;
     private final AppSearchEnvironment mAppSearchEnvironment;
-    private final AppSearchConfig mAppSearchConfig;
+    private final FrameworkAppSearchConfig mAppSearchConfig;
 
     private PackageManager mPackageManager;
     private ServiceImplHelper mServiceImplHelper;
@@ -275,8 +277,9 @@ public class AppSearchManagerService extends SystemService {
                     instance.getAppSearchImpl().clearPackageData(packageName);
                     dispatchChangeNotifications(instance);
                     instance.getLogger().removeCachedUidForPackage(packageName);
-                } catch (Throwable t) {
-                    Log.e(TAG, "Unable to remove data for package: " + packageName, t);
+                } catch (AppSearchException | RuntimeException e) {
+                    Log.e(TAG, "Unable to remove data for package: " + packageName, e);
+                    ExceptionUtil.handleException(e);
                 }
             });
         }
@@ -308,8 +311,9 @@ public class AppSearchManagerService extends SystemService {
                     packagesToKeep.add(VisibilityStore.VISIBILITY_PACKAGE_NAME);
                     instance.getAppSearchImpl().prunePackageData(packagesToKeep);
                 }
-            } catch (Throwable t) {
-                Log.e(TAG, "Unable to prune packages for " + user, t);
+            } catch (AppSearchException | RuntimeException e) {
+                Log.e(TAG, "Unable to prune packages for " + user, e);
+                ExceptionUtil.handleException(e);
             }
         });
     }
@@ -328,18 +332,19 @@ public class AppSearchManagerService extends SystemService {
             mExecutorManager.shutDownAndRemoveUserExecutor(userHandle);
             mAppSearchUserInstanceManager.closeAndRemoveUserInstance(userHandle);
             Log.i(TAG, "Removed AppSearchImpl instance for: " + userHandle);
-        } catch (Throwable t) {
-            Log.e(TAG, "Unable to remove data for: " + userHandle, t);
+        } catch (InterruptedException | RuntimeException e) {
+            Log.e(TAG, "Unable to remove data for: " + userHandle, e);
+            ExceptionUtil.handleException(e);
         }
     }
 
     private class Stub extends IAppSearchManager.Stub {
         @Override
         public void setSchema(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull List<Bundle> schemaBundles,
-                @NonNull List<Bundle> visibilityBundles,
+                @NonNull List<VisibilityDocument> visibilityDocuments,
                 boolean forceOverride,
                 int schemaVersion,
                 @NonNull UserHandle userHandle,
@@ -349,7 +354,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(callerAttributionSource);
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(schemaBundles);
-            Objects.requireNonNull(visibilityBundles);
+            Objects.requireNonNull(visibilityDocuments);
             Objects.requireNonNull(userHandle);
             Objects.requireNonNull(callback);
 
@@ -386,12 +391,6 @@ public class AppSearchManagerService extends SystemService {
                     List<AppSearchSchema> schemas = new ArrayList<>(schemaBundles.size());
                     for (int i = 0; i < schemaBundles.size(); i++) {
                         schemas.add(new AppSearchSchema(schemaBundles.get(i)));
-                    }
-                    List<VisibilityDocument> visibilityDocuments =
-                            new ArrayList<>(visibilityBundles.size());
-                    for (int i = 0; i < visibilityBundles.size(); i++) {
-                        visibilityDocuments.add(
-                                new VisibilityDocument(visibilityBundles.get(i)));
                     }
                     long rebuildFromBundleLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
@@ -440,9 +439,9 @@ public class AppSearchManagerService extends SystemService {
                             .setOptimizeLatencyMillis(
                                     (int) (checkForOptimizeLatencyEndTimeMillis
                                             - checkForOptimizeLatencyStartTimeMillis));
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -481,7 +480,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getSchema(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
                 @NonNull String databaseName,
                 @NonNull UserHandle userHandle,
@@ -534,9 +533,9 @@ public class AppSearchManagerService extends SystemService {
                     invokeCallbackOnResult(
                             callback,
                             AppSearchResult.newSuccessfulResult(response.getBundle()));
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -570,7 +569,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getNamespaces(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
@@ -608,9 +607,9 @@ public class AppSearchManagerService extends SystemService {
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback, AppSearchResult.newSuccessfulResult(namespaces));
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -644,7 +643,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void putDocuments(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull DocumentsParcel documentsParcel,
                 @NonNull UserHandle userHandle,
@@ -691,8 +690,10 @@ public class AppSearchManagerService extends SystemService {
                                     instance.getLogger());
                             resultBuilder.setSuccess(document.getId(), /* value= */ null);
                             ++operationSuccessCount;
-                        } catch (Throwable t) {
-                            AppSearchResult<Void> result = throwableToFailedResult(t);
+                        } catch (AppSearchException | RuntimeException e) {
+                            // We don't rethrow here, so we can keep trying with the
+                            // following documents.
+                            AppSearchResult<Void> result = throwableToFailedResult(e);
                             resultBuilder.setResult(document.getId(), result);
                             // Since we can only include one status code in the atom,
                             // for failures, we would just save the one for the last failure
@@ -712,9 +713,9 @@ public class AppSearchManagerService extends SystemService {
                     // resources that could be released after optimize().
                     checkForOptimize(
                             targetUser, instance, /* mutateBatchSize= */ documents.size());
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnError(callback, failedResult);
                 } finally {
@@ -750,7 +751,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getDocuments(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
                 @NonNull String databaseName,
                 @NonNull String namespace,
@@ -824,19 +825,21 @@ public class AppSearchManagerService extends SystemService {
                             }
                             ++operationSuccessCount;
                             resultBuilder.setSuccess(id, document.getBundle());
-                        } catch (Throwable t) {
+                        } catch (AppSearchException | RuntimeException e) {
                             // Since we can only include one status code in the atom,
                             // for failures, we would just save the one for the last failure
-                            AppSearchResult<Bundle> result = throwableToFailedResult(t);
+                            // Also, we don't rethrow here, so we can keep trying for
+                            // the following ones.
+                            AppSearchResult<Bundle> result = throwableToFailedResult(e);
                             resultBuilder.setResult(id, result);
                             statusCode = result.getResultCode();
                             ++operationFailureCount;
                         }
                     }
                     invokeCallbackOnResult(callback, resultBuilder.build());
-                } catch (Throwable t) {
+                } catch (RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnError(callback, failedResult);
                 } finally {
@@ -873,7 +876,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void query(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String queryExpression,
                 @NonNull Bundle searchSpecBundle,
@@ -918,9 +921,9 @@ public class AppSearchManagerService extends SystemService {
                     invokeCallbackOnResult(
                             callback,
                             AppSearchResult.newSuccessfulResult(searchResultPage.getBundle()));
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -955,7 +958,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void globalQuery(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String queryExpression,
                 @NonNull Bundle searchSpecBundle,
                 @NonNull UserHandle userHandle,
@@ -1003,9 +1006,9 @@ public class AppSearchManagerService extends SystemService {
                     invokeCallbackOnResult(
                             callback,
                             AppSearchResult.newSuccessfulResult(searchResultPage.getBundle()));
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -1039,7 +1042,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getNextPage(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @Nullable String databaseName,
                 long nextPageToken,
                 @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinType,
@@ -1093,9 +1096,9 @@ public class AppSearchManagerService extends SystemService {
                     invokeCallbackOnResult(
                             callback,
                             AppSearchResult.newSuccessfulResult(searchResultPage.getBundle()));
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -1130,7 +1133,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void invalidateNextPageToken(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 long nextPageToken,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis) {
@@ -1161,10 +1164,11 @@ public class AppSearchManagerService extends SystemService {
                         instance.getAppSearchImpl().invalidateNextPageToken(
                                 callingPackageName, nextPageToken);
                         operationSuccessCount++;
-                    } catch (Throwable t) {
+                    } catch (AppSearchException | RuntimeException e) {
                         ++operationFailureCount;
-                        statusCode = throwableToFailedResult(t).getResultCode();
-                        Log.e(TAG, "Unable to invalidate the query page token", t);
+                        statusCode = throwableToFailedResult(e).getResultCode();
+                        Log.e(TAG, "Unable to invalidate the query page token", e);
+                        ExceptionUtil.handleException(e);
                     } finally {
                         if (instance != null) {
                             int estimatedBinderLatencyMillis =
@@ -1196,14 +1200,15 @@ public class AppSearchManagerService extends SystemService {
                             binderCallStartTimeMillis, totalLatencyStartTimeMillis,
                             /* numOperations= */ 1, RESULT_RATE_LIMITED);
                 }
-            } catch (Throwable t) {
-                Log.e(TAG, "Unable to invalidate the query page token", t);
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Unable to invalidate the query page token", e);
+                ExceptionUtil.handleException(e);
             }
         }
 
         @Override
         public void writeQueryResultsToFile(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull ParcelFileDescriptor fileDescriptor,
                 @NonNull String queryExpression,
@@ -1266,9 +1271,9 @@ public class AppSearchManagerService extends SystemService {
                         }
                     }
                     invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
-                } catch (Throwable t) {
+                } catch (AppSearchException | IOException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -1303,11 +1308,11 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void putDocumentsFromFile(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull ParcelFileDescriptor fileDescriptor,
                 @NonNull UserHandle userHandle,
-                @NonNull Bundle schemaMigrationStatsBundle,
+                @NonNull SchemaMigrationStats schemaMigrationStats,
                 @ElapsedRealtimeLong long totalLatencyStartTimeMillis,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
@@ -1315,7 +1320,7 @@ public class AppSearchManagerService extends SystemService {
             Objects.requireNonNull(databaseName);
             Objects.requireNonNull(fileDescriptor);
             Objects.requireNonNull(userHandle);
-            Objects.requireNonNull(schemaMigrationStatsBundle);
+            Objects.requireNonNull(schemaMigrationStats);
             Objects.requireNonNull(callback);
 
             long callStatsTotalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1342,7 +1347,7 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 SchemaMigrationStats.Builder schemaMigrationStatsBuilder = new SchemaMigrationStats
-                        .Builder(schemaMigrationStatsBundle);
+                        .Builder(schemaMigrationStats);
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
 
@@ -1368,9 +1373,11 @@ public class AppSearchManagerService extends SystemService {
                                         /* sendChangeNotifications= */ false,
                                         /* logger= */ null);
                                 ++operationSuccessCount;
-                            } catch (Throwable t) {
+                            } catch (AppSearchException | RuntimeException e) {
+                                // We don't rethrow here, so we can still keep going with the
+                                // following documents.
                                 ++operationFailureCount;
-                                AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                                AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                                 statusCode = failedResult.getResultCode();
                                 migrationFailureBundles.add(new SetSchemaResponse.MigrationFailure(
                                         document.getNamespace(),
@@ -1388,9 +1395,9 @@ public class AppSearchManagerService extends SystemService {
                             .setMigrationFailureCount(migrationFailureBundles.size());
                     invokeCallbackOnResult(callback,
                             AppSearchResult.newSuccessfulResult(migrationFailureBundles));
-                } catch (Throwable t) {
+                } catch (AppSearchException | IOException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -1442,7 +1449,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void searchSuggestion(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String searchQueryExpression,
                 @NonNull Bundle searchSuggestionSpecBundle,
@@ -1486,19 +1493,13 @@ public class AppSearchManagerService extends SystemService {
                                     databaseName,
                                     searchQueryExpression,
                                     new SearchSuggestionSpec(searchSuggestionSpecBundle));
-                    List<Bundle> searchSuggestionResultBundles =
-                            new ArrayList<>(searchSuggestionResults.size());
-                    for (int i = 0; i < searchSuggestionResults.size(); i++) {
-                        searchSuggestionResultBundles.add(
-                                searchSuggestionResults.get(i).getBundle());
-                    }
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
-                            AppSearchResult.newSuccessfulResult(searchSuggestionResultBundles));
-                } catch (Throwable t) {
+                            AppSearchResult.newSuccessfulResult(searchSuggestionResults));
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -1533,7 +1534,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void reportUsage(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
                 @NonNull String databaseName,
                 @NonNull String namespace,
@@ -1600,9 +1601,9 @@ public class AppSearchManagerService extends SystemService {
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback, AppSearchResult.newSuccessfulResult(/* value= */ null));
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -1637,7 +1638,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void removeByDocumentId(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String namespace,
                 @NonNull List<String> ids,
@@ -1687,8 +1688,10 @@ public class AppSearchManagerService extends SystemService {
                                     /* removeStatsBuilder= */ null);
                             ++operationSuccessCount;
                             resultBuilder.setSuccess(id, /*result= */ null);
-                        } catch (Throwable t) {
-                            AppSearchResult<Void> result = throwableToFailedResult(t);
+                        } catch (AppSearchException | RuntimeException e) {
+                            // We don't rethrow here so we can still keep trying for the following
+                            // ones.
+                            AppSearchResult<Void> result = throwableToFailedResult(e);
                             resultBuilder.setResult(id, result);
                             // Since we can only include one status code in the atom,
                             // for failures, we would just save the one for the last failure
@@ -1705,9 +1708,9 @@ public class AppSearchManagerService extends SystemService {
                     dispatchChangeNotifications(instance);
 
                     checkForOptimize(targetUser, instance, ids.size());
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnError(callback, failedResult);
                 } finally {
@@ -1743,7 +1746,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void removeByQuery(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull String queryExpression,
                 @NonNull Bundle searchSpecBundle,
@@ -1796,9 +1799,9 @@ public class AppSearchManagerService extends SystemService {
                     dispatchChangeNotifications(instance);
 
                     checkForOptimize(targetUser, instance);
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -1834,7 +1837,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void getStorageInfo(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String databaseName,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
@@ -1868,13 +1871,12 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     StorageInfo storageInfo = instance.getAppSearchImpl().getStorageInfoForDatabase(
                             callingPackageName, databaseName);
-                    Bundle storageInfoBundle = storageInfo.getBundle();
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
-                            callback, AppSearchResult.newSuccessfulResult(storageInfoBundle));
-                } catch (Throwable t) {
+                            callback, AppSearchResult.newSuccessfulResult(storageInfo));
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -1908,7 +1910,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void persistToDisk(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis) {
             Objects.requireNonNull(callerAttributionSource);
@@ -1935,10 +1937,14 @@ public class AppSearchManagerService extends SystemService {
                         instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                         instance.getAppSearchImpl().persistToDisk(PersistType.Code.FULL);
                         ++operationSuccessCount;
-                    } catch (Throwable t) {
+                    } catch (AppSearchException | RuntimeException e) {
                         ++operationFailureCount;
-                        statusCode = throwableToFailedResult(t).getResultCode();
-                        Log.e(TAG, "Unable to persist the data to disk", t);
+                        statusCode = throwableToFailedResult(e).getResultCode();
+                        // We will print two error messages if we rethrow, but I would rather keep
+                        // this print statement here, so we know where the actual exception
+                        // comes from.
+                        Log.e(TAG, "Unable to persist the data to disk", e);
+                        ExceptionUtil.handleException(e);
                     } finally {
                         if (instance != null) {
                             int estimatedBinderLatencyMillis =
@@ -1969,14 +1975,15 @@ public class AppSearchManagerService extends SystemService {
                             totalLatencyStartTimeMillis, /* numOperations= */ 1,
                             RESULT_RATE_LIMITED);
                 }
-            } catch (Throwable t) {
-                Log.e(TAG, "Unable to persist the data to disk", t);
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Unable to persist the data to disk", e);
+                ExceptionUtil.handleException(e);
             }
         }
 
         @Override
         public AppSearchResultParcel<Void> registerObserverCallback(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String targetPackageName,
                 @NonNull Bundle observerSpecBundle,
                 @NonNull UserHandle userHandle,
@@ -2038,9 +2045,9 @@ public class AppSearchManagerService extends SystemService {
                 } finally {
                     Binder.restoreCallingIdentity(callingIdentity);
                 }
-            } catch (Throwable t) {
+            } catch (RemoteException | RuntimeException e) {
                 ++operationFailureCount;
-                AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                 statusCode = failedResult.getResultCode();
                 return new AppSearchResultParcel<>(failedResult);
             } finally {
@@ -2067,7 +2074,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public AppSearchResultParcel<Void> unregisterObserverCallback(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull String observedPackage,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
@@ -2107,9 +2114,9 @@ public class AppSearchManagerService extends SystemService {
                 } finally {
                     Binder.restoreCallingIdentity(callingIdentity);
                 }
-            } catch (Throwable t) {
+            } catch (RuntimeException e) {
                 ++operationFailureCount;
-                AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                 statusCode = failedResult.getResultCode();
                 return new AppSearchResultParcel<>(failedResult);
             } finally {
@@ -2137,7 +2144,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void initialize(
-                @NonNull AttributionSource callerAttributionSource,
+                @NonNull AppSearchAttributionSource callerAttributionSource,
                 @NonNull UserHandle userHandle,
                 @ElapsedRealtimeLong long binderCallStartTimeMillis,
                 @NonNull IAppSearchResultCallback callback) {
@@ -2176,9 +2183,9 @@ public class AppSearchManagerService extends SystemService {
                             mAppSearchConfig);
                     ++operationSuccessCount;
                     invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
-                } catch (Throwable t) {
+                } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
-                    AppSearchResult<Void> failedResult = throwableToFailedResult(t);
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
                     invokeCallbackOnResult(callback, failedResult);
                 } finally {
@@ -2347,14 +2354,15 @@ public class AppSearchManagerService extends SystemService {
                     stats.dataSize += instance.getAppSearchImpl()
                             .getStorageInfoForPackage(packageName).getSizeBytes();
                 }
-            } catch (Throwable t) {
+            } catch (AppSearchException | RuntimeException e) {
                 Log.e(
                         TAG,
                         "Unable to augment storage stats for "
                                 + userHandle
                                 + " packageName "
                                 + packageName,
-                        t);
+                        e);
+                ExceptionUtil.handleException(e);
             }
         }
 
@@ -2389,8 +2397,9 @@ public class AppSearchManagerService extends SystemService {
                                 .getStorageInfoForPackage(packagesForUid[i]).getSizeBytes();
                     }
                 }
-            } catch (Throwable t) {
-                Log.e(TAG, "Unable to augment storage stats for uid " + uid, t);
+            } catch (AppSearchException | RuntimeException e) {
+                Log.e(TAG, "Unable to augment storage stats for uid " + uid, e);
+                ExceptionUtil.handleException(e);
             }
         }
 
@@ -2426,8 +2435,9 @@ public class AppSearchManagerService extends SystemService {
                         }
                     }
                 }
-            } catch (Throwable t) {
-                Log.e(TAG, "Unable to augment storage stats for " + userHandle, t);
+            } catch (AppSearchException | RuntimeException e) {
+                Log.e(TAG, "Unable to augment storage stats for " + userHandle, e);
+                ExceptionUtil.handleException(e);
             }
         }
     }

@@ -21,22 +21,28 @@ import static android.app.appsearch.testutil.AppSearchTestUtils.convertSearchRes
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+
+import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.AppSearchSessionShim;
+import android.app.appsearch.BatchResultCallback;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.PutDocumentsRequest;
 import android.app.appsearch.SearchResultsShim;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
+import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.testutil.AppSearchSessionShimImpl;
 import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
 
-import com.android.modules.utils.testing.TestableDeviceConfig;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.ContactPoint;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
 
@@ -44,12 +50,16 @@ import com.google.common.collect.ImmutableSet;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -135,10 +145,76 @@ public class AppSearchHelperTest {
 
     @Test
     public void testIndexContacts() throws Exception {
-        mAppSearchHelper.indexContactsAsync(generatePersonData(50), mUpdateStats).get();
+        mAppSearchHelper.indexContactsAsync(generatePersonData(50),
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true).get();
 
         List<String> appsearchIds = mAppSearchHelper.getAllContactIdsAsync().get();
         assertThat(appsearchIds.size()).isEqualTo(50);
+    }
+
+    @Test
+    public void testIndexContacts_shouldCompleteNormallyOnError() throws Exception {
+        // Set incompatible schema
+        SetSchemaRequest setSchemaRequest = new SetSchemaRequest.Builder()
+                .addSchemas(TestUtils.CONTACT_POINT_SCHEMA_WITH_LABEL_REPEATED)
+                .setForceOverride(true).build();
+        mDb.setSchemaAsync(setSchemaRequest).get();
+
+        mAppSearchHelper.indexContactsAsync(generatePersonData(50), mUpdateStats,
+                /*shouldKeepUpdatingOnError=*/ true).get();
+
+        List<String> appsearchIds = mAppSearchHelper.getAllContactIdsAsync().get();
+        assertThat(appsearchIds).isEmpty();
+    }
+
+    @Test
+    public void testIndexContacts_shouldNotCompleteNormallyOnError() throws Exception {
+        // Set incompatible schema
+        SetSchemaRequest setSchemaRequest = new SetSchemaRequest.Builder()
+                .addSchemas(TestUtils.CONTACT_POINT_SCHEMA_WITH_LABEL_REPEATED)
+                .setForceOverride(true).build();
+        mDb.setSchemaAsync(setSchemaRequest).get();
+
+        CompletableFuture<Void> future = mAppSearchHelper.indexContactsAsync(generatePersonData(50),
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ false);
+        ExecutionException thrown = assertThrows(ExecutionException.class, future::get);
+        assertThat(thrown).hasCauseThat().isInstanceOf(AppSearchException.class);
+
+        List<String> appsearchIds = mAppSearchHelper.getAllContactIdsAsync().get();
+        assertThat(appsearchIds).isEmpty();
+    }
+
+    @Test
+    public void testIndexContacts_outOfSpace_shouldNeverCompleteNormally() throws Exception {
+        // set up AppSearchSession#put to invoke the callback with a RESULT_OUT_OF_SPACE failure
+        AppSearchSession appSearchSessionSpy = Mockito.spy(mAppSearchHelper.getSession());
+        Mockito.doAnswer(invocation -> {
+            BatchResultCallback<String, Void> callback = invocation.getArgument(2);
+            callback.onResult(new AppSearchBatchResult.Builder<String, Void>().setFailure("id",
+                    AppSearchResult.RESULT_OUT_OF_SPACE, "errorMessage").build());
+            return null;
+        }).when(appSearchSessionSpy).put(any(), any(), any());
+        mAppSearchHelper.setAppSearchSessionFutureForTesting(
+                CompletableFuture.completedFuture(appSearchSessionSpy));
+
+        // should throw from out of space normally
+        CompletableFuture<Void> future = mAppSearchHelper.indexContactsAsync(/*contacts=*/
+                Collections.emptyList(), mUpdateStats, /*shouldKeepUpdatingOnError=*/ false);
+        ExecutionException thrown = assertThrows(ExecutionException.class, future::get);
+        assertThat(thrown).hasCauseThat().isInstanceOf(AppSearchException.class);
+        assertThat(mUpdateStats.mUpdateStatuses).containsExactly(
+                AppSearchResult.RESULT_OUT_OF_SPACE);
+
+        mUpdateStats.clear();
+
+        // should throw from out of space even though it's set to complete normally on error
+        future = mAppSearchHelper.indexContactsAsync(/*contacts=*/ Collections.emptyList(),
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true);
+
+        thrown = assertThrows(ExecutionException.class, future::get);
+        assertThat(thrown).hasCauseThat().isInstanceOf(AppSearchException.class);
+        assertThat(mUpdateStats.mUpdateStatuses).containsExactly(
+                AppSearchResult.RESULT_OUT_OF_SPACE);
     }
 
     @Test
@@ -146,7 +222,7 @@ public class AppSearchHelperTest {
         List<Person> contacts = generatePersonData(50);
 
         CompletableFuture<Void> indexContactsFuture = mAppSearchHelper.indexContactsAsync(contacts,
-                mUpdateStats);
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true);
         contacts.clear();
         indexContactsFuture.get();
 
@@ -156,18 +232,37 @@ public class AppSearchHelperTest {
 
     @Test
     public void testAppSearchHelper_removeContacts() throws Exception {
-        mAppSearchHelper.indexContactsAsync(generatePersonData(50), mUpdateStats).get();
+        mAppSearchHelper.indexContactsAsync(generatePersonData(50),
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true).get();
         List<String> indexedIds = mAppSearchHelper.getAllContactIdsAsync().get();
 
         List<String> deletedIds = new ArrayList<>();
         for (int i = 0; i < 50; i += 5) {
             deletedIds.add(String.valueOf(i));
         }
-        mAppSearchHelper.removeContactsByIdAsync(deletedIds, mUpdateStats).get();
+        mAppSearchHelper.removeContactsByIdAsync(deletedIds,
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true).get();
 
         assertThat(indexedIds.size()).isEqualTo(50);
         List<String> appsearchIds = mAppSearchHelper.getAllContactIdsAsync().get();
         assertThat(appsearchIds).containsNoneIn(deletedIds);
+    }
+
+    @Test
+    public void testRemoveContacts_notFound_shouldCompleteNormallyAlways() throws Exception {
+        List<String> deletedIds = Collections.singletonList("0");
+
+        // should treat NOT_FOUND as an error and complete normally
+        mAppSearchHelper.removeContactsByIdAsync(deletedIds,
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ true).get();
+        assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_NOT_FOUND);
+
+        // should treat NOT_FOUND as an error and complete normally even though it's not set to
+        // complete normally on error
+        mUpdateStats.clear();
+        mAppSearchHelper.removeContactsByIdAsync(deletedIds,
+                mUpdateStats, /*shouldKeepUpdatingOnError=*/ false).get();
+        assertThat(mUpdateStats.mDeleteStatuses).containsExactly(AppSearchResult.RESULT_NOT_FOUND);
     }
 
     @Test
@@ -231,7 +326,7 @@ public class AppSearchHelperTest {
             List<Person> batchedContacts = contacts.subList(startIndex, batchEndIndex);
             indexContactsInBatchesFuture = indexContactsInBatchesFuture
                     .thenCompose(x -> mAppSearchHelper.indexContactsAsync(batchedContacts,
-                            mUpdateStats));
+                            mUpdateStats, /*shouldKeepUpdatingOnError=*/ true));
             startIndex = batchEndIndex;
         }
         return indexContactsInBatchesFuture;
