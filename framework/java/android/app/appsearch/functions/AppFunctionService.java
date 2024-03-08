@@ -57,7 +57,7 @@ public abstract class AppFunctionService extends Service {
 
     /**
      * The {@link Intent} that must be declared as handled by the service. To be supported, the
-     * service must also require the {@link android.Manifest.permission#BIND_APP_FUNCTION_SERVICE}
+     * service must also require the {@link AppFunctionManager#PERMISSION_BIND_APP_FUNCTION_SERVICE}
      * permission so that other applications can not abuse it.
      */
     @NonNull
