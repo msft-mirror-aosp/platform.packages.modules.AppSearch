@@ -22,6 +22,7 @@ import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
@@ -33,7 +34,7 @@ import java.util.Objects;
 @SafeParcelable.Class(creator = "PutDocumentsAidlRequestCreator")
 public class PutDocumentsAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final PutDocumentsAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<PutDocumentsAidlRequest> CREATOR =
             new PutDocumentsAidlRequestCreator();
 
     @NonNull
@@ -51,6 +52,16 @@ public class PutDocumentsAidlRequest extends AbstractSafeParcelable {
     @Field(id = 5, getter = "getBinderCallStartTimeMillis")
     private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
 
+    /**
+     * Inserts documents into the index.
+     *
+     * @param callerAttributionSource The permission identity of the package that
+     *     owns this document.
+     * @param databaseName The name of the database where this document lives.
+     * @param documentsParcel The Parcelable object contains a list of GenericDocument.
+     * @param userHandle The Handle of the calling user.
+     * @param binderCallStartTimeMillis The start timestamp of binder call in Millis.
+     */
     @Constructor
     public PutDocumentsAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
