@@ -219,11 +219,14 @@ package android.app.appsearch {
     method @NonNull public BuilderType setTtlMillis(long);
   }
 
-  public final class GetByDocumentIdRequest {
+  public final class GetByDocumentIdRequest implements android.os.Parcelable {
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public final int describeContents();
     method @NonNull public java.util.Set<java.lang.String> getIds();
     method @NonNull public String getNamespace();
     method @NonNull public java.util.Map<java.lang.String,java.util.List<android.app.appsearch.PropertyPath>> getProjectionPaths();
     method @NonNull public java.util.Map<java.lang.String,java.util.List<java.lang.String>> getProjections();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.GetByDocumentIdRequest> CREATOR;
     field public static final String PROJECTION_SCHEMA_TYPE_WILDCARD = "*";
   }
 
@@ -339,9 +342,12 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.PutDocumentsRequest build();
   }
 
-  public final class RemoveByDocumentIdRequest {
+  public final class RemoveByDocumentIdRequest implements android.os.Parcelable {
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public final int describeContents();
     method @NonNull public java.util.Set<java.lang.String> getIds();
     method @NonNull public String getNamespace();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.RemoveByDocumentIdRequest> CREATOR;
   }
 
   public static final class RemoveByDocumentIdRequest.Builder {
@@ -365,10 +371,13 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.ReportSystemUsageRequest.Builder setUsageTimestampMillis(long);
   }
 
-  public final class ReportUsageRequest {
+  public final class ReportUsageRequest implements android.os.Parcelable {
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public final int describeContents();
     method @NonNull public String getDocumentId();
     method @NonNull public String getNamespace();
     method public long getUsageTimestampMillis();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.ReportUsageRequest> CREATOR;
   }
 
   public static final class ReportUsageRequest.Builder {
