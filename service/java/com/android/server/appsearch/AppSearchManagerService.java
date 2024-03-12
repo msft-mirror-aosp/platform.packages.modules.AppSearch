@@ -36,6 +36,7 @@ import android.annotation.BinderThread;
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.UserIdInt;
 import android.annotation.WorkerThread;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchEnvironment;
@@ -205,6 +206,7 @@ public class AppSearchManagerService extends SystemService {
         registerReceivers();
         LocalManagerRegistry.getManager(StorageStatsManagerLocal.class)
                 .registerStorageStatsAugmenter(new AppSearchStorageStatsAugmenter(), TAG);
+        LocalManagerRegistry.addManager(LocalService.class, new LocalService());
     }
 
     @Override
@@ -356,6 +358,9 @@ public class AppSearchManagerService extends SystemService {
                     }
                     packagesToKeep.add(VisibilityStore.VISIBILITY_PACKAGE_NAME);
                     instance.getAppSearchImpl().prunePackageData(packagesToKeep);
+                    AppSearchMaintenanceService.scheduleFullyPersistJob(mContext,
+                            userHandle.getIdentifier(),
+                            mAppSearchConfig.getCachedFullyPersistJobIntervalMillis());
                 }
             } catch (AppSearchException | RuntimeException e) {
                 Log.e(TAG, "Unable to prune packages for " + user, e);
@@ -377,10 +382,22 @@ public class AppSearchManagerService extends SystemService {
             mServiceImplHelper.setUserIsLocked(userHandle, true);
             mExecutorManager.shutDownAndRemoveUserExecutor(userHandle);
             mAppSearchUserInstanceManager.closeAndRemoveUserInstance(userHandle);
+            AppSearchMaintenanceService.cancelFullyPersistJobIfScheduled(
+                    mContext, userHandle.getIdentifier());
             Log.i(TAG, "Removed AppSearchImpl instance for: " + userHandle);
         } catch (InterruptedException | RuntimeException e) {
             Log.e(TAG, "Unable to remove data for: " + userHandle, e);
             ExceptionUtil.handleException(e);
+        }
+    }
+
+    class LocalService {
+        /** Persist all pending mutation operation to disk for the given user. */
+        public void doFullyPersistForUser(@UserIdInt int userId) throws AppSearchException {
+            UserHandle targetUser = UserHandle.getUserHandleForUid(userId);
+            AppSearchUserInstance instance =
+                mAppSearchUserInstanceManager.getUserInstance(targetUser);
+            instance.getAppSearchImpl().persistToDisk(PersistType.Code.FULL);
         }
     }
 
