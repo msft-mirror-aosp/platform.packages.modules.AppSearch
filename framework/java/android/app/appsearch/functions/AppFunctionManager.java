@@ -21,6 +21,7 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
 import android.annotation.UserHandleAware;
+import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.SearchSessionUtil;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
@@ -42,9 +43,11 @@ import java.util.function.Consumer;
  *
  * <p>App function is a specific piece of functionality that an app offers to the system. These
  * functionalities can be integrated into various system features.
+ *
+ * <p>You can obtain an instance using {@link AppSearchManager#getAppFunctionManager()}.
  */
 @FlaggedApi(Flags.FLAG_ENABLE_APP_FUNCTIONS)
-public class AppFunctionManager {
+public final class AppFunctionManager {
     /**
      * Allows system applications to execute app functions provided by apps through AppSearch.
      *
