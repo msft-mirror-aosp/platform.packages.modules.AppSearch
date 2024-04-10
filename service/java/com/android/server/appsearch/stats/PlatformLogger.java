@@ -18,6 +18,7 @@ package com.android.server.appsearch.stats;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.Context;
@@ -232,6 +233,7 @@ public final class PlatformLogger implements AppSearchLogger {
      * @return removed UID for the package, or {@code INVALID_UID} if package was not previously
      * cached.
      */
+    @CanIgnoreReturnValue
     public int removeCachedUidForPackage(@NonNull String packageName) {
         // TODO(b/173532925) This needs to be called when we get PACKAGE_REMOVED intent
         Objects.requireNonNull(packageName);
