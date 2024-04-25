@@ -187,8 +187,7 @@ public class MobileApplication extends GenericDocument {
     /**
      * Returns the fully qualified name of the Application class for this mobile app. This would
      * look something like "com.android.vending.SearchActivity". Combined with the package name, a
-     * launch intent can be created with
-     * <code>
+     * launch intent can be created with <code>
      *     Intent launcher = new Intent(Intent.ACTION_MAIN);
      *     launcher.setComponent(new ComponentName(app.getPackageName(), app.getClassName()));
      *     launcher.setPackage(app.getPackageName());
@@ -196,7 +195,6 @@ public class MobileApplication extends GenericDocument {
      *     launcher.addCategory(Intent.CATEGORY_LAUNCHER);
      *     appListFragment.getActivity().startActivity(launcher);
      *  </code>
-     *
      */
     @Nullable
     public String getClassName() {
@@ -211,8 +209,8 @@ public class MobileApplication extends GenericDocument {
                     Objects.requireNonNull(packageName),
                     getSchemaNameForPackage(packageName));
             setPropertyString(APP_PROPERTY_PACKAGE_NAME, packageName);
-            setPropertyBytes(APP_PROPERTY_SHA256_CERTIFICATE,
-                    Objects.requireNonNull(sha256Certificate));
+            setPropertyBytes(
+                    APP_PROPERTY_SHA256_CERTIFICATE, Objects.requireNonNull(sha256Certificate));
         }
 
         /** Sets the display name. */

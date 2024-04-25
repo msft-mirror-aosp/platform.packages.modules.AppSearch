@@ -50,8 +50,10 @@ public final class AppsUtil {
 
     /** Gets the resource Uri given a resource id. */
     @NonNull
-    private static Uri getResourceUri(@NonNull PackageManager packageManager,
-            @NonNull ApplicationInfo appInfo, int resourceId)
+    private static Uri getResourceUri(
+            @NonNull PackageManager packageManager,
+            @NonNull ApplicationInfo appInfo,
+            int resourceId)
             throws PackageManager.NameNotFoundException {
         Objects.requireNonNull(packageManager);
         Objects.requireNonNull(appInfo);
@@ -63,14 +65,14 @@ public final class AppsUtil {
 
     /**
      * Appends the resource id instead of name to make the resource uri due to b/161564466. The
-     * resource names for some apps (e.g. Chrome) are obfuscated due to resource name collapsing,
-     * so we need to use resource id instead.
+     * resource names for some apps (e.g. Chrome) are obfuscated due to resource name collapsing, so
+     * we need to use resource id instead.
      *
      * @see Uri
      */
     @NonNull
-    private static Uri makeResourceUri(@NonNull String appPkg, @NonNull String resPkg,
-            @NonNull String type, int resourceId) {
+    private static Uri makeResourceUri(
+            @NonNull String appPkg, @NonNull String resPkg, @NonNull String type, int resourceId) {
         Objects.requireNonNull(appPkg);
         Objects.requireNonNull(resPkg);
         Objects.requireNonNull(type);
@@ -105,8 +107,8 @@ public final class AppsUtil {
         }
 
         try {
-            return getResourceUri(
-                    packageManager, activityInfo.applicationInfo, iconResourceId).toString();
+            return getResourceUri(packageManager, activityInfo.applicationInfo, iconResourceId)
+                    .toString();
         } catch (PackageManager.NameNotFoundException e) {
             // If resources aren't found for the application, that is fine. We return null and
             // handle it with getActivityIconUriString
@@ -208,7 +210,7 @@ public final class AppsUtil {
      * Uses PackageManager to supplement packageInfos with an application display name and icon uri.
      *
      * @return a MobileApplication representing the packageInfo, null if finding the signing
-     * certificate fails.
+     *     certificate fails.
      */
     @Nullable
     private static MobileApplication createMobileApplication(
