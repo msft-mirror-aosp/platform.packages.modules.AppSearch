@@ -26,6 +26,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.pm.Signature;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.text.TextUtils;
@@ -114,49 +115,74 @@ public final class AppsUtil {
     }
 
     /**
-     * Uses {@link PackageManager} and a list of {@link PackageInfo} to convert the package infos
-     * into AppSearch MobileApplication documents.
+     * Gets {@link PackageInfo}s only for packages that have a launch activity, along with their
+     * corresponding {@link ResolveInfo}. This is useful for building schemas as well as determining
+     * which packages to set schemas for.
      *
-     * @param packageInfos A list of PackageInfos to convert to MobileApplications
+     * @return a mapping of {@link PackageInfo}s with their corresponding {@link ResolveInfo} for
+     *     the packages launch activity.
+     * @see PackageManager#getInstalledPackages
      * @see PackageManager#queryIntentActivities
      */
     @NonNull
-    public static List<MobileApplication> buildAppsFromPackageInfos(
-            @NonNull PackageManager packageManager, @NonNull List<PackageInfo> packageInfos) {
+    public static Map<PackageInfo, ResolveInfo> getLaunchablePackages(
+            @NonNull PackageManager packageManager) {
         Objects.requireNonNull(packageManager);
-        Objects.requireNonNull(packageInfos);
+        List<PackageInfo> packageInfos =
+                packageManager.getInstalledPackages(
+                        PackageManager.GET_META_DATA | PackageManager.GET_SIGNING_CERTIFICATES);
+        Map<PackageInfo, ResolveInfo> launchablePackages = new ArrayMap<>();
         Intent intent = new Intent(Intent.ACTION_MAIN, null);
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
         intent.setPackage(null);
-        List<ResolveInfo> activities;
-        activities = packageManager.queryIntentActivities(intent, 0);
+        List<ResolveInfo> activities = packageManager.queryIntentActivities(intent, 0);
         Map<String, ResolveInfo> packageNameToLauncher = new ArrayMap<>();
         for (int i = 0; i < activities.size(); i++) {
             ResolveInfo ri = activities.get(i);
             packageNameToLauncher.put(ri.activityInfo.packageName, ri);
         }
 
-        List<MobileApplication> mobileApplications = new ArrayList<>();
         for (int i = 0; i < packageInfos.size(); i++) {
             PackageInfo packageInfo = packageInfos.get(i);
             ResolveInfo resolveInfo = packageNameToLauncher.get(packageInfo.packageName);
-            if (resolveInfo == null) {
-                continue;
+            if (resolveInfo != null) {
+                // Include the resolve info as we might need it later to build the MobileApplication
+                launchablePackages.put(packageInfo, resolveInfo);
             }
+        }
 
+        return launchablePackages;
+    }
+
+    /**
+     * Uses {@link PackageManager} and a Map of {@link PackageInfo}s to {@link ResolveInfo}s to
+     * build AppSearch {@link MobileApplication} documents. Info from both are required to build app
+     * documents.
+     *
+     * @param packageInfos a mapping of {@link PackageInfo}s and their corresponding {@link
+     *     ResolveInfo} for the packages launch activity.
+     */
+    @NonNull
+    public static List<MobileApplication> buildAppsFromPackageInfos(
+            @NonNull PackageManager packageManager,
+            @NonNull Map<PackageInfo, ResolveInfo> packageInfos) {
+        Objects.requireNonNull(packageManager);
+        Objects.requireNonNull(packageInfos);
+
+        List<MobileApplication> mobileApplications = new ArrayList<>();
+        for (Map.Entry<PackageInfo, ResolveInfo> entry : packageInfos.entrySet()) {
             MobileApplication mobileApplication =
-                    createMobileApplication(packageManager, packageInfo, resolveInfo);
+                    createMobileApplication(packageManager, entry.getKey(), entry.getValue());
             if (mobileApplication != null && !mobileApplication.getDisplayName().isEmpty()) {
                 mobileApplications.add(mobileApplication);
             }
-
         }
         return mobileApplications;
     }
 
     /** Gets the SHA-256 certificate from a {@link PackageManager}, or null if it is not found */
     @Nullable
-    private static byte[] getCertificate(@NonNull PackageInfo packageInfo) {
+    public static byte[] getCertificate(@NonNull PackageInfo packageInfo) {
         Objects.requireNonNull(packageInfo);
         if (packageInfo.signingInfo == null) {
             if (LogUtil.DEBUG) {
@@ -170,7 +196,11 @@ public final class AppsUtil {
         } catch (NoSuchAlgorithmException e) {
             return null;
         }
-        md.update(packageInfo.signingInfo.getSigningCertificateHistory()[0].toByteArray());
+        Signature[] signatures = packageInfo.signingInfo.getSigningCertificateHistory();
+        if (signatures == null || signatures.length == 0) {
+            return null;
+        }
+        md.update(signatures[0].toByteArray());
         return md.digest();
     }
 
@@ -218,3 +248,4 @@ public final class AppsUtil {
         return builder.build();
     }
 }
+
