@@ -17,16 +17,16 @@
 package android.app.appsearch;
 
 import android.annotation.CurrentTimeMillisLong;
+import android.annotation.FlaggedApi;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
-import android.app.appsearch.PropertyPath.PathSegment;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.util.BundleUtil;
+import android.app.appsearch.flags.Flags;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
+import android.app.appsearch.safeparcel.PropertyParcel;
 import android.app.appsearch.util.IndentingStringBuilder;
-import android.os.Bundle;
-import android.os.Parcelable;
 import android.util.Log;
 
 import java.lang.reflect.Array;
@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -55,22 +56,6 @@ public class GenericDocument {
     /** The maximum number of indexed properties a document can have. */
     private static final int MAX_INDEXED_PROPERTIES = 16;
 
-    /** The default score of document. */
-    private static final int DEFAULT_SCORE = 0;
-
-    /** The default time-to-live in millisecond of a document, which is infinity. */
-    private static final long DEFAULT_TTL_MILLIS = 0L;
-
-    private static final String PROPERTIES_FIELD = "properties";
-    private static final String BYTE_ARRAY_FIELD = "byteArray";
-    private static final String SCHEMA_TYPE_FIELD = "schemaType";
-    private static final String ID_FIELD = "id";
-    private static final String SCORE_FIELD = "score";
-    private static final String TTL_MILLIS_FIELD = "ttlMillis";
-    private static final String CREATION_TIMESTAMP_MILLIS_FIELD = "creationTimestampMillis";
-    private static final String NAMESPACE_FIELD = "namespace";
-    private static final String PARENT_TYPES_FIELD = "parentTypes";
-
     /** @hide */
     public static final String PARENT_TYPES_SYNTHETIC_PROPERTY = "$$__AppSearch__parentTypes";
 
@@ -87,37 +72,19 @@ public class GenericDocument {
         return MAX_INDEXED_PROPERTIES;
     }
 
-    /**
-     * Contains all {@link GenericDocument} information in a packaged format.
-     *
-     * <p>Keys are the {@code *_FIELD} constants in this class.
-     */
-    @NonNull final Bundle mBundle;
-
-    /** Contains all properties in {@link GenericDocument} to support getting properties via name */
-    @NonNull private final Bundle mProperties;
-
-    @NonNull private final String mId;
-    @NonNull private final String mSchemaType;
-    private final long mCreationTimestampMillis;
-    @Nullable private Integer mHashCode;
+    /** The class to hold all meta data and properties for this {@link GenericDocument}. */
+    private final GenericDocumentParcel mDocumentParcel;
 
     /**
-     * Rebuilds a {@link GenericDocument} from a bundle.
+     * Rebuilds a {@link GenericDocument} from a {@link GenericDocumentParcel}.
      *
-     * @param bundle Packaged {@link GenericDocument} data, such as the result of {@link
-     *     #getBundle}.
+     * @param documentParcel Packaged {@link GenericDocument} data, such as the result of {@link
+     *     #getDocumentParcel()}.
      * @hide
      */
     @SuppressWarnings("deprecation")
-    public GenericDocument(@NonNull Bundle bundle) {
-        Objects.requireNonNull(bundle);
-        mBundle = bundle;
-        mProperties = Objects.requireNonNull(bundle.getParcelable(PROPERTIES_FIELD));
-        mId = Objects.requireNonNull(mBundle.getString(ID_FIELD));
-        mSchemaType = Objects.requireNonNull(mBundle.getString(SCHEMA_TYPE_FIELD));
-        mCreationTimestampMillis =
-                mBundle.getLong(CREATION_TIMESTAMP_MILLIS_FIELD, System.currentTimeMillis());
+    public GenericDocument(@NonNull GenericDocumentParcel documentParcel) {
+        mDocumentParcel = Objects.requireNonNull(documentParcel);
     }
 
     /**
@@ -126,35 +93,36 @@ public class GenericDocument {
      * <p>This method should be only used by constructor of a subclass.
      */
     protected GenericDocument(@NonNull GenericDocument document) {
-        this(document.mBundle);
+        this(document.mDocumentParcel);
     }
 
     /**
-     * Returns the {@link Bundle} populated by this builder.
+     * Returns the {@link GenericDocumentParcel} holding the values for this {@link
+     * GenericDocument}.
      *
      * @hide
      */
     @NonNull
-    public Bundle getBundle() {
-        return mBundle;
+    public GenericDocumentParcel getDocumentParcel() {
+        return mDocumentParcel;
     }
 
     /** Returns the unique identifier of the {@link GenericDocument}. */
     @NonNull
     public String getId() {
-        return mId;
+        return mDocumentParcel.getId();
     }
 
     /** Returns the namespace of the {@link GenericDocument}. */
     @NonNull
     public String getNamespace() {
-        return mBundle.getString(NAMESPACE_FIELD, /*defaultValue=*/ "");
+        return mDocumentParcel.getNamespace();
     }
 
     /** Returns the {@link AppSearchSchema} type of the {@link GenericDocument}. */
     @NonNull
     public String getSchemaType() {
-        return mSchemaType;
+        return mDocumentParcel.getSchemaType();
     }
 
     /**
@@ -166,7 +134,7 @@ public class GenericDocument {
      */
     @Nullable
     public List<String> getParentTypes() {
-        List<String> result = mBundle.getStringArrayList(PARENT_TYPES_FIELD);
+        List<String> result = mDocumentParcel.getParentTypes();
         if (result == null) {
             return null;
         }
@@ -180,7 +148,7 @@ public class GenericDocument {
      */
     @CurrentTimeMillisLong
     public long getCreationTimestampMillis() {
-        return mCreationTimestampMillis;
+        return mDocumentParcel.getCreationTimestampMillis();
     }
 
     /**
@@ -194,7 +162,7 @@ public class GenericDocument {
      * until the app is uninstalled or {@link AppSearchSession#remove} is called.
      */
     public long getTtlMillis() {
-        return mBundle.getLong(TTL_MILLIS_FIELD, DEFAULT_TTL_MILLIS);
+        return mDocumentParcel.getTtlMillis();
     }
 
     /**
@@ -209,13 +177,13 @@ public class GenericDocument {
      * <p>Any non-negative integer can be used a score.
      */
     public int getScore() {
-        return mBundle.getInt(SCORE_FIELD, DEFAULT_SCORE);
+        return mDocumentParcel.getScore();
     }
 
     /** Returns the names of all properties defined in this document. */
     @NonNull
     public Set<String> getPropertyNames() {
-        return Collections.unmodifiableSet(mProperties.keySet());
+        return Collections.unmodifiableSet(mDocumentParcel.getPropertyNames());
     }
 
     /**
@@ -283,60 +251,29 @@ public class GenericDocument {
     public Object getProperty(@NonNull String path) {
         Objects.requireNonNull(path);
         Object rawValue =
-                getRawPropertyFromRawDocument(new PropertyPath(path), /*pathIndex=*/ 0, mBundle);
+                getRawPropertyFromRawDocument(
+                        new PropertyPath(path), /*pathIndex=*/ 0, mDocumentParcel.getPropertyMap());
 
         // Unpack the raw value into the types the user expects, if required.
-        if (rawValue instanceof Bundle) {
-            // getRawPropertyFromRawDocument may return a document as a bare Bundle as a performance
-            // optimization for lookups.
-            GenericDocument document = new GenericDocument((Bundle) rawValue);
+        if (rawValue instanceof GenericDocumentParcel) {
+            // getRawPropertyFromRawDocument may return a document as a bare documentParcel
+            // as a performance optimization for lookups.
+            GenericDocument document = new GenericDocument((GenericDocumentParcel) rawValue);
             return new GenericDocument[] {document};
         }
 
-        if (rawValue instanceof List) {
-            // byte[][] fields are packed into List<Bundle> where each Bundle contains just a single
-            // entry: BYTE_ARRAY_FIELD -> byte[].
-            @SuppressWarnings("unchecked")
-            List<Bundle> bundles = (List<Bundle>) rawValue;
-            byte[][] bytes = new byte[bundles.size()][];
-            for (int i = 0; i < bundles.size(); i++) {
-                Bundle bundle = bundles.get(i);
-                if (bundle == null) {
-                    Log.e(TAG, "The inner bundle is null at " + i + ", for path: " + path);
-                    continue;
-                }
-                byte[] innerBytes = bundle.getByteArray(BYTE_ARRAY_FIELD);
-                if (innerBytes == null) {
-                    Log.e(TAG, "The bundle at " + i + " contains a null byte[].");
-                    continue;
-                }
-                bytes[i] = innerBytes;
-            }
-            return bytes;
-        }
-
-        if (rawValue instanceof Parcelable[]) {
-            // The underlying Bundle of nested GenericDocuments is packed into a Parcelable array.
+        if (rawValue instanceof GenericDocumentParcel[]) {
+            // The underlying parcelable of nested GenericDocuments is packed into
+            // a Parcelable array.
             // We must unpack it into GenericDocument instances.
-            Parcelable[] bundles = (Parcelable[]) rawValue;
-            GenericDocument[] documents = new GenericDocument[bundles.length];
-            for (int i = 0; i < bundles.length; i++) {
-                if (bundles[i] == null) {
-                    Log.e(TAG, "The inner bundle is null at " + i + ", for path: " + path);
+            GenericDocumentParcel[] docParcels = (GenericDocumentParcel[]) rawValue;
+            GenericDocument[] documents = new GenericDocument[docParcels.length];
+            for (int i = 0; i < docParcels.length; i++) {
+                if (docParcels[i] == null) {
+                    Log.e(TAG, "The inner parcel is null at " + i + ", for path: " + path);
                     continue;
                 }
-                if (!(bundles[i] instanceof Bundle)) {
-                    Log.e(
-                            TAG,
-                            "The inner element at "
-                                    + i
-                                    + " is a "
-                                    + bundles[i].getClass()
-                                    + ", not a Bundle for path: "
-                                    + path);
-                    continue;
-                }
-                documents[i] = new GenericDocument((Bundle) bundles[i]);
+                documents[i] = new GenericDocument(docParcels[i]);
             }
             return documents;
         }
@@ -357,22 +294,20 @@ public class GenericDocument {
      *
      * @param path the PropertyPath object representing the path
      * @param pathIndex the index into the path we start at
-     * @param documentBundle the bundle that contains the path we are looking up
+     * @param propertyMap the map containing the path we are looking up
      * @return the raw property
      */
     @Nullable
     @SuppressWarnings("deprecation")
     private static Object getRawPropertyFromRawDocument(
-            @NonNull PropertyPath path, int pathIndex, @NonNull Bundle documentBundle) {
+            @NonNull PropertyPath path,
+            int pathIndex,
+            @NonNull Map<String, PropertyParcel> propertyMap) {
         Objects.requireNonNull(path);
-        Objects.requireNonNull(documentBundle);
-        Bundle properties = Objects.requireNonNull(documentBundle.getBundle(PROPERTIES_FIELD));
-
+        Objects.requireNonNull(propertyMap);
         for (int i = pathIndex; i < path.size(); i++) {
-            PathSegment segment = path.get(i);
-
-            Object currentElementValue = properties.get(segment.getPropertyName());
-
+            PropertyPath.PathSegment segment = path.get(i);
+            Object currentElementValue = propertyMap.get(segment.getPropertyName());
             if (currentElementValue == null) {
                 return null;
             }
@@ -382,41 +317,43 @@ public class GenericDocument {
             // "recipients[0]", currentElementValue now contains the value of "recipients" while we
             // need the value of "recipients[0]".
             int index = segment.getPropertyIndex();
-            if (index != PathSegment.NON_REPEATED_CARDINALITY) {
+            if (index != PropertyPath.PathSegment.NON_REPEATED_CARDINALITY) {
+                // For properties bundle, now we will only get PropertyParcel as the value.
+                PropertyParcel propertyParcel = (PropertyParcel) currentElementValue;
+
                 // Extract the right array element
                 Object extractedValue = null;
-                if (currentElementValue instanceof String[]) {
-                    String[] stringValues = (String[]) currentElementValue;
+                if (propertyParcel.getStringValues() != null) {
+                    String[] stringValues = propertyParcel.getStringValues();
                     if (index < stringValues.length) {
                         extractedValue = Arrays.copyOfRange(stringValues, index, index + 1);
                     }
-                } else if (currentElementValue instanceof long[]) {
-                    long[] longValues = (long[]) currentElementValue;
+                } else if (propertyParcel.getLongValues() != null) {
+                    long[] longValues = propertyParcel.getLongValues();
                     if (index < longValues.length) {
                         extractedValue = Arrays.copyOfRange(longValues, index, index + 1);
                     }
-                } else if (currentElementValue instanceof double[]) {
-                    double[] doubleValues = (double[]) currentElementValue;
+                } else if (propertyParcel.getDoubleValues() != null) {
+                    double[] doubleValues = propertyParcel.getDoubleValues();
                     if (index < doubleValues.length) {
                         extractedValue = Arrays.copyOfRange(doubleValues, index, index + 1);
                     }
-                } else if (currentElementValue instanceof boolean[]) {
-                    boolean[] booleanValues = (boolean[]) currentElementValue;
+                } else if (propertyParcel.getBooleanValues() != null) {
+                    boolean[] booleanValues = propertyParcel.getBooleanValues();
                     if (index < booleanValues.length) {
                         extractedValue = Arrays.copyOfRange(booleanValues, index, index + 1);
                     }
-                } else if (currentElementValue instanceof List) {
-                    @SuppressWarnings("unchecked")
-                    List<Bundle> bundles = (List<Bundle>) currentElementValue;
-                    if (index < bundles.size()) {
-                        extractedValue = bundles.subList(index, index + 1);
+                } else if (propertyParcel.getBytesValues() != null) {
+                    byte[][] bytesValues = propertyParcel.getBytesValues();
+                    if (index < bytesValues.length) {
+                        extractedValue = Arrays.copyOfRange(bytesValues, index, index + 1);
                     }
-                } else if (currentElementValue instanceof Parcelable[]) {
+                } else if (propertyParcel.getDocumentValues() != null) {
                     // Special optimization: to avoid creating new singleton arrays for traversing
-                    // paths we return the bare document Bundle in this particular case.
-                    Parcelable[] bundles = (Parcelable[]) currentElementValue;
-                    if (index < bundles.length) {
-                        extractedValue = bundles[index];
+                    // paths we return the bare document parcel in this particular case.
+                    GenericDocumentParcel[] docValues = propertyParcel.getDocumentValues();
+                    if (index < docValues.length) {
+                        extractedValue = docValues[index];
                     }
                 } else {
                     throw new IllegalStateException(
@@ -427,16 +364,25 @@ public class GenericDocument {
 
             // at the end of the path, either something like "...foo" or "...foo[1]"
             if (currentElementValue == null || i == path.size() - 1) {
+                if (currentElementValue != null && currentElementValue instanceof PropertyParcel) {
+                    // Unlike previous bundle-based implementation, now each
+                    // value is wrapped in PropertyParcel.
+                    // Here we need to get and return the actual value for non-repeated fields.
+                    currentElementValue = ((PropertyParcel) currentElementValue).getValues();
+                }
                 return currentElementValue;
             }
 
-            // currentElementValue is now a Bundle or Parcelable[], we can continue down the path
-            if (currentElementValue instanceof Bundle) {
-                properties = ((Bundle) currentElementValue).getBundle(PROPERTIES_FIELD);
-            } else if (currentElementValue instanceof Parcelable[]) {
-                Parcelable[] parcelables = (Parcelable[]) currentElementValue;
-                if (parcelables.length == 1) {
-                    properties = ((Bundle) parcelables[0]).getBundle(PROPERTIES_FIELD);
+            // currentElementValue is now a GenericDocumentParcel or PropertyParcel,
+            // we can continue down the path.
+            if (currentElementValue instanceof GenericDocumentParcel) {
+                propertyMap = ((GenericDocumentParcel) currentElementValue).getPropertyMap();
+            } else if (currentElementValue instanceof PropertyParcel
+                    && ((PropertyParcel) currentElementValue).getDocumentValues() != null) {
+                GenericDocumentParcel[] docParcels =
+                        ((PropertyParcel) currentElementValue).getDocumentValues();
+                if (docParcels.length == 1) {
+                    propertyMap = docParcels[0].getPropertyMap();
                     continue;
                 }
 
@@ -463,12 +409,14 @@ public class GenericDocument {
                 // repeated values. The implementation is optimized for these two cases, requiring
                 // no additional allocations. So we've decided that the above performance
                 // characteristics are OK for the less used path.
-                List<Object> accumulator = new ArrayList<>(parcelables.length);
-                for (Parcelable parcelable : parcelables) {
+                List<Object> accumulator = new ArrayList<>(docParcels.length);
+                for (GenericDocumentParcel docParcel : docParcels) {
                     // recurse as we need to branch
                     Object value =
                             getRawPropertyFromRawDocument(
-                                    path, /*pathIndex=*/ i + 1, (Bundle) parcelable);
+                                    path,
+                                    /*pathIndex=*/ i + 1,
+                                    ((GenericDocumentParcel) docParcel).getPropertyMap());
                     if (value != null) {
                         accumulator.add(value);
                     }
@@ -488,8 +436,8 @@ public class GenericDocument {
      * Combines accumulated repeated properties from multiple documents into a single array.
      *
      * @param accumulator List containing objects of the following types: {@code String[]}, {@code
-     *     long[]}, {@code double[]}, {@code boolean[]}, {@code List<Bundle>}, or {@code
-     *     Parcelable[]}.
+     *     long[]}, {@code double[]}, {@code boolean[]}, {@code byte[][]}, or {@code
+     *     GenericDocumentParcelable[]}.
      * @return The result of concatenating each individual list element into a larger array/list of
      *     the same type.
      */
@@ -555,28 +503,29 @@ public class GenericDocument {
             }
             return result;
         }
-        if (first instanceof List) {
+        if (first instanceof byte[][]) {
             int length = 0;
             for (int i = 0; i < accumulator.size(); i++) {
-                length += ((List<?>) accumulator.get(i)).size();
+                length += ((byte[][]) accumulator.get(i)).length;
             }
-            List<Bundle> result = new ArrayList<>(length);
+            byte[][] result = new byte[length][];
+            int total = 0;
             for (int i = 0; i < accumulator.size(); i++) {
-                @SuppressWarnings("unchecked")
-                List<Bundle> castValue = (List<Bundle>) accumulator.get(i);
-                result.addAll(castValue);
+                byte[][] castValue = (byte[][]) accumulator.get(i);
+                System.arraycopy(castValue, 0, result, total, castValue.length);
+                total += castValue.length;
             }
             return result;
         }
-        if (first instanceof Parcelable[]) {
+        if (first instanceof GenericDocumentParcel[]) {
             int length = 0;
             for (int i = 0; i < accumulator.size(); i++) {
-                length += ((Parcelable[]) accumulator.get(i)).length;
+                length += ((GenericDocumentParcel[]) accumulator.get(i)).length;
             }
-            Parcelable[] result = new Parcelable[length];
+            GenericDocumentParcel[] result = new GenericDocumentParcel[length];
             int total = 0;
             for (int i = 0; i < accumulator.size(); i++) {
-                Parcelable[] castValue = (Parcelable[]) accumulator.get(i);
+                GenericDocumentParcel[] castValue = (GenericDocumentParcel[]) accumulator.get(i);
                 System.arraycopy(castValue, 0, result, total, castValue.length);
                 total += castValue.length;
             }
@@ -895,8 +844,7 @@ public class GenericDocument {
     @NonNull
     @Deprecated
     public GenericDocument.Builder<GenericDocument.Builder<?>> toBuilder() {
-        Bundle clonedBundle = BundleUtil.deepCopy(mBundle);
-        return new GenericDocument.Builder<>(clonedBundle);
+        return new Builder<>(new GenericDocumentParcel.Builder(mDocumentParcel));
     }
 
     @Override
@@ -908,15 +856,12 @@ public class GenericDocument {
             return false;
         }
         GenericDocument otherDocument = (GenericDocument) other;
-        return BundleUtil.deepEquals(this.mBundle, otherDocument.mBundle);
+        return mDocumentParcel.equals(otherDocument.mDocumentParcel);
     }
 
     @Override
     public int hashCode() {
-        if (mHashCode == null) {
-            mHashCode = BundleUtil.deepHashCode(mBundle);
-        }
-        return mHashCode;
+        return mDocumentParcel.hashCode();
     }
 
     @Override
@@ -1030,10 +975,8 @@ public class GenericDocument {
     // GenericDocument.
     @SuppressLint("StaticFinalBuilder")
     public static class Builder<BuilderType extends Builder> {
-        private Bundle mBundle;
-        private Bundle mProperties;
+        private GenericDocumentParcel.Builder mDocumentParcelBuilder;
         private final BuilderType mBuilderTypeInstance;
-        private boolean mBuilt = false;
 
         /**
          * Creates a new {@link GenericDocument.Builder}.
@@ -1057,28 +1000,19 @@ public class GenericDocument {
             Objects.requireNonNull(id);
             Objects.requireNonNull(schemaType);
 
-            mBundle = new Bundle();
             mBuilderTypeInstance = (BuilderType) this;
-            mBundle.putString(GenericDocument.NAMESPACE_FIELD, namespace);
-            mBundle.putString(GenericDocument.ID_FIELD, id);
-            mBundle.putString(GenericDocument.SCHEMA_TYPE_FIELD, schemaType);
-            mBundle.putLong(GenericDocument.TTL_MILLIS_FIELD, DEFAULT_TTL_MILLIS);
-            mBundle.putInt(GenericDocument.SCORE_FIELD, DEFAULT_SCORE);
-
-            mProperties = new Bundle();
-            mBundle.putBundle(PROPERTIES_FIELD, mProperties);
+            mDocumentParcelBuilder = new GenericDocumentParcel.Builder(namespace, id, schemaType);
         }
 
         /**
-         * Creates a new {@link GenericDocument.Builder} from the given Bundle.
+         * Creates a new {@link GenericDocument.Builder} from the given {@link
+         * GenericDocumentParcel.Builder}.
          *
          * <p>The bundle is NOT copied.
          */
         @SuppressWarnings("unchecked")
-        Builder(@NonNull Bundle bundle) {
-            mBundle = Objects.requireNonNull(bundle);
-            // mProperties is NonNull and initialized to empty Bundle() in builder.
-            mProperties = Objects.requireNonNull(mBundle.getBundle(PROPERTIES_FIELD));
+        Builder(@NonNull GenericDocumentParcel.Builder documentParcelBuilder) {
+            mDocumentParcelBuilder = Objects.requireNonNull(documentParcelBuilder);
             mBuilderTypeInstance = (BuilderType) this;
         }
 
@@ -1087,11 +1021,10 @@ public class GenericDocument {
          *
          * <p>The GenericDocument is deep copied, i.e. changes to the new GenericDocument returned
          * by this function will NOT affect the original GenericDocument.
-         *
-         * @hide
          */
+        @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_COPY_CONSTRUCTOR)
         public Builder(@NonNull GenericDocument document) {
-            this(BundleUtil.deepCopy(document.getBundle()));
+            this(new GenericDocumentParcel.Builder(document.mDocumentParcel));
         }
 
         /**
@@ -1101,15 +1034,13 @@ public class GenericDocument {
          * <p>Document IDs are unique within a namespace.
          *
          * <p>The number of namespaces per app should be kept small for efficiency reasons.
-         *
-         * @hide
          */
+        @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS)
         @CanIgnoreReturnValue
         @NonNull
         public BuilderType setNamespace(@NonNull String namespace) {
             Objects.requireNonNull(namespace);
-            resetIfBuilt();
-            mBundle.putString(GenericDocument.NAMESPACE_FIELD, namespace);
+            mDocumentParcelBuilder.setNamespace(namespace);
             return mBuilderTypeInstance;
         }
 
@@ -1117,16 +1048,17 @@ public class GenericDocument {
          * Sets the ID of this document, changing the value provided in the constructor. No special
          * values are reserved or understood by the infrastructure.
          *
-         * <p>Document IDs are unique within a namespace.
+         * <p>Document IDs are unique within the combination of package, database, and namespace.
          *
-         * @hide
+         * <p>Setting a document with a duplicate id will overwrite the original document with the
+         * new document, enforcing uniqueness within the above constraint.
          */
+        @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS)
         @CanIgnoreReturnValue
         @NonNull
         public BuilderType setId(@NonNull String id) {
             Objects.requireNonNull(id);
-            resetIfBuilt();
-            mBundle.putString(GenericDocument.ID_FIELD, id);
+            mDocumentParcelBuilder.setId(id);
             return mBuilderTypeInstance;
         }
 
@@ -1135,15 +1067,13 @@ public class GenericDocument {
          *
          * <p>To successfully index a document, the schema type must match the name of an {@link
          * AppSearchSchema} object previously provided to {@link AppSearchSession#setSchema}.
-         *
-         * @hide
          */
+        @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS)
         @CanIgnoreReturnValue
         @NonNull
         public BuilderType setSchemaType(@NonNull String schemaType) {
             Objects.requireNonNull(schemaType);
-            resetIfBuilt();
-            mBundle.putString(GenericDocument.SCHEMA_TYPE_FIELD, schemaType);
+            mDocumentParcelBuilder.setSchemaType(schemaType);
             return mBuilderTypeInstance;
         }
 
@@ -1158,9 +1088,7 @@ public class GenericDocument {
         @NonNull
         public BuilderType setParentTypes(@NonNull List<String> parentTypes) {
             Objects.requireNonNull(parentTypes);
-            resetIfBuilt();
-            mBundle.putStringArrayList(
-                    GenericDocument.PARENT_TYPES_FIELD, new ArrayList<>(parentTypes));
+            mDocumentParcelBuilder.setParentTypes(parentTypes);
             return mBuilderTypeInstance;
         }
 
@@ -1184,8 +1112,7 @@ public class GenericDocument {
             if (score < 0) {
                 throw new IllegalArgumentException("Document score cannot be negative.");
             }
-            resetIfBuilt();
-            mBundle.putInt(GenericDocument.SCORE_FIELD, score);
+            mDocumentParcelBuilder.setScore(score);
             return mBuilderTypeInstance;
         }
 
@@ -1203,9 +1130,7 @@ public class GenericDocument {
         @NonNull
         public BuilderType setCreationTimestampMillis(
                 @CurrentTimeMillisLong long creationTimestampMillis) {
-            resetIfBuilt();
-            mBundle.putLong(
-                    GenericDocument.CREATION_TIMESTAMP_MILLIS_FIELD, creationTimestampMillis);
+            mDocumentParcelBuilder.setCreationTimestampMillis(creationTimestampMillis);
             return mBuilderTypeInstance;
         }
 
@@ -1228,8 +1153,7 @@ public class GenericDocument {
             if (ttlMillis < 0) {
                 throw new IllegalArgumentException("Document ttlMillis cannot be negative.");
             }
-            resetIfBuilt();
-            mBundle.putLong(GenericDocument.TTL_MILLIS_FIELD, ttlMillis);
+            mDocumentParcelBuilder.setTtlMillis(ttlMillis);
             return mBuilderTypeInstance;
         }
 
@@ -1247,8 +1171,13 @@ public class GenericDocument {
         public BuilderType setPropertyString(@NonNull String name, @NonNull String... values) {
             Objects.requireNonNull(name);
             Objects.requireNonNull(values);
-            resetIfBuilt();
-            putInPropertyBundle(name, values);
+            validatePropertyName(name);
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] == null) {
+                    throw new IllegalArgumentException("The String at " + i + " is null.");
+                }
+            }
+            mDocumentParcelBuilder.putInPropertyMap(name, values);
             return mBuilderTypeInstance;
         }
 
@@ -1266,8 +1195,8 @@ public class GenericDocument {
         public BuilderType setPropertyBoolean(@NonNull String name, @NonNull boolean... values) {
             Objects.requireNonNull(name);
             Objects.requireNonNull(values);
-            resetIfBuilt();
-            putInPropertyBundle(name, values);
+            validatePropertyName(name);
+            mDocumentParcelBuilder.putInPropertyMap(name, values);
             return mBuilderTypeInstance;
         }
 
@@ -1284,8 +1213,8 @@ public class GenericDocument {
         public BuilderType setPropertyLong(@NonNull String name, @NonNull long... values) {
             Objects.requireNonNull(name);
             Objects.requireNonNull(values);
-            resetIfBuilt();
-            putInPropertyBundle(name, values);
+            validatePropertyName(name);
+            mDocumentParcelBuilder.putInPropertyMap(name, values);
             return mBuilderTypeInstance;
         }
 
@@ -1302,8 +1231,8 @@ public class GenericDocument {
         public BuilderType setPropertyDouble(@NonNull String name, @NonNull double... values) {
             Objects.requireNonNull(name);
             Objects.requireNonNull(values);
-            resetIfBuilt();
-            putInPropertyBundle(name, values);
+            validatePropertyName(name);
+            mDocumentParcelBuilder.putInPropertyMap(name, values);
             return mBuilderTypeInstance;
         }
 
@@ -1321,8 +1250,13 @@ public class GenericDocument {
         public BuilderType setPropertyBytes(@NonNull String name, @NonNull byte[]... values) {
             Objects.requireNonNull(name);
             Objects.requireNonNull(values);
-            resetIfBuilt();
-            putInPropertyBundle(name, values);
+            validatePropertyName(name);
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] == null) {
+                    throw new IllegalArgumentException("The byte[] at " + i + " is null.");
+                }
+            }
+            mDocumentParcelBuilder.putInPropertyMap(name, values);
             return mBuilderTypeInstance;
         }
 
@@ -1342,8 +1276,15 @@ public class GenericDocument {
                 @NonNull String name, @NonNull GenericDocument... values) {
             Objects.requireNonNull(name);
             Objects.requireNonNull(values);
-            resetIfBuilt();
-            putInPropertyBundle(name, values);
+            validatePropertyName(name);
+            GenericDocumentParcel[] documentParcels = new GenericDocumentParcel[values.length];
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] == null) {
+                    throw new IllegalArgumentException("The document at " + i + " is null.");
+                }
+                documentParcels[i] = values[i].getDocumentParcel();
+            }
+            mDocumentParcelBuilder.putInPropertyMap(name, documentParcels);
             return mBuilderTypeInstance;
         }
 
@@ -1352,96 +1293,27 @@ public class GenericDocument {
          *
          * <p>Note that this method does not support property paths.
          *
+         * <p>You should check for the existence of the property in {@link #getPropertyNames} if you
+         * need to make sure the property being cleared actually exists.
+         *
+         * <p>If the string passed is an invalid or nonexistent property, no error message or
+         * behavior will be observed.
+         *
          * @param name The name of the property to clear.
-         * @hide
          */
+        @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS)
         @CanIgnoreReturnValue
         @NonNull
         public BuilderType clearProperty(@NonNull String name) {
             Objects.requireNonNull(name);
-            resetIfBuilt();
-            mProperties.remove(name);
+            mDocumentParcelBuilder.clearProperty(name);
             return mBuilderTypeInstance;
-        }
-
-        private void putInPropertyBundle(@NonNull String name, @NonNull String[] values)
-                throws IllegalArgumentException {
-            validatePropertyName(name);
-            for (int i = 0; i < values.length; i++) {
-                if (values[i] == null) {
-                    throw new IllegalArgumentException("The String at " + i + " is null.");
-                }
-            }
-            mProperties.putStringArray(name, values);
-        }
-
-        private void putInPropertyBundle(@NonNull String name, @NonNull boolean[] values) {
-            validatePropertyName(name);
-            mProperties.putBooleanArray(name, values);
-        }
-
-        private void putInPropertyBundle(@NonNull String name, @NonNull double[] values) {
-            validatePropertyName(name);
-            mProperties.putDoubleArray(name, values);
-        }
-
-        private void putInPropertyBundle(@NonNull String name, @NonNull long[] values) {
-            validatePropertyName(name);
-            mProperties.putLongArray(name, values);
-        }
-
-        /**
-         * Converts and saves a byte[][] into {@link #mProperties}.
-         *
-         * <p>Bundle doesn't support for two dimension array byte[][], we are converting byte[][]
-         * into ArrayList<Bundle>, and each elements will contain a one dimension byte[].
-         */
-        private void putInPropertyBundle(@NonNull String name, @NonNull byte[][] values) {
-            validatePropertyName(name);
-            ArrayList<Bundle> bundles = new ArrayList<>(values.length);
-            for (int i = 0; i < values.length; i++) {
-                if (values[i] == null) {
-                    throw new IllegalArgumentException("The byte[] at " + i + " is null.");
-                }
-                Bundle bundle = new Bundle();
-                bundle.putByteArray(BYTE_ARRAY_FIELD, values[i]);
-                bundles.add(bundle);
-            }
-            mProperties.putParcelableArrayList(name, bundles);
-        }
-
-        private void putInPropertyBundle(@NonNull String name, @NonNull GenericDocument[] values) {
-            validatePropertyName(name);
-            Parcelable[] documentBundles = new Parcelable[values.length];
-            for (int i = 0; i < values.length; i++) {
-                if (values[i] == null) {
-                    throw new IllegalArgumentException("The document at " + i + " is null.");
-                }
-                documentBundles[i] = values[i].mBundle;
-            }
-            mProperties.putParcelableArray(name, documentBundles);
         }
 
         /** Builds the {@link GenericDocument} object. */
         @NonNull
         public GenericDocument build() {
-            mBuilt = true;
-            // Set current timestamp for creation timestamp by default.
-            if (mBundle.getLong(GenericDocument.CREATION_TIMESTAMP_MILLIS_FIELD, -1) == -1) {
-                mBundle.putLong(
-                        GenericDocument.CREATION_TIMESTAMP_MILLIS_FIELD,
-                        System.currentTimeMillis());
-            }
-            return new GenericDocument(mBundle);
-        }
-
-        private void resetIfBuilt() {
-            if (mBuilt) {
-                mBundle = BundleUtil.deepCopy(mBundle);
-                // mProperties is NonNull and initialized to empty Bundle() in builder.
-                mProperties = Objects.requireNonNull(mBundle.getBundle(PROPERTIES_FIELD));
-                mBuilt = false;
-            }
+            return new GenericDocument(mDocumentParcelBuilder.build());
         }
 
         /** Method to ensure property names are not blank */

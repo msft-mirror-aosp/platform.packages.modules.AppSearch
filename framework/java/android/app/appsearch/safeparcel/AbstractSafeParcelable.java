@@ -30,7 +30,7 @@ import android.app.appsearch.flags.Flags;
 public abstract class AbstractSafeParcelable implements SafeParcelable {
 
     /** @hide */
-    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE)
+    @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)
     @Override
     public final int describeContents() {
         return 0;

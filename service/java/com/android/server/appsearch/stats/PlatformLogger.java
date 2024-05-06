@@ -18,6 +18,7 @@ package com.android.server.appsearch.stats;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.content.Context;
@@ -29,8 +30,8 @@ import android.util.SparseIntArray;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.appsearch.InternalAppSearchLogger;
 import com.android.server.appsearch.FrameworkAppSearchConfig;
-import com.android.server.appsearch.external.localstorage.AppSearchLogger;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
@@ -58,7 +59,7 @@ import java.util.Random;
  *
  * @hide
  */
-public final class PlatformLogger implements AppSearchLogger {
+public final class PlatformLogger implements InternalAppSearchLogger {
     private static final String TAG = "AppSearchPlatformLogger";
 
     // Context of the user we're logging for.
@@ -226,13 +227,20 @@ public final class PlatformLogger implements AppSearchLogger {
         }
     }
 
+    @Override
+    public void removeCacheForPackage(@NonNull String packageName) {
+        removeCachedUidForPackage(packageName);
+    }
+
     /**
      * Removes cached UID for package.
      *
      * @return removed UID for the package, or {@code INVALID_UID} if package was not previously
      * cached.
      */
-    public int removeCachedUidForPackage(@NonNull String packageName) {
+    @CanIgnoreReturnValue
+    @VisibleForTesting
+    int removeCachedUidForPackage(@NonNull String packageName) {
         // TODO(b/173532925) This needs to be called when we get PACKAGE_REMOVED intent
         Objects.requireNonNull(packageName);
         synchronized (mLock) {
@@ -244,6 +252,7 @@ public final class PlatformLogger implements AppSearchLogger {
     /**
      * Return a copy of the recorded {@link ApiCallRecord}.
      */
+    @Override
     @NonNull
     public List<ApiCallRecord> getLastCalledApis() {
         synchronized (mLock) {
@@ -424,6 +433,7 @@ public final class PlatformLogger implements AppSearchLogger {
         String database = stats.getDatabase();
         try {
             int hashCodeForDatabase = calculateHashCodeMd5(database);
+            int hashCodeForSearchSourceLogTag = calculateHashCodeMd5(stats.getSearchSourceLogTag());
             AppSearchStatsLog.write(AppSearchStatsLog.APP_SEARCH_QUERY_STATS_REPORTED,
                     extraStats.mSamplingInterval,
                     extraStats.mSkippedSampleCount,
@@ -456,7 +466,8 @@ public final class PlatformLogger implements AppSearchLogger {
                     stats.getNativeToJavaJniLatencyMillis(),
                     stats.getJoinType(),
                     stats.getNumJoinedResultsCurrentPage(),
-                    stats.getJoinLatencyMillis());
+                    stats.getJoinLatencyMillis(),
+                    hashCodeForSearchSourceLogTag);
         } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
             // TODO(b/184204720) report hashing error to statsd
             //  We need to set a special value(e.g. 0xFFFFFFFF) for the hashing of the database,
@@ -560,9 +571,6 @@ public final class PlatformLogger implements AppSearchLogger {
     static int calculateHashCodeMd5(@Nullable String str) throws
             NoSuchAlgorithmException, UnsupportedEncodingException {
         if (str == null) {
-            // Just return -1 if caller doesn't have database name
-            // For some stats like globalQuery, databaseName can be null.
-            // Since in atom it is an integer, we have to return something here.
             return -1;
         }
 

@@ -27,7 +27,7 @@ import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.exceptions.AppSearchException;
 
 import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
-import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
+import com.android.server.appsearch.external.localstorage.LocalStorageIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.icing.proto.DocumentProto;
@@ -53,7 +53,7 @@ public class SearchResultToProtoConverterTest {
         final String schemaType = prefix + "schema";
         final AppSearchConfigImpl config =
                 new AppSearchConfigImpl(
-                        new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig());
+                        new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig());
 
         // Building the SearchResult received from query.
         DocumentProto.Builder documentProtoBuilder =
@@ -169,7 +169,7 @@ public class SearchResultToProtoConverterTest {
                                         schemaMap,
                                         new AppSearchConfigImpl(
                                                 new UnlimitedLimitConfig(),
-                                                new DefaultIcingOptionsConfig())));
+                                                new LocalStorageIcingOptionsConfig())));
         assertThat(e.getMessage())
                 .isEqualTo("Nesting joined results within joined results not allowed.");
     }

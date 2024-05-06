@@ -18,6 +18,7 @@ package com.android.server.appsearch.contactsindexer;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.util.LogUtil;
 import android.content.ContentResolver;
@@ -31,11 +32,7 @@ import android.util.Slog;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.server.appsearch.AppSearchEnvironmentFactory;
 import com.android.server.appsearch.stats.AppSearchStatsLog;
-
-import com.google.android.icing.proto.DebugInfoProto;
-import com.google.android.icing.proto.DebugInfoVerbosity;
 
 import java.io.File;
 import java.io.FileNotFoundException;

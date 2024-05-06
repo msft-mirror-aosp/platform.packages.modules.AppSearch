@@ -36,6 +36,7 @@ import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.util.LogUtil;
 import android.content.Context;
 import android.util.AndroidRuntimeException;
+import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -43,6 +44,7 @@ import com.android.server.appsearch.contactsindexer.appsearchtypes.ContactPoint;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -195,6 +197,16 @@ public class AppSearchHelper {
                 .addSchemas(ContactPoint.SCHEMA, Person.getSchema(mContactsIndexerConfig))
                 .addRequiredPermissionsForSchemaTypeVisibility(Person.SCHEMA_TYPE,
                         Collections.singleton(SetSchemaRequest.READ_CONTACTS))
+                // Adds a permission set that allows the Person schema to be read by an enterprise
+                // session. The set contains ENTERPRISE_ACCESS which makes it visible to enterprise
+                // sessions and unsatisfiable for regular sessions. The set also requires the caller
+                // to have regular read contacts access and managed profile contacts access.
+                .addRequiredPermissionsForSchemaTypeVisibility(Person.SCHEMA_TYPE,
+                        new ArraySet<>(Arrays.asList(
+                                SetSchemaRequest.ENTERPRISE_ACCESS,
+                                SetSchemaRequest.READ_CONTACTS,
+                                SetSchemaRequest.MANAGED_PROFILE_CONTACTS_ACCESS
+                        )))
                 .setForceOverride(forceOverride);
         session.setSchema(schemaBuilder.build(), mExecutor, mExecutor,
                 result -> {

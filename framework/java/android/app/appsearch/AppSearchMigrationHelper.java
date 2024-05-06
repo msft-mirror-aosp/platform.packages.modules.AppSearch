@@ -23,21 +23,22 @@ import static android.os.ParcelFileDescriptor.MODE_WRITE_ONLY;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.WorkerThread;
+import android.app.appsearch.SetSchemaResponse.MigrationFailure;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
+import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.stats.SchemaMigrationStats;
-import android.content.AttributionSource;
-import android.os.Bundle;
 import android.os.Parcel;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.util.ArraySet;
-
 import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -57,6 +58,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * The helper class for {@link AppSearchSchema} migration.
  *
  * <p>It will query and migrate {@link GenericDocument} in given type to a new version.
+ * Application-specific cache directory is used to store the temporary files created
+ * during migration.
  * @hide
  */
 public class AppSearchMigrationHelper implements Closeable {
@@ -64,20 +67,38 @@ public class AppSearchMigrationHelper implements Closeable {
     private final AppSearchAttributionSource mCallerAttributionSource;
     private final String mDatabaseName;
     private final UserHandle mUserHandle;
+    @Nullable
+    private final File mTempDirectoryForSchemaMigration;
     private final File mMigratedFile;
     private final Set<String> mDestinationTypes;
     private int mTotalNeedMigratedDocumentCount = 0;
 
+    /**
+     * Initializes an AppSearchMigrationHelper instance.
+     * @param service The {@link IAppSearchManager} service from which to make api calls.
+     * @param userHandle The user for which the session should be created.
+     * @param callerAttributionSource The attribution source containing the caller's package name
+     *                                and uid
+     * @param databaseName The name of the database where this schema lives.
+     * @param newSchemas The set of new schemas to update existing schemas.
+     * @param tempDirectoryForSchemaMigration The directory to create temporary files needed for
+     *                                        migration. If this is null, the default temporary-file
+     *                                        directory (/data/local/tmp) will be used.
+     * @throws IOException on failure to create a temporary file.
+     */
     AppSearchMigrationHelper(@NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
             @NonNull AppSearchAttributionSource callerAttributionSource,
             @NonNull String databaseName,
-            @NonNull Set<AppSearchSchema> newSchemas) throws IOException {
+            @NonNull Set<AppSearchSchema> newSchemas,
+            @Nullable File tempDirectoryForSchemaMigration) throws IOException {
         mService = Objects.requireNonNull(service);
         mUserHandle = Objects.requireNonNull(userHandle);
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
         mDatabaseName = Objects.requireNonNull(databaseName);
-        mMigratedFile = File.createTempFile(/*prefix=*/"appsearch", /*suffix=*/null);
+        mTempDirectoryForSchemaMigration = tempDirectoryForSchemaMigration;
+        mMigratedFile = File.createTempFile(/*prefix=*/ "appsearch",
+                /*suffix=*/ null, mTempDirectoryForSchemaMigration);
         mDestinationTypes = new ArraySet<>(newSchemas.size());
         for (AppSearchSchema newSchema : newSchemas) {
             mDestinationTypes.add(newSchema.getSchemaType());
@@ -103,20 +124,22 @@ public class AppSearchMigrationHelper implements Closeable {
             int currentVersion, int finalVersion,
             @Nullable SchemaMigrationStats.Builder schemaMigrationStatsBuilder)
             throws IOException, AppSearchException, InterruptedException, ExecutionException {
-        File queryFile = File.createTempFile(/*prefix=*/"appsearch", /*suffix=*/null);
+        File queryFile = File.createTempFile(/*prefix=*/ "appsearch",
+                /*suffix=*/ null, mTempDirectoryForSchemaMigration);
         try (ParcelFileDescriptor fileDescriptor =
                      ParcelFileDescriptor.open(queryFile, MODE_WRITE_ONLY)) {
             CountDownLatch latch = new CountDownLatch(1);
             AtomicReference<AppSearchResult<Void>> resultReference = new AtomicReference<>();
-            mService.writeQueryResultsToFile(mCallerAttributionSource, mDatabaseName,
-                    fileDescriptor,
-                    /*queryExpression=*/ "",
-                    new SearchSpec.Builder()
-                            .addFilterSchemas(schemaType)
-                            .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
-                            .build().getBundle(),
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+            mService.writeSearchResultsToFile(
+                    new WriteSearchResultsToFileAidlRequest(mCallerAttributionSource, mDatabaseName,
+                            fileDescriptor,
+                            /*searchExpression=*/ "",
+                            new SearchSpec.Builder()
+                                    .addFilterSchemas(schemaType)
+                                    .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
+                                    .build(),
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -165,13 +188,15 @@ public class AppSearchMigrationHelper implements Closeable {
         try (ParcelFileDescriptor fileDescriptor =
                      ParcelFileDescriptor.open(mMigratedFile, MODE_READ_ONLY)) {
             CountDownLatch latch = new CountDownLatch(1);
-            AtomicReference<AppSearchResult<List<Bundle>>> resultReference =
+            AtomicReference<AppSearchResult<List<MigrationFailure>>> resultReference =
                     new AtomicReference<>();
-            mService.putDocumentsFromFile(mCallerAttributionSource, mDatabaseName, fileDescriptor,
-                    mUserHandle,
-                    schemaMigrationStatsBuilder.build(),
-                    totalLatencyStartTimeMillis,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+            mService.putDocumentsFromFile(
+                    new PutDocumentsFromFileAidlRequest(mCallerAttributionSource, mDatabaseName,
+                            fileDescriptor,
+                            mUserHandle,
+                            schemaMigrationStatsBuilder.build(),
+                            totalLatencyStartTimeMillis,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -180,15 +205,13 @@ public class AppSearchMigrationHelper implements Closeable {
                         }
                     });
             latch.await();
-            AppSearchResult<List<Bundle>> result = resultReference.get();
+            AppSearchResult<List<MigrationFailure>> result = resultReference.get();
             if (!result.isSuccess()) {
                 return AppSearchResult.newFailedResult(result);
             }
-            List<Bundle> migratedFailureBundles = Objects.requireNonNull(result.getResultValue());
-            for (int i = 0; i < migratedFailureBundles.size(); i++) {
-                responseBuilder.addMigrationFailure(
-                        new SetSchemaResponse.MigrationFailure(migratedFailureBundles.get(i)));
-            }
+            List<MigrationFailure> migrationFailures =
+                Objects.requireNonNull(result.getResultValue());
+            responseBuilder.addMigrationFailures(migrationFailures);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         } catch (InterruptedException | IOException | RuntimeException e) {
@@ -242,7 +265,7 @@ public class AppSearchMigrationHelper implements Closeable {
                                     + newDocument.getSchemaType()
                                     + ". But the schema types doesn't exist in the request");
                 }
-                writeBundleToOutputStream(outputStream, newDocument.getBundle());
+                writeDocumentToOutputStream(outputStream, newDocument);
             }
         }
         if (schemaMigrationStatsBuilder != null) {
@@ -252,7 +275,7 @@ public class AppSearchMigrationHelper implements Closeable {
     }
 
     /**
-     * Reads the {@link Bundle} of a {@link GenericDocument} from given {@link DataInputStream}.
+     * Reads a {@link GenericDocument} from given {@link DataInputStream}.
      *
      * @param inputStream The inputStream to read from
      *
@@ -273,22 +296,24 @@ public class AppSearchMigrationHelper implements Closeable {
         try {
             parcel.unmarshall(serializedMessage, 0, serializedMessage.length);
             parcel.setDataPosition(0);
-            Bundle bundle = parcel.readBundle();
-            return new GenericDocument(bundle);
+            GenericDocumentParcel genericDocumentParcel =
+                    parcel.readParcelable(GenericDocumentParcel.class.getClassLoader());
+            return new GenericDocument(genericDocumentParcel);
         } finally {
             parcel.recycle();
         }
     }
 
     /**
-     * Serializes a {@link Bundle} and writes into the given {@link DataOutputStream}.
+     * Serializes a {@link GenericDocument} and writes into the given {@link DataOutputStream}.
      */
-    public static void writeBundleToOutputStream(
-            @NonNull DataOutputStream outputStream, @NonNull Bundle bundle)
+    public static void writeDocumentToOutputStream(
+            @NonNull DataOutputStream outputStream, @NonNull GenericDocument document)
             throws IOException {
+        GenericDocumentParcel documentParcel = document.getDocumentParcel();
         Parcel parcel = Parcel.obtain();
         try {
-            parcel.writeBundle(bundle);
+            parcel.writeParcelable(documentParcel, /*parcelableFlags=*/ 0);
             byte[] serializedMessage = parcel.marshall();
             outputStream.writeInt(serializedMessage.length);
             outputStream.write(serializedMessage);

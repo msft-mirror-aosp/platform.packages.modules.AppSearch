@@ -24,6 +24,7 @@ import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.icing.proto.NamespaceDocumentUriGroup;
 import com.android.server.appsearch.icing.proto.SchemaTypeConfigProto;
 import com.android.server.appsearch.icing.proto.SuggestionSpecProto;
+import com.android.server.appsearch.icing.proto.TypePropertyMask;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -74,6 +75,37 @@ public class SearchSuggestionSpecToProtoConverterTest {
                                 .setNamespace("package$database/namespace1")
                                 .addDocumentUris("doc1")
                                 .addDocumentUris("doc2")
+                                .build());
+    }
+
+    @Test
+    public void testToProto_propertyFilters() throws Exception {
+        SearchSuggestionSpec searchSuggestionSpec =
+                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 123)
+                        .addFilterProperties("typeA", ImmutableList.of("property1", "property2"))
+                        .build();
+
+        String prefix1 = PrefixUtil.createPrefix("package", "database");
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        SearchSuggestionSpecToProtoConverter converter =
+                new SearchSuggestionSpecToProtoConverter(
+                        /*queryExpression=*/ "prefix",
+                        searchSuggestionSpec,
+                        /*prefixes=*/ ImmutableSet.of(prefix1),
+                        /*namespaceMap=*/ ImmutableMap.of(),
+                        /*schemaMap=*/ ImmutableMap.of(
+                                prefix1,
+                                ImmutableMap.of(
+                                        prefix1 + "typeA", configProto,
+                                        prefix1 + "typeB", configProto)));
+
+        SuggestionSpecProto proto = converter.toSearchSuggestionSpecProto();
+        assertThat(proto.getTypePropertyFiltersList())
+                .containsExactly(
+                        TypePropertyMask.newBuilder()
+                                .setSchemaType("package$database/typeA")
+                                .addPaths("property1")
+                                .addPaths("property2")
                                 .build());
     }
 }
