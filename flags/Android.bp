@@ -5,6 +5,7 @@ package {
 aconfig_declarations {
     name: "appsearch_aconfig_flags",
     package: "com.android.appsearch.flags",
+    container: "com.android.appsearch",
     srcs: [
         "appsearch.aconfig",
     ],
