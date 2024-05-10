@@ -21,11 +21,14 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
 import android.app.appsearch.AppSearchSchema;
+import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.exceptions.AppSearchException;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
@@ -60,7 +63,8 @@ public class VisibilityStoreTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -107,13 +111,14 @@ public class VisibilityStoreTest {
         assertThat(mVisibilityStore.getVisibility(prefix + "Email")).isEqualTo(visibilityDocument);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Email",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Email",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument).isEqualTo(visibilityDocument);
     }
 
@@ -129,13 +134,14 @@ public class VisibilityStoreTest {
         assertThat(mVisibilityStore.getVisibility("Email")).isEqualTo(visibilityDocument);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         VisibilityDocument actualDocument =
-                new VisibilityDocument(
-                        mAppSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ "Email",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                mAppSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ "Email",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         assertThat(actualDocument).isEqualTo(visibilityDocument);
 
         mVisibilityStore.removeVisibility(ImmutableSet.of(visibilityDocument.getId()));
@@ -162,14 +168,16 @@ public class VisibilityStoreTest {
                 new AppSearchSchema.Builder(VisibilityDocument.SCHEMA_TYPE).build();
 
         // Index a broken schema into AppSearch, use the latest version to make it broken.
-        mAppSearchImpl.setSchema(
-                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                Collections.singletonList(brokenSchema),
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ true,
-                /*version=*/ VisibilityDocument.SCHEMA_VERSION_LATEST,
-                /*setSchemaStatsBuilder=*/ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                        Collections.singletonList(brokenSchema),
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ true,
+                        /*version=*/ VisibilityDocument.SCHEMA_VERSION_LATEST,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         // Create VisibilityStore should recover the broken schema
         mVisibilityStore = new VisibilityStore(mAppSearchImpl);
 

@@ -18,9 +18,13 @@ package com.android.server.appsearch.external.localstorage.converter;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import android.app.appsearch.PropertyPath;
 import android.app.appsearch.SearchResult;
 import android.app.appsearch.SearchResultPage;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
+import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.icing.proto.DocumentProto;
 import com.android.server.appsearch.icing.proto.PropertyProto;
@@ -97,7 +101,11 @@ public class SnippetTest {
 
         // Making ResultReader and getting Snippet values.
         SearchResultPage searchResultPage =
-                SearchResultToProtoConverter.toSearchResultPage(searchResultProto, SCHEMA_MAP);
+                SearchResultToProtoConverter.toSearchResultPage(
+                        searchResultProto,
+                        SCHEMA_MAP,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match.getPropertyPath()).isEqualTo(propertyKeyString);
@@ -142,7 +150,11 @@ public class SnippetTest {
                         .build();
 
         SearchResultPage searchResultPage =
-                SearchResultToProtoConverter.toSearchResultPage(searchResultProto, SCHEMA_MAP);
+                SearchResultToProtoConverter.toSearchResultPage(
+                        searchResultProto,
+                        SCHEMA_MAP,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         assertThat(searchResultPage.getResults()).hasSize(1);
         assertThat(searchResultPage.getResults().get(0).getMatchInfos()).isEmpty();
     }
@@ -207,7 +219,11 @@ public class SnippetTest {
 
         // Making ResultReader and getting Snippet values.
         SearchResultPage searchResultPage =
-                SearchResultToProtoConverter.toSearchResultPage(searchResultProto, SCHEMA_MAP);
+                SearchResultToProtoConverter.toSearchResultPage(
+                        searchResultProto,
+                        SCHEMA_MAP,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match1 = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match1.getPropertyPath()).isEqualTo("senderName");
@@ -307,10 +323,15 @@ public class SnippetTest {
 
         // Making ResultReader and getting Snippet values.
         SearchResultPage searchResultPage =
-                SearchResultToProtoConverter.toSearchResultPage(searchResultProto, SCHEMA_MAP);
+                SearchResultToProtoConverter.toSearchResultPage(
+                        searchResultProto,
+                        SCHEMA_MAP,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()));
         assertThat(searchResultPage.getResults()).hasSize(1);
         SearchResult.MatchInfo match1 = searchResultPage.getResults().get(0).getMatchInfos().get(0);
         assertThat(match1.getPropertyPath()).isEqualTo("sender.name");
+        assertThat(match1.getPropertyPathObject()).isEqualTo(new PropertyPath("sender.name"));
         assertThat(match1.getFullText()).isEqualTo("Test Name Jr.");
         assertThat(match1.getExactMatchRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 4));
@@ -324,6 +345,7 @@ public class SnippetTest {
 
         SearchResult.MatchInfo match2 = searchResultPage.getResults().get(0).getMatchInfos().get(1);
         assertThat(match2.getPropertyPath()).isEqualTo("sender.email[1]");
+        assertThat(match2.getPropertyPathObject()).isEqualTo(new PropertyPath("sender.email[1]"));
         assertThat(match2.getFullText()).isEqualTo("TestNameJr2@gmail.com");
         assertThat(match2.getExactMatchRange())
                 .isEqualTo(new SearchResult.MatchRange(/*lower=*/ 0, /*upper=*/ 21));

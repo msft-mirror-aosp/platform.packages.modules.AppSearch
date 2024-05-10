@@ -18,6 +18,7 @@ package com.android.server.appsearch.external.localstorage.stats;
 
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 
 import java.util.Objects;
 
@@ -62,6 +63,21 @@ public final class PutDocumentStats {
     /** Number of tokens added to the index. */
     private final int mNativeNumTokensIndexed;
 
+    /**
+     * Time used to index all indexable string terms in the document. It does not include the time
+     * to merge indices.
+     */
+    private final int mNativeTermIndexLatencyMillis;
+
+    /** Time used to index all indexable integers in the document. */
+    private final int mNativeIntegerIndexLatencyMillis;
+
+    /** Time used to index all qualified id join strings in the document. */
+    private final int mNativeQualifiedIdJoinIndexLatencyMillis;
+
+    /** Time used to sort and merge the lite index's hit buffer. */
+    private final int mNativeLiteIndexSortLatencyMillis;
+
     PutDocumentStats(@NonNull Builder builder) {
         Objects.requireNonNull(builder);
         mPackageName = builder.mPackageName;
@@ -76,6 +92,10 @@ public final class PutDocumentStats {
         mNativeIndexMergeLatencyMillis = builder.mNativeIndexMergeLatencyMillis;
         mNativeDocumentSizeBytes = builder.mNativeDocumentSizeBytes;
         mNativeNumTokensIndexed = builder.mNativeNumTokensIndexed;
+        mNativeTermIndexLatencyMillis = builder.mNativeTermIndexLatencyMillis;
+        mNativeIntegerIndexLatencyMillis = builder.mNativeIntegerIndexLatencyMillis;
+        mNativeQualifiedIdJoinIndexLatencyMillis = builder.mNativeQualifiedIdJoinIndexLatencyMillis;
+        mNativeLiteIndexSortLatencyMillis = builder.mNativeLiteIndexSortLatencyMillis;
     }
 
     /** Returns calling package name. */
@@ -141,6 +161,26 @@ public final class PutDocumentStats {
         return mNativeNumTokensIndexed;
     }
 
+    /** Returns time spent on term indexing, in milliseconds. */
+    public int getNativeTermIndexLatencyMillis() {
+        return mNativeTermIndexLatencyMillis;
+    }
+
+    /** Returns time spent on integer indexing, in milliseconds. */
+    public int getNativeIntegerIndexLatencyMillis() {
+        return mNativeIntegerIndexLatencyMillis;
+    }
+
+    /** Returns time spent on qualified id join indexing, in milliseconds. */
+    public int getNativeQualifiedIdJoinIndexLatencyMillis() {
+        return mNativeQualifiedIdJoinIndexLatencyMillis;
+    }
+
+    /** Returns time spent sorting and merging the lite index, in milliseconds. */
+    public int getNativeLiteIndexSortLatencyMillis() {
+        return mNativeLiteIndexSortLatencyMillis;
+    }
+
     /** Builder for {@link PutDocumentStats}. */
     public static class Builder {
         @NonNull final String mPackageName;
@@ -155,6 +195,10 @@ public final class PutDocumentStats {
         int mNativeIndexMergeLatencyMillis;
         int mNativeDocumentSizeBytes;
         int mNativeNumTokensIndexed;
+        int mNativeTermIndexLatencyMillis;
+        int mNativeIntegerIndexLatencyMillis;
+        int mNativeQualifiedIdJoinIndexLatencyMillis;
+        int mNativeLiteIndexSortLatencyMillis;
 
         /** Builder for {@link PutDocumentStats} */
         public Builder(@NonNull String packageName, @NonNull String database) {
@@ -163,6 +207,7 @@ public final class PutDocumentStats {
         }
 
         /** Sets the status code. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setStatusCode(@AppSearchResult.ResultCode int statusCode) {
             mStatusCode = statusCode;
@@ -170,6 +215,7 @@ public final class PutDocumentStats {
         }
 
         /** Sets total latency in millis. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setTotalLatencyMillis(int totalLatencyMillis) {
             mTotalLatencyMillis = totalLatencyMillis;
@@ -177,6 +223,7 @@ public final class PutDocumentStats {
         }
 
         /** Sets how much time we spend for generating document proto, in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setGenerateDocumentProtoLatencyMillis(
                 int generateDocumentProtoLatencyMillis) {
@@ -188,6 +235,7 @@ public final class PutDocumentStats {
          * Sets how much time we spend for rewriting types and namespaces in document, in
          * milliseconds.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setRewriteDocumentTypesLatencyMillis(int rewriteDocumentTypesLatencyMillis) {
             mRewriteDocumentTypesLatencyMillis = rewriteDocumentTypesLatencyMillis;
@@ -195,6 +243,7 @@ public final class PutDocumentStats {
         }
 
         /** Sets the native latency, in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeLatencyMillis(int nativeLatencyMillis) {
             mNativeLatencyMillis = nativeLatencyMillis;
@@ -202,6 +251,7 @@ public final class PutDocumentStats {
         }
 
         /** Sets how much time we spend on document store, in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeDocumentStoreLatencyMillis(int nativeDocumentStoreLatencyMillis) {
             mNativeDocumentStoreLatencyMillis = nativeDocumentStoreLatencyMillis;
@@ -209,6 +259,7 @@ public final class PutDocumentStats {
         }
 
         /** Sets the native index latency, in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeIndexLatencyMillis(int nativeIndexLatencyMillis) {
             mNativeIndexLatencyMillis = nativeIndexLatencyMillis;
@@ -216,6 +267,7 @@ public final class PutDocumentStats {
         }
 
         /** Sets how much time we spend on merging indices, in milliseconds. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeIndexMergeLatencyMillis(int nativeIndexMergeLatencyMillis) {
             mNativeIndexMergeLatencyMillis = nativeIndexMergeLatencyMillis;
@@ -223,6 +275,7 @@ public final class PutDocumentStats {
         }
 
         /** Sets document size, in bytes. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeDocumentSizeBytes(int nativeDocumentSizeBytes) {
             mNativeDocumentSizeBytes = nativeDocumentSizeBytes;
@@ -230,9 +283,43 @@ public final class PutDocumentStats {
         }
 
         /** Sets number of tokens indexed in native. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeNumTokensIndexed(int nativeNumTokensIndexed) {
             mNativeNumTokensIndexed = nativeNumTokensIndexed;
+            return this;
+        }
+
+        /** Sets the native term indexing time, in millis. */
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder setNativeTermIndexLatencyMillis(int nativeTermIndexLatencyMillis) {
+            mNativeTermIndexLatencyMillis = nativeTermIndexLatencyMillis;
+            return this;
+        }
+
+        /** Sets the native integer indexing time, in millis. */
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder setNativeIntegerIndexLatencyMillis(int nativeIntegerIndexLatencyMillis) {
+            mNativeIntegerIndexLatencyMillis = nativeIntegerIndexLatencyMillis;
+            return this;
+        }
+
+        /** Sets the native qualified id indexing time, in millis. */
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder setNativeQualifiedIdJoinIndexLatencyMillis(
+                int nativeQualifiedIdJoinIndexLatencyMillis) {
+            mNativeQualifiedIdJoinIndexLatencyMillis = nativeQualifiedIdJoinIndexLatencyMillis;
+            return this;
+        }
+
+        /** Sets the native lite index sort latency, in millis. */
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder setNativeLiteIndexSortLatencyMillis(int nativeLiteIndexSortLatencyMillis) {
+            mNativeLiteIndexSortLatencyMillis = nativeLiteIndexSortLatencyMillis;
             return this;
         }
 

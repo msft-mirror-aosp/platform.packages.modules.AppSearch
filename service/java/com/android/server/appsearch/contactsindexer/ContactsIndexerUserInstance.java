@@ -27,21 +27,26 @@ import android.net.Uri;
 import android.os.CancellationSignal;
 import android.provider.ContactsContract;
 import android.util.Log;
+import android.util.Slog;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.appsearch.AppSearchEnvironmentFactory;
 import com.android.server.appsearch.stats.AppSearchStatsLog;
+
+import com.google.android.icing.proto.DebugInfoProto;
+import com.google.android.icing.proto.DebugInfoVerbosity;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -104,7 +109,8 @@ public final class ContactsIndexerUserInstance {
         Objects.requireNonNull(contactsDir);
         Objects.requireNonNull(contactsIndexerConfig);
 
-        ExecutorService singleThreadedExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService singleThreadedExecutor = AppSearchEnvironmentFactory
+                .getEnvironmentInstance().createSingleThreadExecutor();
         return createInstance(userContext, contactsDir, contactsIndexerConfig,
                 singleThreadedExecutor);
     }
@@ -120,7 +126,7 @@ public final class ContactsIndexerUserInstance {
         Objects.requireNonNull(executorService);
 
         AppSearchHelper appSearchHelper = AppSearchHelper.createAppSearchHelper(context,
-                executorService);
+                executorService, contactsIndexerConfig);
         ContactsIndexerUserInstance indexer = new ContactsIndexerUserInstance(context,
                 contactsDir, appSearchHelper, contactsIndexerConfig, executorService);
         indexer.loadSettingsAsync();
@@ -131,12 +137,12 @@ public final class ContactsIndexerUserInstance {
     /**
      * Constructs a {@link ContactsIndexerUserInstance}.
      *
-     * @param context                 Context object passed from
-     *                                {@link ContactsIndexerManagerService}
-     * @param dataDir                 data directory for storing contacts indexer state.
-     * @param contactsIndexerConfig   configuration for the Contacts Indexer.
-     * @param singleThreadedExecutor  an {@link ExecutorService} with at most one thread to ensure
-     *                                the thread safety of this class.
+     * @param context                Context object passed from
+     *                               {@link ContactsIndexerManagerService}
+     * @param dataDir                data directory for storing contacts indexer state.
+     * @param contactsIndexerConfig  configuration for the Contacts Indexer.
+     * @param singleThreadedExecutor an {@link ExecutorService} with at most one thread to ensure
+     *                               the thread safety of this class.
      */
     private ContactsIndexerUserInstance(@NonNull Context context, @NonNull File dataDir,
             @NonNull AppSearchHelper appSearchHelper,
@@ -185,8 +191,8 @@ public final class ContactsIndexerUserInstance {
         }
         mContext.getContentResolver().unregisterContentObserver(mContactsObserver);
 
-        ContactsIndexerMaintenanceService.cancelFullUpdateJob(mContext,
-                mContext.getUser().getIdentifier());
+        ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(mContext,
+                mContext.getUser());
         synchronized (mSingleThreadedExecutor) {
             mSingleThreadedExecutor.shutdown();
         }
@@ -211,18 +217,28 @@ public final class ContactsIndexerUserInstance {
      * Performs a one-time sync of CP2 contacts into AppSearch.
      *
      * <p>This handles the scenario where this contacts indexer instance has been started for the
-     * current device user for the first time. The full-update job which syncs all CP2 contacts
-     * is scheduled to run when the device is idle and its battery is not low. It can take several
-     * minutes or hours for these constraints to be met. Additionally, the delta-update job which
-     * runs on each CP2 change notification is designed to sync only the changed contacts because
-     * the user might be actively using the device at that time.
-     * Schedules a one-off full update job to sync all CP2 contacts when the device is idle.
+     * current device user for the first time or the background full update job is not scheduled.
+     * The full-update job which syncs all CP2 contacts is scheduled to run when the device is idle
+     * and its battery is not low. It can take several minutes or hours for these constraints to be
+     * met. Additionally, the delta-update job which runs on each CP2 change notification is
+     * designed to sync only the changed contacts because the user might be actively using the
+     * device at that time.
      *
-     * <p>Schedules the initial full-update job, as well as syncs a configurable number of CP2
-     * contacts into the AppSearch Person corpus so that it's nominally functional.
+     * <p>Schedules a one-off full update job to sync all CP2 contacts when the device is idle.
+     * Also syncs a configurable number of CP2 contacts into the AppSearch Person corpus so that
+     * it's nominally functional.
      */
     private void doCp2SyncFirstRun() {
-        if (mSettings.getLastFullUpdateTimestampMillis() != 0) {
+        // If this is not the first run of contacts indexer (lastFullUpdateTimestampMillis is not 0)
+        // for the given user and a full update job is scheduled, this means that contacts indexer
+        // has been running recently and contacts should be up to date. The initial sync can be
+        // skipped in this case.
+        // If the job is not scheduled but lastFullUpdateTimestampMillis is not 0, the contacts
+        // indexer was disabled before. We need to reschedule the job and run a limited delta update
+        // to bring latest contact change in AppSearch right away, after it is re-enabled.
+        if (mSettings.getLastFullUpdateTimestampMillis() != 0 &&
+                ContactsIndexerMaintenanceService.isFullUpdateJobScheduled(mContext,
+                        mContext.getUser().getIdentifier())) {
             return;
         }
         ContactsIndexerMaintenanceService.scheduleFullUpdateJob(mContext,
@@ -254,6 +270,26 @@ public final class ContactsIndexerUserInstance {
         });
     }
 
+    /** Dumps the internal state of this {@link ContactsIndexerUserInstance}. */
+    public void dump(@NonNull PrintWriter pw, boolean verbose) {
+        // Those timestamps are not protected by any lock since in ContactsIndexerUserInstance
+        // we only have one thread to handle all the updates. It is possible we might run into
+        // race condition if there is an update running while those numbers are being printed.
+        // This is acceptable though for debug purpose, so still no lock here.
+        pw.println(
+                "last_full_update_timestamp_millis: " +
+                        mSettings.getLastFullUpdateTimestampMillis());
+        pw.println(
+                "last_delta_update_timestamp_millis: " +
+                        mSettings.getLastDeltaUpdateTimestampMillis());
+        pw.println(
+                "last_contact_update_timestamp_millis: " +
+                        mSettings.getLastContactUpdateTimestampMillis());
+        pw.println(
+                "last_contact_delete_timestamp_millis: " +
+                        mSettings.getLastContactDeleteTimestampMillis());
+    }
+
     @VisibleForTesting
     CompletableFuture<Void> doFullUpdateInternalAsync(
             @Nullable CancellationSignal signal, @NonNull ContactsUpdateStats updateStats) {
@@ -261,40 +297,43 @@ public final class ContactsIndexerUserInstance {
         long currentTimeMillis = System.currentTimeMillis();
         updateStats.mUpdateType = ContactsUpdateStats.FULL_UPDATE;
         updateStats.mUpdateAndDeleteStartTimeMillis = currentTimeMillis;
+        updateStats.mLastFullUpdateStartTimeMillis = mSettings.getLastFullUpdateTimestampMillis();
+        updateStats.mLastDeltaUpdateStartTimeMillis = mSettings.getLastDeltaUpdateTimestampMillis();
 
         List<String> cp2ContactIds = new ArrayList<>();
-        // Get a list of all contact IDs from CP2. Ignore the return value which denotes the
-        // most recent updated timestamp.
-        // TODO(b/203605504): reconsider whether the most recent
-        //  updated and deleted timestamps are useful.
-        ContactsProviderUtil.getUpdatedContactIds(mContext, /*sinceFilter=*/ 0,
-                mContactsIndexerConfig.getContactsFullUpdateLimit(), cp2ContactIds,
-                updateStats);
+        // Get a list of all contact IDs from CP2
+        updateStats.mLastContactUpdatedTimeMillis = ContactsProviderUtil.getUpdatedContactIds(
+                mContext, /*sinceFilter=*/ 0, mContactsIndexerConfig.getContactsFullUpdateLimit(),
+                cp2ContactIds, updateStats);
+        updateStats.mPreviousLastContactUpdatedTimeMillis =
+                mSettings.getLastContactUpdateTimestampMillis();
         return mAppSearchHelper.getAllContactIdsAsync()
                 .thenCompose(appsearchContactIds -> {
                     // all_contacts_from_AppSearch - all_contacts_from_cp2 =
                     // contacts_needs_to_be_removed_from_AppSearch.
                     appsearchContactIds.removeAll(cp2ContactIds);
-                    if (LogUtil.DEBUG) {
-                        Log.d(TAG, "Performing a full sync (updated:" + cp2ContactIds.size()
-                                + ", deleted:" + appsearchContactIds.size()
-                                + ") of CP2 contacts in AppSearch");
-                    }
+                    // Full update doesn't happen very often. In normal cases, it is scheduled to
+                    // be run every 15-30 days.
+                    // One-off full update can be scheduled if
+                    // 1) during startup, full update has never been run.
+                    // 2) or we get OUT_OF_SPACE from AppSearch.
+                    // So print a message once in 15-30 days should be acceptable.
+                    Log.i(TAG, "Performing a full sync (updated:" + cp2ContactIds.size()
+                            + ", deleted:" + appsearchContactIds.size()
+                            + ") of CP2 contacts in AppSearch");
                     return mContactsIndexerImpl.updatePersonCorpusAsync(/*wantedContactIds=*/
                             cp2ContactIds, /*unwantedContactIds=*/ appsearchContactIds,
-                            updateStats);
+                            updateStats, mContactsIndexerConfig.shouldKeepUpdatingOnError());
                 }).handle((x, t) -> {
                     if (t != null) {
                         Log.w(TAG, "Failed to perform full update", t);
-                        // Just clear all the remaining contacts in case of error.
-                        mContactsIndexerImpl.cancelUpdatePersonCorpus();
                         if (updateStats.mUpdateStatuses.isEmpty()
                                 && updateStats.mDeleteStatuses.isEmpty()) {
                             // Somehow this error is not reflected in the stats, and
                             // unfortunately we don't know what part is wrong. Just add an error
                             // code for the update.
                             updateStats.mUpdateStatuses.add(
-                                    AppSearchResult.RESULT_UNKNOWN_ERROR);
+                                    ContactsUpdateStats.ERROR_CODE_CONTACTS_INDEXER_UNKNOWN_ERROR);
                         }
                     }
 
@@ -306,8 +345,8 @@ public final class ContactsIndexerUserInstance {
                     // TODO(b/226078966) Also finding the update timestamps for last success is
                     //  not trivial, and we should think more about how to do that correctly.
                     mSettings.setLastFullUpdateTimestampMillis(currentTimeMillis);
-                    mSettings.setLastDeltaUpdateTimestampMillis(currentTimeMillis);
-                    mSettings.setLastDeltaDeleteTimestampMillis(currentTimeMillis);
+                    mSettings.setLastContactUpdateTimestampMillis(currentTimeMillis);
+                    mSettings.setLastContactDeleteTimestampMillis(currentTimeMillis);
                     persistSettings();
                     logStats(updateStats);
                     return null;
@@ -383,24 +422,29 @@ public final class ContactsIndexerUserInstance {
             mCp2ChangePending = false;
         }
 
+        long currentTimeMillis = System.currentTimeMillis();
         updateStats.mUpdateType = ContactsUpdateStats.DELTA_UPDATE;
-        updateStats.mUpdateAndDeleteStartTimeMillis = System.currentTimeMillis();
-        long lastDeltaUpdateTimestampMillis = mSettings.getLastDeltaUpdateTimestampMillis();
-        long lastDeltaDeleteTimestampMillis = mSettings.getLastDeltaDeleteTimestampMillis();
+        updateStats.mUpdateAndDeleteStartTimeMillis = currentTimeMillis;
+        updateStats.mLastFullUpdateStartTimeMillis = mSettings.getLastFullUpdateTimestampMillis();
+        updateStats.mLastDeltaUpdateStartTimeMillis = mSettings.getLastDeltaUpdateTimestampMillis();
+        long lastContactUpdateTimestampMillis = mSettings.getLastContactUpdateTimestampMillis();
+        long lastContactDeleteTimestampMillis = mSettings.getLastContactDeleteTimestampMillis();
         if (LogUtil.DEBUG) {
             Log.d(TAG, "previous timestamps --"
-                    + " lastDeltaUpdateTimestampMillis: " + lastDeltaUpdateTimestampMillis
-                    + " lastDeltaDeleteTimestampMillis: " + lastDeltaDeleteTimestampMillis);
+                    + " lastContactUpdateTimestampMillis: " + lastContactUpdateTimestampMillis
+                    + " lastContactDeleteTimestampMillis: " + lastContactDeleteTimestampMillis);
         }
 
         List<String> wantedIds = new ArrayList<>();
         List<String> unWantedIds = new ArrayList<>();
-        long mostRecentContactLastUpdateTimestampMillis =
-                ContactsProviderUtil.getUpdatedContactIds(mContext, lastDeltaUpdateTimestampMillis,
-                        indexingLimit, wantedIds, updateStats);
+        long mostRecentContactUpdatedTimestampMillis =
+                ContactsProviderUtil.getUpdatedContactIds(mContext,
+                        lastContactUpdateTimestampMillis, indexingLimit, wantedIds, updateStats);
         long mostRecentContactDeletedTimestampMillis =
-                ContactsProviderUtil.getDeletedContactIds(mContext, lastDeltaDeleteTimestampMillis,
-                        unWantedIds, updateStats);
+                ContactsProviderUtil.getDeletedContactIds(mContext,
+                        lastContactDeleteTimestampMillis, unWantedIds, updateStats);
+        updateStats.mLastContactUpdatedTimeMillis = mostRecentContactUpdatedTimestampMillis;
+        updateStats.mLastContactDeletedTimeMillis = mostRecentContactDeletedTimestampMillis;
 
         // Update the person corpus in AppSearch based on the changed contact
         // information we get from CP2. At this point mUpdateScheduled has been
@@ -409,34 +453,35 @@ public final class ContactsIndexerUserInstance {
         //  timestamps for last successful deletion and update. This requires the ids from CP2
         //  are sorted in last_update_timestamp ascending order, and the code would become a
         //  little complicated.
-        return mContactsIndexerImpl.updatePersonCorpusAsync(wantedIds, unWantedIds, updateStats)
+        return mContactsIndexerImpl.updatePersonCorpusAsync(wantedIds, unWantedIds,
+                        updateStats, mContactsIndexerConfig.shouldKeepUpdatingOnError())
                 .handle((x, t) -> {
                     try {
                         if (t != null) {
                             Log.w(TAG, "Failed to perform delta update", t);
-                            // Just clear all the remaining contacts in case of error.
-                            mContactsIndexerImpl.cancelUpdatePersonCorpus();
                             if (updateStats.mUpdateStatuses.isEmpty()
                                     && updateStats.mDeleteStatuses.isEmpty()) {
                                 // Somehow this error is not reflected in the stats, and
                                 // unfortunately we don't know which part is wrong. Just add an
                                 // error code for the update.
                                 updateStats.mUpdateStatuses.add(
-                                        AppSearchResult.RESULT_UNKNOWN_ERROR);
+                                        ContactsUpdateStats
+                                                .ERROR_CODE_CONTACTS_INDEXER_UNKNOWN_ERROR);
                             }
                         }
                         // Persisting timestamping and logging, no matter if update succeeds or not.
                         if (LogUtil.DEBUG) {
                             Log.d(TAG, "updated timestamps --"
-                                    + " lastDeltaUpdateTimestampMillis: "
-                                    + mostRecentContactLastUpdateTimestampMillis
-                                    + " lastDeltaDeleteTimestampMillis: "
+                                    + " lastContactUpdateTimestampMillis: "
+                                    + mostRecentContactUpdatedTimestampMillis
+                                    + " lastContactDeleteTimestampMillis: "
                                     + mostRecentContactDeletedTimestampMillis);
                         }
-                        mSettings.setLastDeltaUpdateTimestampMillis(
-                                mostRecentContactLastUpdateTimestampMillis);
-                        mSettings.setLastDeltaDeleteTimestampMillis(
+                        mSettings.setLastContactUpdateTimestampMillis(
+                                mostRecentContactUpdatedTimestampMillis);
+                        mSettings.setLastContactDeleteTimestampMillis(
                                 mostRecentContactDeletedTimestampMillis);
+                        mSettings.setLastDeltaUpdateTimestampMillis(currentTimeMillis);
                         persistSettings();
                         logStats(updateStats);
                         if (updateStats.mUpdateStatuses.contains(
@@ -470,7 +515,8 @@ public final class ContactsIndexerUserInstance {
     }
 
     // Logs the stats to statsd.
-    private void logStats(@NonNull ContactsUpdateStats updateStats) {
+    @VisibleForTesting
+    void logStats(@NonNull ContactsUpdateStats updateStats) {
         int totalUpdateLatency =
                 (int) (System.currentTimeMillis()
                         - updateStats.mUpdateAndDeleteStartTimeMillis);
@@ -502,7 +548,7 @@ public final class ContactsIndexerUserInstance {
             updateStatusArr[updateIdx] = updateStatus;
             ++updateIdx;
         }
-        for (int deleteStatus : updateStats.mUpdateStatuses) {
+        for (int deleteStatus : updateStats.mDeleteStatuses) {
             deleteStatusArr[deleteIdx] = deleteStatus;
             ++deleteIdx;
         }
@@ -517,7 +563,14 @@ public final class ContactsIndexerUserInstance {
                 updateStats.mContactsDeleteSucceededCount,
                 updateStats.mContactsUpdateSkippedCount,
                 updateStats.mContactsUpdateFailedCount,
-                updateStats.mContactsDeleteFailedCount);
+                updateStats.mContactsDeleteFailedCount,
+                updateStats.mContactsDeleteNotFoundCount,
+                updateStats.mUpdateAndDeleteStartTimeMillis,
+                updateStats.mLastFullUpdateStartTimeMillis,
+                updateStats.mLastDeltaUpdateStartTimeMillis,
+                updateStats.mLastContactUpdatedTimeMillis,
+                updateStats.mLastContactDeletedTimeMillis,
+                updateStats.mPreviousLastContactUpdatedTimeMillis);
     }
 
     /**
@@ -563,7 +616,16 @@ public final class ContactsIndexerUserInstance {
                 Log.w(TAG, "Executor is shutdown, not executing task");
                 return;
             }
-            mSingleThreadedExecutor.execute(command);
+            mSingleThreadedExecutor.execute(
+                    () -> {
+                        try {
+                            command.run();
+                        } catch (RuntimeException e) {
+                            Slog.wtf(TAG, "ContactsIndexerUserInstance"
+                                    + ".executeOnSingleThreadedExecutor() failed ", e);
+                        }
+                    }
+            );
         }
     }
 }

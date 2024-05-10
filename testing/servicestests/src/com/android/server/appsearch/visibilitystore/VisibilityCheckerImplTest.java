@@ -37,6 +37,8 @@ import android.app.UiAutomation;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
+import android.app.appsearch.testutil.FakeAppSearchConfig;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.content.ContextWrapper;
@@ -48,6 +50,7 @@ import androidx.test.core.app.ApplicationProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
@@ -75,13 +78,13 @@ public class VisibilityCheckerImplTest {
     private Context mContext;
     private VisibilityCheckerImpl mVisibilityChecker;
     private VisibilityStore mVisibilityStore;
-    private AttributionSource mAttributionSource;
+    private AppSearchAttributionSource mAttributionSource;
     private UiAutomation mUiAutomation;
 
     @Before
     public void setUp() throws Exception {
         Context context = ApplicationProvider.getApplicationContext();
-        mAttributionSource = context.getAttributionSource();
+        mAttributionSource = AppSearchAttributionSource.createAttributionSource(context);
         mContext = new ContextWrapper(context) {
             @Override
             public Context createContextAsUser(UserHandle user, int flags) {
@@ -104,7 +107,7 @@ public class VisibilityCheckerImplTest {
         // Give ourselves global query permissions
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
                 mTemporaryFolder.newFolder(),
-                new UnlimitedLimitConfig(),
+                new FakeAppSearchConfig(),
                 /*initStatsBuilder=*/ null,
                 ALWAYS_OPTIMIZE,
                 mVisibilityChecker);
@@ -207,8 +210,7 @@ public class VisibilityCheckerImplTest {
                 packageNameFoo, sha256CertFoo, PackageManager.CERT_INPUT_SHA256))
                 .thenReturn(false);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidFoo)
-                        .setPackageName(packageNameFoo).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaFoo",
@@ -222,8 +224,7 @@ public class VisibilityCheckerImplTest {
                 packageNameFoo, sha256CertFoo, PackageManager.CERT_INPUT_SHA256))
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidFoo)
-                        .setPackageName(packageNameFoo).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaFoo",
@@ -237,8 +238,7 @@ public class VisibilityCheckerImplTest {
                 packageNameFoo, sha256CertFoo, PackageManager.CERT_INPUT_SHA256))
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidFoo)
-                        .setPackageName(packageNameFoo).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaFoo",
@@ -251,8 +251,7 @@ public class VisibilityCheckerImplTest {
                 packageNameBar, sha256CertBar, PackageManager.CERT_INPUT_SHA256))
                 .thenReturn(true);
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidBar)
-                        .setPackageName(packageNameBar).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameBar, uidBar),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaBar",
@@ -264,16 +263,14 @@ public class VisibilityCheckerImplTest {
         visibilityDocument2 = new VisibilityDocument.Builder(/*id=*/"prefix/SchemaBar").build();
         mVisibilityStore.setVisibility(ImmutableList.of(visibilityDocument1, visibilityDocument2));
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidFoo)
-                        .setPackageName(packageNameFoo).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameFoo, uidFoo),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaFoo",
                 mVisibilityStore))
                 .isFalse();
         assertThat(mVisibilityChecker.isSchemaSearchableByCaller(
-                new FrameworkCallerAccess(new AttributionSource.Builder(uidBar)
-                        .setPackageName(packageNameBar).build(),
+                new FrameworkCallerAccess(new AppSearchAttributionSource(packageNameBar, uidBar),
                         /*callerHasSystemAccess=*/ false),
                 "package",
                 "prefix/SchemaBar",

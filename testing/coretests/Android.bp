@@ -20,15 +20,16 @@ android_test {
     name: "AppSearchCoreTests",
     srcs: ["src/**/*.java"],
     static_libs: [
-        "AppSearchTestUtils",
+        "CtsAppSearchTestUtils",
         "androidx.test.ext.junit",
         "androidx.test.rules",
         "junit",
         "testng",
-        "truth-prebuilt",
+        "truth",
     ],
     libs: [
         "android.test.runner",
+        "framework-annotations-lib",
         "framework-appsearch.impl",
     ],
     sdk_version: "module_current",

@@ -16,11 +16,14 @@
 
 package android.app.appsearch;
 
+import static android.app.appsearch.AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE;
+import static android.app.appsearch.AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID;
 import static android.app.appsearch.SearchSessionUtil.safeExecute;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
@@ -59,7 +62,7 @@ public class SearchResults implements Closeable {
     private final IAppSearchManager mService;
 
     // The permission identity of the caller
-    private final AttributionSource mAttributionSource;
+    private final AppSearchAttributionSource mAttributionSource;
 
     // The database name to search over. If null, this will search over all database names.
     @Nullable
@@ -79,7 +82,7 @@ public class SearchResults implements Closeable {
 
     SearchResults(
             @NonNull IAppSearchManager service,
-            @NonNull AttributionSource attributionSource,
+            @NonNull AppSearchAttributionSource attributionSource,
             @Nullable String databaseName,
             @NonNull String queryExpression,
             @NonNull SearchSpec searchSpec,
@@ -110,9 +113,9 @@ public class SearchResults implements Closeable {
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "SearchResults has already been closed");
         try {
+            long binderCallStartTimeMillis = SystemClock.elapsedRealtime();
             if (mIsFirstLoad) {
                 mIsFirstLoad = false;
-                long binderCallStartTimeMillis = SystemClock.elapsedRealtime();
                 if (mDatabaseName == null) {
                     // Global query, there's no one package-database combination to check.
                     mService.globalQuery(mAttributionSource, mQueryExpression,
@@ -126,8 +129,15 @@ public class SearchResults implements Closeable {
                             wrapCallback(executor, callback));
                 }
             } else {
-                mService.getNextPage(mAttributionSource, mNextPageToken, mUserHandle,
-                        wrapCallback(executor, callback));
+                // TODO(b/276349029): Log different join types when they get added.
+                @AppSearchSchema.StringPropertyConfig.JoinableValueType
+                int joinType = JOINABLE_VALUE_TYPE_NONE;
+                if (mSearchSpec.getJoinSpec() != null
+                        && !mSearchSpec.getJoinSpec().getChildPropertyExpression().isEmpty()) {
+                    joinType = JOINABLE_VALUE_TYPE_QUALIFIED_ID;
+                }
+                mService.getNextPage(mAttributionSource, mDatabaseName, mNextPageToken, joinType,
+                        mUserHandle, binderCallStartTimeMillis, wrapCallback(executor, callback));
             }
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -138,7 +148,8 @@ public class SearchResults implements Closeable {
     public void close() {
         if (!mIsClosed) {
             try {
-                mService.invalidateNextPageToken(mAttributionSource, mNextPageToken, mUserHandle);
+                mService.invalidateNextPageToken(mAttributionSource, mNextPageToken,
+                        mUserHandle, /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime());
                 mIsClosed = true;
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to close the SearchResults", e);
@@ -165,13 +176,13 @@ public class SearchResults implements Closeable {
             @NonNull Consumer<AppSearchResult<List<SearchResult>>> callback) {
         if (searchResultPageResult.isSuccess()) {
             try {
-                SearchResultPage searchResultPage =
-                        new SearchResultPage(searchResultPageResult.getResultValue());
+                SearchResultPage searchResultPage = new SearchResultPage
+                        (Objects.requireNonNull(searchResultPageResult.getResultValue()));
                 mNextPageToken = searchResultPage.getNextPageToken();
                 callback.accept(AppSearchResult.newSuccessfulResult(
                         searchResultPage.getResults()));
-            } catch (Throwable t) {
-                callback.accept(AppSearchResult.throwableToFailedResult(t));
+            } catch (RuntimeException e) {
+                callback.accept(AppSearchResult.throwableToFailedResult(e));
             }
         } else {
             callback.accept(AppSearchResult.newFailedResult(searchResultPageResult));

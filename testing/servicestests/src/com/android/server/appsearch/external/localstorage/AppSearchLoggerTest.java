@@ -21,6 +21,8 @@ import static com.google.common.truth.Truth.assertThat;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
+import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.exceptions.AppSearchException;
@@ -54,6 +56,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -74,7 +77,8 @@ public class AppSearchLoggerTest {
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -151,6 +155,10 @@ public class AppSearchLoggerTest {
         final int nativeDocumentSize = 7;
         final int nativeNumTokensIndexed = 8;
         final boolean nativeExceededMaxNumTokens = true;
+        final int nativeTermIndexLatencyMillis = 9;
+        final int nativeIntegerIndexLatencyMillis = 10;
+        final int nativeQualifiedIdJoinIndexLatencyMillis = 11;
+        final int nativeLiteIndexSortLatencyMillis = 12;
         PutDocumentStatsProto nativePutDocumentStats =
                 PutDocumentStatsProto.newBuilder()
                         .setLatencyMs(nativeLatencyMillis)
@@ -162,6 +170,10 @@ public class AppSearchLoggerTest {
                                 PutDocumentStatsProto.TokenizationStats.newBuilder()
                                         .setNumTokensIndexed(nativeNumTokensIndexed)
                                         .build())
+                        .setTermIndexLatencyMs(nativeTermIndexLatencyMillis)
+                        .setIntegerIndexLatencyMs(nativeIntegerIndexLatencyMillis)
+                        .setQualifiedIdJoinIndexLatencyMs(nativeQualifiedIdJoinIndexLatencyMillis)
+                        .setLiteIndexSortLatencyMs(nativeLiteIndexSortLatencyMillis)
                         .build();
         PutDocumentStats.Builder pBuilder = new PutDocumentStats.Builder(PACKAGE_NAME, DATABASE);
 
@@ -176,6 +188,14 @@ public class AppSearchLoggerTest {
                 .isEqualTo(nativeIndexMergeLatencyMillis);
         assertThat(pStats.getNativeDocumentSizeBytes()).isEqualTo(nativeDocumentSize);
         assertThat(pStats.getNativeNumTokensIndexed()).isEqualTo(nativeNumTokensIndexed);
+        assertThat(pStats.getNativeTermIndexLatencyMillis())
+                .isEqualTo(nativeTermIndexLatencyMillis);
+        assertThat(pStats.getNativeIntegerIndexLatencyMillis())
+                .isEqualTo(nativeIntegerIndexLatencyMillis);
+        assertThat(pStats.getNativeQualifiedIdJoinIndexLatencyMillis())
+                .isEqualTo(nativeQualifiedIdJoinIndexLatencyMillis);
+        assertThat(pStats.getNativeLiteIndexSortLatencyMillis())
+                .isEqualTo(nativeLiteIndexSortLatencyMillis);
     }
 
     @Test
@@ -195,6 +215,9 @@ public class AppSearchLoggerTest {
         int nativeRankingLatencyMillis = 15;
         int nativeNumResultsWithSnippets = 16;
         int nativeDocumentRetrievingLatencyMillis = 17;
+        int nativeLockAcquisitionLatencyMillis = 18;
+        int javaToNativeJniLatencyMillis = 19;
+        int nativeToJavaJniLatencyMillis = 20;
         QueryStatsProto nativeQueryStats =
                 QueryStatsProto.newBuilder()
                         .setLatencyMs(nativeLatencyMillis)
@@ -214,6 +237,9 @@ public class AppSearchLoggerTest {
                         .setRankingLatencyMs(nativeRankingLatencyMillis)
                         .setNumResultsWithSnippets(nativeNumResultsWithSnippets)
                         .setDocumentRetrievalLatencyMs(nativeDocumentRetrievingLatencyMillis)
+                        .setLockAcquisitionLatencyMs(nativeLockAcquisitionLatencyMillis)
+                        .setJavaToNativeJniLatencyMs(javaToNativeJniLatencyMillis)
+                        .setNativeToJavaJniLatencyMs(nativeToJavaJniLatencyMillis)
                         .build();
         SearchStats.Builder qBuilder =
                 new SearchStats.Builder(SearchStats.VISIBILITY_SCOPE_LOCAL, PACKAGE_NAME)
@@ -239,6 +265,12 @@ public class AppSearchLoggerTest {
         assertThat(sStats.getResultWithSnippetsCount()).isEqualTo(nativeNumResultsWithSnippets);
         assertThat(sStats.getDocumentRetrievingLatencyMillis())
                 .isEqualTo(nativeDocumentRetrievingLatencyMillis);
+        assertThat(sStats.getNativeLockAcquisitionLatencyMillis())
+                .isEqualTo(nativeLockAcquisitionLatencyMillis);
+        assertThat(sStats.getJavaToNativeJniLatencyMillis())
+                .isEqualTo(javaToNativeJniLatencyMillis);
+        assertThat(sStats.getNativeToJavaJniLatencyMillis())
+                .isEqualTo(nativeToJavaJniLatencyMillis);
     }
 
     @Test
@@ -343,7 +375,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -374,7 +407,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -382,14 +416,16 @@ public class AppSearchLoggerTest {
                 ImmutableList.of(
                         new AppSearchSchema.Builder("Type1").build(),
                         new AppSearchSchema.Builder("Type2").build());
-        appSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                appSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         GenericDocument doc1 = new GenericDocument.Builder<>("namespace", "id1", "Type1").build();
         GenericDocument doc2 = new GenericDocument.Builder<>("namespace", "id2", "Type1").build();
         appSearchImpl.putDocument(
@@ -403,7 +439,8 @@ public class AppSearchLoggerTest {
         appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -434,7 +471,8 @@ public class AppSearchLoggerTest {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -443,14 +481,16 @@ public class AppSearchLoggerTest {
                 ImmutableList.of(
                         new AppSearchSchema.Builder("Type1").build(),
                         new AppSearchSchema.Builder("Type2").build());
-        appSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                appSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
 
         // Insert a valid doc
         GenericDocument doc1 = new GenericDocument.Builder<>("namespace", "id1", "Type1").build();
@@ -473,7 +513,8 @@ public class AppSearchLoggerTest {
         appSearchImpl =
                 AppSearchImpl.create(
                         folder,
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         initStatsBuilder,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
@@ -506,14 +547,16 @@ public class AppSearchLoggerTest {
                                         .build())
                         .build();
         List<AppSearchSchema> schemas = Collections.singletonList(testSchema);
-        mAppSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
 
         GenericDocument document =
                 new GenericDocument.Builder<>("namespace", "id", "type")
@@ -557,14 +600,16 @@ public class AppSearchLoggerTest {
                                         .build())
                         .build();
         List<AppSearchSchema> schemas = Collections.singletonList(testSchema);
-        mAppSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
 
         GenericDocument document =
                 new GenericDocument.Builder<>("namespace", "id", "type")
@@ -610,14 +655,16 @@ public class AppSearchLoggerTest {
                                         .build())
                         .build();
         List<AppSearchSchema> schemas = Collections.singletonList(testSchema);
-        mAppSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         GenericDocument document1 =
                 new GenericDocument.Builder<>("namespace", "id1", "type")
                         .setPropertyString("subject", "testPut example1")
@@ -694,14 +741,16 @@ public class AppSearchLoggerTest {
                 ImmutableList.of(
                         new AppSearchSchema.Builder("Type1").build(),
                         new AppSearchSchema.Builder("Type2").build());
-        mAppSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
 
         SearchSpec searchSpec =
                 new SearchSpec.Builder()
@@ -725,6 +774,173 @@ public class AppSearchLoggerTest {
     }
 
     @Test
+    public void testLoggingStats_search_join() throws Exception {
+        AppSearchSchema actionSchema =
+                new AppSearchSchema.Builder("ViewAction")
+                        .addProperty(
+                                new AppSearchSchema.StringPropertyConfig.Builder("entityId")
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setIndexingType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .INDEXING_TYPE_EXACT_TERMS)
+                                        .setJoinableValueType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                                        .setTokenizerType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .build();
+
+        AppSearchSchema entitySchema =
+                new AppSearchSchema.Builder("entity")
+                        .addProperty(
+                                new AppSearchSchema.StringPropertyConfig.Builder("subject")
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setIndexingType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .build();
+        List<AppSearchSchema> schemas = Arrays.asList(actionSchema, entitySchema);
+
+        // Insert schema
+        final String testPackageName = "testPackage";
+        final String testDatabase = "testDatabase";
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+        GenericDocument entity1 =
+                new GenericDocument.Builder<>("namespace", "id1", "entity")
+                        .setPropertyString("subject", "an entity")
+                        .build();
+        GenericDocument entity2 =
+                new GenericDocument.Builder<>("namespace", "id2", "entity")
+                        .setPropertyString("subject", "another entity")
+                        .build();
+
+        GenericDocument action1 =
+                new GenericDocument.Builder<>("namespace", "action1", "ViewAction")
+                        .setPropertyString("entityId", "testPackage$testDatabase/namespace#id1")
+                        .build();
+        GenericDocument action2 =
+                new GenericDocument.Builder<>("namespace", "action2", "ViewAction")
+                        .setPropertyString("entityId", "testPackage$testDatabase/namespace#id1")
+                        .build();
+        GenericDocument action3 =
+                new GenericDocument.Builder<>("namespace", "action3", "ViewAction")
+                        .setPropertyString("entityId", "testPackage$testDatabase/namespace#id1")
+                        .build();
+        GenericDocument action4 =
+                new GenericDocument.Builder<>("namespace", "action4", "ViewAction")
+                        .setPropertyString("entityId", "testPackage$testDatabase/namespace#id2")
+                        .build();
+
+        mAppSearchImpl.putDocument(
+                testPackageName,
+                testDatabase,
+                entity1,
+                /*sendChangeNotifications=*/ false,
+                mLogger);
+        mAppSearchImpl.putDocument(
+                testPackageName,
+                testDatabase,
+                entity2,
+                /*sendChangeNotifications=*/ false,
+                mLogger);
+        mAppSearchImpl.putDocument(
+                testPackageName,
+                testDatabase,
+                action1,
+                /*sendChangeNotifications=*/ false,
+                mLogger);
+        mAppSearchImpl.putDocument(
+                testPackageName,
+                testDatabase,
+                action2,
+                /*sendChangeNotifications=*/ false,
+                mLogger);
+        mAppSearchImpl.putDocument(
+                testPackageName,
+                testDatabase,
+                action3,
+                /*sendChangeNotifications=*/ false,
+                mLogger);
+        mAppSearchImpl.putDocument(
+                testPackageName,
+                testDatabase,
+                action4,
+                /*sendChangeNotifications=*/ false,
+                mLogger);
+
+        SearchSpec nestedSearchSpec =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_DOCUMENT_SCORE)
+                        .setOrder(SearchSpec.ORDER_ASCENDING)
+                        .build();
+
+        JoinSpec js =
+                new JoinSpec.Builder("entityId")
+                        .setNestedSearch("", nestedSearchSpec)
+                        .setAggregationScoringStrategy(JoinSpec.AGGREGATION_SCORING_RESULT_COUNT)
+                        .build();
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(SearchSpec.RANKING_STRATEGY_JOIN_AGGREGATE_SCORE)
+                        .setJoinSpec(js)
+                        .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
+                        .build();
+
+        String queryStr = "entity";
+        SearchResultPage searchResultPage =
+                mAppSearchImpl.query(
+                        testPackageName, testDatabase, queryStr, searchSpec, /*logger=*/ mLogger);
+
+        assertThat(searchResultPage.getResults()).hasSize(2);
+        assertThat(searchResultPage.getResults().get(0).getGenericDocument()).isEqualTo(entity1);
+        assertThat(searchResultPage.getResults().get(1).getGenericDocument()).isEqualTo(entity2);
+
+        SearchStats sStats = mLogger.mSearchStats;
+
+        assertThat(sStats).isNotNull();
+
+        assertThat(sStats.getPackageName()).isEqualTo(testPackageName);
+        assertThat(sStats.getDatabase()).isEqualTo(testDatabase);
+        assertThat(sStats.getStatusCode()).isEqualTo(AppSearchResult.RESULT_OK);
+        assertThat(sStats.getVisibilityScope()).isEqualTo(SearchStats.VISIBILITY_SCOPE_LOCAL);
+        assertThat(sStats.getTermCount()).isEqualTo(1);
+        assertThat(sStats.getQueryLength()).isEqualTo(queryStr.length());
+        assertThat(sStats.getFilteredNamespaceCount()).isEqualTo(1);
+        assertThat(sStats.getFilteredSchemaTypeCount()).isEqualTo(2);
+        assertThat(sStats.getCurrentPageReturnedResultCount()).isEqualTo(2);
+        assertThat(sStats.isFirstPage()).isTrue();
+        assertThat(sStats.getRankingStrategy())
+                .isEqualTo(ScoringSpecProto.RankingStrategy.Code.JOIN_AGGREGATE_SCORE_VALUE);
+        assertThat(sStats.getScoredDocumentCount()).isEqualTo(2);
+        assertThat(sStats.getResultWithSnippetsCount()).isEqualTo(0);
+        // Join-specific stats. If the process goes really fast, the total latency could be 0.
+        // Since the default of total latency is also 0, we just remove the assertion on
+        // JoinLatencyMillis.
+        assertThat(sStats.getJoinType())
+                .isEqualTo(AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_QUALIFIED_ID);
+        assertThat(sStats.getNumJoinedResultsCurrentPage()).isEqualTo(4);
+    }
+
+    @Test
     public void testLoggingStats_remove_success() throws Exception {
         // Insert schema
         final String testPackageName = "testPackage";
@@ -733,14 +949,16 @@ public class AppSearchLoggerTest {
         final String testId = "id";
         List<AppSearchSchema> schemas =
                 Collections.singletonList(new AppSearchSchema.Builder("type").build());
-        mAppSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         GenericDocument document =
                 new GenericDocument.Builder<>(testNamespace, testId, "type").build();
         mAppSearchImpl.putDocument(
@@ -771,14 +989,16 @@ public class AppSearchLoggerTest {
         final String testId = "id";
         List<AppSearchSchema> schemas =
                 Collections.singletonList(new AppSearchSchema.Builder("type").build());
-        mAppSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
 
         GenericDocument document =
                 new GenericDocument.Builder<>(testNamespace, testId, "type").build();
@@ -821,14 +1041,16 @@ public class AppSearchLoggerTest {
         final String testNamespace = "testNameSpace";
         List<AppSearchSchema> schemas =
                 Collections.singletonList(new AppSearchSchema.Builder("type").build());
-        mAppSearchImpl.setSchema(
-                testPackageName,
-                testDatabase,
-                schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        testPackageName,
+                        testDatabase,
+                        schemas,
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         GenericDocument document1 =
                 new GenericDocument.Builder<>(testNamespace, "id1", "type").build();
         GenericDocument document2 =
@@ -879,26 +1101,30 @@ public class AppSearchLoggerTest {
                                                         .TOKENIZER_TYPE_PLAIN)
                                         .build())
                         .build();
-        mAppSearchImpl.setSchema(
-                PACKAGE_NAME,
-                DATABASE,
-                Collections.singletonList(schema1),
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        PACKAGE_NAME,
+                        DATABASE,
+                        Collections.singletonList(schema1),
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
 
         // create a backwards incompatible schema
         SetSchemaStats.Builder sStatsBuilder = new SetSchemaStats.Builder(PACKAGE_NAME, DATABASE);
         AppSearchSchema schema2 = new AppSearchSchema.Builder("testSchema").build();
-        mAppSearchImpl.setSchema(
-                PACKAGE_NAME,
-                DATABASE,
-                Collections.singletonList(schema2),
-                /*visibilityDocuments=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*version=*/ 0,
-                /* setSchemaStatsBuilder= */ sStatsBuilder);
+        internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        PACKAGE_NAME,
+                        DATABASE,
+                        Collections.singletonList(schema2),
+                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*version=*/ 0,
+                        /* setSchemaStatsBuilder= */ sStatsBuilder);
+        assertThat(internalSetSchemaResponse.isSuccess()).isFalse();
 
         SetSchemaStats sStats = sStatsBuilder.build();
         assertThat(sStats.getPackageName()).isEqualTo(PACKAGE_NAME);

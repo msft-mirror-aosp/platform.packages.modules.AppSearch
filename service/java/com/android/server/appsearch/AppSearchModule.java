@@ -16,35 +16,25 @@
 
 package com.android.server.appsearch;
 
+import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
-import android.os.Environment;
 import android.os.UserHandle;
 import android.util.Log;
 
 import com.android.server.SystemService;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerConfig;
+import com.android.server.appsearch.contactsindexer.ContactsIndexerMaintenanceService;
 import com.android.server.appsearch.contactsindexer.FrameworkContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerManagerService;
+import com.android.server.appsearch.util.ExceptionUtil;
 
-import java.io.File;
+import java.io.PrintWriter;
+import java.util.Objects;
 
 public class AppSearchModule {
     private static final String TAG = "AppSearchModule";
-
-    /**
-     * Returns AppSearch directory in the credential encrypted system directory for the given user.
-     *
-     * <p>This folder should only be accessed after unlock.
-     */
-    public static File getAppSearchDir(@NonNull UserHandle userHandle) {
-        // Duplicates the implementation of Environment#getDataSystemCeDirectory
-        // TODO(b/191059409): Unhide Environment#getDataSystemCeDirectory and switch to it.
-        File systemCeDir = new File(Environment.getDataDirectory(), "system_ce");
-        File systemCeUserDir = new File(systemCeDir, String.valueOf(userHandle.getIdentifier()));
-        return new File(systemCeUserDir, "appsearch");
-    }
 
     public static final class Lifecycle extends SystemService {
         private AppSearchManagerService mAppSearchManagerService;
@@ -57,14 +47,16 @@ public class AppSearchModule {
 
         @Override
         public void onStart() {
-            mAppSearchManagerService = new AppSearchManagerService(getContext());
+            mAppSearchManagerService = new AppSearchManagerService(
+                    getContext(), /* lifecycle= */ this);
 
             try {
                 mAppSearchManagerService.onStart();
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 Log.e(TAG, "Failed to start AppSearch service", e);
                 // If AppSearch service fails to start, skip starting ContactsIndexer service
                 // since it indexes CP2 contacts into AppSearch builtin:Person corpus
+                ExceptionUtil.handleException(e);
                 return;
             }
 
@@ -87,6 +79,17 @@ public class AppSearchModule {
             }
         }
 
+        /** Dumps ContactsIndexer internal state for the user. */
+        @BinderThread
+        void dumpContactsIndexerForUser(
+                @NonNull UserHandle userHandle, @NonNull PrintWriter pw, boolean verbose) {
+            if (mContactsIndexerManagerService != null) {
+                mContactsIndexerManagerService.dumpContactsIndexerForUser(userHandle, pw, verbose);
+            } else {
+                pw.println("No dumpsys for ContactsIndexer as it is disabled.");
+            }
+        }
+
         @Override
         public void onBootPhase(int phase) {
             mAppSearchManagerService.onBootPhase(phase);
@@ -95,7 +98,10 @@ public class AppSearchModule {
         @Override
         public void onUserUnlocking(@NonNull TargetUser user) {
             mAppSearchManagerService.onUserUnlocking(user);
-            if (mContactsIndexerManagerService != null) {
+            if (mContactsIndexerManagerService == null) {
+                ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(getContext(),
+                        user.getUserHandle());
+            } else {
                 mContactsIndexerManagerService.onUserUnlocking(user);
             }
         }

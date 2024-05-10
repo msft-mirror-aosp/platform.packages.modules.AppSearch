@@ -28,10 +28,13 @@ import static com.google.common.truth.Truth.assertThat;
 
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
+import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.VisibilityDocument;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
+import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.OptimizeStrategy;
 import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
@@ -112,16 +115,18 @@ public class VisibilityStoreMigrationHelperFromV0Test {
 
         // Set some client schemas into AppSearchImpl with empty VisibilityDocument since we need to
         // directly put old version of VisibilityDocument.
-        appSearchImplInV0.setSchema(
-                "package",
-                "database",
-                ImmutableList.of(
-                        new AppSearchSchema.Builder("schema1").build(),
-                        new AppSearchSchema.Builder("schema2").build()),
-                /*prefixedVisibilityBundles=*/ Collections.emptyList(),
-                /*forceOverride=*/ false,
-                /*schemaVersion=*/ 0,
-                /*setSchemaStatsBuilder=*/ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                appSearchImplInV0.setSchema(
+                        "package",
+                        "database",
+                        ImmutableList.of(
+                                new AppSearchSchema.Builder("schema1").build(),
+                                new AppSearchSchema.Builder("schema2").build()),
+                        /*prefixedVisibilityBundles=*/ Collections.emptyList(),
+                        /*forceOverride=*/ false,
+                        /*schemaVersion=*/ 0,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
 
         // Put deprecated visibility documents in version 0 to AppSearchImpl
         appSearchImplInV0.putDocument(
@@ -136,42 +141,44 @@ public class VisibilityStoreMigrationHelperFromV0Test {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         mFile,
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
 
         VisibilityDocument actualDocument1 =
-                new VisibilityDocument(
-                        appSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Schema1",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                appSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Schema1",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
         VisibilityDocument actualDocument2 =
-                new VisibilityDocument(
-                        appSearchImpl.getDocument(
-                                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                VisibilityDocument.NAMESPACE,
-                                /*id=*/ prefix + "Schema2",
-                                /*typePropertyPaths=*/ Collections.emptyMap()));
+                new VisibilityDocument.Builder(
+                                appSearchImpl.getDocument(
+                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityDocument.NAMESPACE,
+                                        /*id=*/ prefix + "Schema2",
+                                        /*typePropertyPaths=*/ Collections.emptyMap()))
+                        .build();
 
         VisibilityDocument expectedDocument1 =
                 new VisibilityDocument.Builder(/*id=*/ prefix + "Schema1")
                         .setNotDisplayedBySystem(true)
-                        .setCreationTimestampMillis(actualDocument1.getCreationTimestampMillis())
                         .addVisibleToPackage(new PackageIdentifier(packageNameFoo, sha256CertFoo))
                         .build();
         VisibilityDocument expectedDocument2 =
                 new VisibilityDocument.Builder(/*id=*/ prefix + "Schema2")
                         .setNotDisplayedBySystem(true)
-                        .setCreationTimestampMillis(actualDocument2.getCreationTimestampMillis())
                         .addVisibleToPackage(new PackageIdentifier(packageNameBar, sha256CertBar))
                         .build();
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
         assertThat(actualDocument2).isEqualTo(expectedDocument2);
+        appSearchImpl.close();
     }
 
     /** Build AppSearchImpl with deprecated visibility schemas version 0. */
@@ -217,18 +224,21 @@ public class VisibilityStoreMigrationHelperFromV0Test {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         mFile,
-                        new UnlimitedLimitConfig(),
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
                         ALWAYS_OPTIMIZE,
                         /*visibilityChecker=*/ null);
-        appSearchImpl.setSchema(
-                VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                VisibilityStore.VISIBILITY_DATABASE_NAME,
-                ImmutableList.of(visibilityDocumentSchemaV0, visibilityToPackagesSchemaV0),
-                /*prefixedVisibilityBundles=*/ Collections.emptyList(),
-                /*forceOverride=*/ true, // force push the old version into disk
-                /*version=*/ 0,
-                /*setSchemaStatsBuilder=*/ null);
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                appSearchImpl.setSchema(
+                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
+                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                        ImmutableList.of(visibilityDocumentSchemaV0, visibilityToPackagesSchemaV0),
+                        /*prefixedVisibilityBundles=*/ Collections.emptyList(),
+                        /*forceOverride=*/ true, // force push the old version into disk
+                        /*version=*/ 0,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         return appSearchImpl;
     }
 }

@@ -46,4 +46,14 @@ public class TestContactsIndexerConfig implements ContactsIndexerConfig {
     public int getContactsDeltaUpdateLimit() {
         return DEFAULT_CONTACTS_DELTA_UPDATE_INDEXING_LIMIT;
     }
+
+    @Override
+    public boolean shouldIndexFirstMiddleAndLastNames() {
+        return DEFAULT_CONTACTS_INDEX_FIRST_MIDDLE_AND_LAST_NAMES;
+    }
+
+    @Override
+    public boolean shouldKeepUpdatingOnError() {
+        return DEFAULT_CONTACTS_KEEP_UPDATING_ON_ERROR;
+    }
 }

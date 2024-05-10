@@ -18,6 +18,7 @@ package com.android.server.appsearch.visibilitystore;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.content.AttributionSource;
 
 import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
@@ -30,7 +31,7 @@ import java.util.Objects;
  * @hide
  */
 public class FrameworkCallerAccess extends CallerAccess {
-    private final AttributionSource mAttributionSource;
+    private final AppSearchAttributionSource mAttributionSource;
     private final boolean mCallerHasSystemAccess;
 
     /**
@@ -42,15 +43,16 @@ public class FrameworkCallerAccess extends CallerAccess {
      *     android.app.appsearch.SetSchemaRequest.Builder#setSchemaTypeDisplayedBySystem}.
      */
     public FrameworkCallerAccess(
-            @NonNull AttributionSource callerAttributionSource,boolean callerHasSystemAccess) {
-        super(callerAttributionSource.getPackageName());
+            @NonNull AppSearchAttributionSource callerAttributionSource,
+            boolean callerHasSystemAccess) {
+        super(Objects.requireNonNull(callerAttributionSource.getPackageName()));
         mAttributionSource = callerAttributionSource;
         mCallerHasSystemAccess = callerHasSystemAccess;
     }
 
     /** Returns the permission identity {@link AttributionSource} of the caller. */
     @NonNull
-    public AttributionSource getCallingAttributionSource() {
+    public AppSearchAttributionSource getCallingAttributionSource() {
         return mAttributionSource;
     }
 
