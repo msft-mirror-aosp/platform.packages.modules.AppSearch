@@ -23,14 +23,16 @@ import com.android.server.appsearch.external.localstorage.AppSearchConfig;
 /**
  * An interface which exposes config flags to AppSearch.
  *
- * <p>This interface provides an abstraction for the platform's flag mechanism and implements
- * caching to avoid expensive lookups.
+ * <p>This interface provides an abstraction for the AppSearch's flag mechanism and implements
+ * caching to avoid expensive lookups. This interface is only used by environments which have a
+ * running AppSearch service like Framework and GMSCore. JetPack uses {@link AppSearchConfig}
+ * directly instead.
  *
  * <p>Implementations of this interface must be thread-safe.
  *
  * @hide
  */
-public interface FrameworkAppSearchConfig extends AppSearchConfig, AutoCloseable {
+public interface ServiceAppSearchConfig extends AppSearchConfig, AutoCloseable {
     /**
      * Default min time interval between samples in millis if there is no value set for {@link
      * #getCachedMinTimeIntervalBetweenSamplesMillis()} in the flag system.
@@ -46,8 +48,8 @@ public interface FrameworkAppSearchConfig extends AppSearchConfig, AutoCloseable
     int DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES = 512 * 1024; // 512KiB
     int DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT = 80_000;
     int DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT = 20_000;
-    int DEFAULT_BYTES_OPTIMIZE_THRESHOLD = 1 * 1024 * 1024; // 1 MiB
-    int DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS = Integer.MAX_VALUE;
+    int DEFAULT_BYTES_OPTIMIZE_THRESHOLD = 10 * 1024 * 1024; // 10 MiB
+    int DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS = 7 * 24 * 60 * 60 * 1000; // 7 days in millis
     int DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD = 10_000;
     int DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS = 0;
     // Cached API Call Stats is disabled by default

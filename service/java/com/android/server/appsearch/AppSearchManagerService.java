@@ -42,7 +42,6 @@ import android.app.appsearch.AppSearchEnvironment;
 import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.AppSearchMigrationHelper;
 import android.app.appsearch.AppSearchResult;
-import android.app.appsearch.ExceptionUtil;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
@@ -89,6 +88,7 @@ import android.app.appsearch.functions.ServiceCallHelper.ServiceUsageCompleteLis
 import android.app.appsearch.functions.ServiceCallHelperImpl;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.stats.SchemaMigrationStats;
+import android.app.appsearch.util.ExceptionUtil;
 import android.app.appsearch.util.LogUtil;
 import android.app.role.RoleManager;
 import android.content.BroadcastReceiver;
@@ -125,6 +125,7 @@ import com.android.server.appsearch.transformer.EnterpriseSearchSpecTransformer;
 import com.android.server.appsearch.util.AdbDumpUtil;
 import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.ExecutorManager;
+import com.android.server.appsearch.util.PackageManagerUtil;
 import com.android.server.appsearch.util.ServiceImplHelper;
 import com.android.server.appsearch.visibilitystore.FrameworkCallerAccess;
 import com.android.server.usage.StorageStatsManagerLocal;
@@ -171,7 +172,7 @@ public class AppSearchManagerService extends SystemService {
     private final Context mContext;
     private final ExecutorManager mExecutorManager;
     private final AppSearchEnvironment mAppSearchEnvironment;
-    private final FrameworkAppSearchConfig mAppSearchConfig;
+    private final ServiceAppSearchConfig mAppSearchConfig;
 
     private PackageManager mPackageManager;
     private RoleManager mRoleManager;
@@ -2378,7 +2379,17 @@ public class AppSearchManagerService extends SystemService {
             }
             serviceIntent.setComponent(
                     new ComponentName(serviceInfo.packageName, serviceInfo.name));
-            // TODO(b/327134039): Verify the certificate if given.
+
+            if (request.getSha256Certificate() != null) {
+                if (!PackageManagerUtil.hasSigningCertificate(
+                        mContext, request.getTargetPackageName(), request.getSha256Certificate())) {
+                    safeCallback.onFailedResult(
+                            AppSearchResult.newFailedResult(
+                                    RESULT_NOT_FOUND, "Cannot find the target service"));
+                    return;
+                }
+            }
+
             boolean bindServiceResult = mAppFunctionServiceCallHelper.runServiceCall(
                     serviceIntent,
                     Context.BIND_ALLOW_BACKGROUND_ACTIVITY_STARTS | Context.BIND_AUTO_CREATE,
@@ -2536,13 +2547,13 @@ public class AppSearchManagerService extends SystemService {
             if (args != null) {
                 for (int i = 0; i < args.length; i++) {
                     String arg = args[i];
-                    if ("-h".equals(arg)) {
+                    if (Objects.equals(arg, "-h")) {
                         pw.println(
                                 "Dumps the internal state of AppSearch platform storage and "
                                         + "AppSearch Contacts Indexer for the current user.");
                         pw.println("-v, verbose mode");
                         return;
-                    } else if ("-v".equals(arg) || "-a".equals(arg)) {
+                    } else if (Objects.equals(arg, "-v") || Objects.equals(arg, "-a")) {
                         // "-a" is included when adb dumps all services e.g. in adb bugreport so we
                         // want to run in verbose mode when this happens
                         verbose = true;

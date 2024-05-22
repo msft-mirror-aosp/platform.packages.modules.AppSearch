@@ -52,7 +52,8 @@ import java.util.Objects;
 public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelable {
 
     @NonNull
-    public static final AppSearchResultParcelCreator CREATOR =
+    @SuppressWarnings("rawtypes")
+    public static final Parcelable.Creator<AppSearchResultParcel> CREATOR =
             new AppSearchResultParcelCreator() {
                 @Override
                 public AppSearchResultParcel createFromParcel(Parcel in) {
@@ -216,6 +217,7 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
     }
 
     /** Creates a new failed {@link AppSearchResultParcel} from result code and error message. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public static AppSearchResultParcel fromFailedResult(AppSearchResult failedResult) {
         if (failedResult.isSuccess()) {
             throw new IllegalStateException(
@@ -231,9 +233,10 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * InternalSetSchemaResponse}.
      */
-    public static AppSearchResultParcel fromInternalSetSchemaResponse(
+    public static AppSearchResultParcel<InternalSetSchemaResponse> fromInternalSetSchemaResponse(
             InternalSetSchemaResponse internalSetSchemaResponse) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+        return new AppSearchResultParcel.Builder<InternalSetSchemaResponse>(
+                        AppSearchResult.RESULT_OK)
                 .setInternalSetSchemaResponse(internalSetSchemaResponse)
                 .build();
     }
@@ -242,8 +245,9 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * GetSchemaResponse}.
      */
-    public static AppSearchResultParcel fromGetSchemaResponse(GetSchemaResponse getSchemaResponse) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+    public static AppSearchResultParcel<GetSchemaResponse> fromGetSchemaResponse(
+            GetSchemaResponse getSchemaResponse) {
+        return new AppSearchResultParcel.Builder<GetSchemaResponse>(AppSearchResult.RESULT_OK)
                 .setGetSchemaResponse(getSchemaResponse)
                 .build();
     }
@@ -252,8 +256,8 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * List}&lt;{@link String}&gt;.
      */
-    public static AppSearchResultParcel fromStringList(List<String> stringList) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+    public static AppSearchResultParcel<List<String>> fromStringList(List<String> stringList) {
+        return new AppSearchResultParcel.Builder<List<String>>(AppSearchResult.RESULT_OK)
                 .setStrings(stringList)
                 .build();
     }
@@ -262,9 +266,9 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * GenericDocumentParcel}.
      */
-    public static AppSearchResultParcel fromGenericDocumentParcel(
+    public static AppSearchResultParcel<GenericDocumentParcel> fromGenericDocumentParcel(
             GenericDocumentParcel genericDocumentParcel) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+        return new AppSearchResultParcel.Builder<GenericDocumentParcel>(AppSearchResult.RESULT_OK)
                 .setGenericDocumentParcel(genericDocumentParcel)
                 .build();
     }
@@ -273,8 +277,9 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * SearchResultPage}.
      */
-    public static AppSearchResultParcel fromSearchResultPage(SearchResultPage searchResultPage) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+    public static AppSearchResultParcel<SearchResultPage> fromSearchResultPage(
+            SearchResultPage searchResultPage) {
+        return new AppSearchResultParcel.Builder<SearchResultPage>(AppSearchResult.RESULT_OK)
                 .setSearchResultPage(searchResultPage)
                 .build();
     }
@@ -283,9 +288,9 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * List}&lt;{@link MigrationFailure}&gt;.
      */
-    public static AppSearchResultParcel fromMigrationFailuresList(
+    public static AppSearchResultParcel<List<MigrationFailure>> fromMigrationFailuresList(
             List<MigrationFailure> migrationFailureList) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+        return new AppSearchResultParcel.Builder<List<MigrationFailure>>(AppSearchResult.RESULT_OK)
                 .setMigrationFailures(migrationFailureList)
                 .build();
     }
@@ -294,9 +299,11 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * List}&lt;{@link SearchSuggestionResult}&gt;.
      */
-    public static AppSearchResultParcel fromSearchSuggestionResultList(
-            List<SearchSuggestionResult> searchSuggestionResultList) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+    public static AppSearchResultParcel<List<SearchSuggestionResult>>
+            fromSearchSuggestionResultList(
+                    List<SearchSuggestionResult> searchSuggestionResultList) {
+        return new AppSearchResultParcel.Builder<List<SearchSuggestionResult>>(
+                        AppSearchResult.RESULT_OK)
                 .setSearchSuggestionResults(searchSuggestionResultList)
                 .build();
     }
@@ -305,8 +312,8 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * StorageInfo}.
      */
-    public static AppSearchResultParcel fromStorageInfo(StorageInfo storageInfo) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+    public static AppSearchResultParcel<StorageInfo> fromStorageInfo(StorageInfo storageInfo) {
+        return new AppSearchResultParcel.Builder<StorageInfo>(AppSearchResult.RESULT_OK)
                 .setStorageInfo(storageInfo)
                 .build();
     }
@@ -315,9 +322,10 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      * Creates a new {@link AppSearchResultParcel} from the given result in case a successful {@link
      * ExecuteAppFunctionResponse}.
      */
-    public static AppSearchResultParcel fromExecuteAppFunctionResponse(
+    public static AppSearchResultParcel<ExecuteAppFunctionResponse> fromExecuteAppFunctionResponse(
             ExecuteAppFunctionResponse executeAppFunctionResponse) {
-        return new AppSearchResultParcel.Builder<>(AppSearchResult.RESULT_OK)
+        return new AppSearchResultParcel.Builder<ExecuteAppFunctionResponse>(
+                        AppSearchResult.RESULT_OK)
                 .setExecuteAppFunctionResponse(executeAppFunctionResponse)
                 .build();
     }
@@ -346,11 +354,11 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
     }
 
     static void directlyWriteToParcel(
-            @NonNull AppSearchResultParcel result, @NonNull Parcel data, int flags) {
+            @NonNull AppSearchResultParcel<?> result, @NonNull Parcel data, int flags) {
         AppSearchResultParcelCreator.writeToParcel(result, data, flags);
     }
 
-    static AppSearchResultParcel directlyReadFromParcel(@NonNull Parcel data) {
+    static AppSearchResultParcel<?> directlyReadFromParcel(@NonNull Parcel data) {
         return CREATOR_WITHOUT_BLOB.createFromParcel(data);
     }
 
@@ -361,7 +369,7 @@ public final class AppSearchResultParcel<ValueType> extends AbstractSafeParcelab
      */
     static final class Builder<ValueType> {
 
-        @AppSearchResult.ResultCode private int mResultCode;
+        @AppSearchResult.ResultCode private final int mResultCode;
         @Nullable private String mErrorMessage;
         @Nullable private InternalSetSchemaResponse mInternalSetSchemaResponse;
         @Nullable private GetSchemaResponse mGetSchemaResponse;
