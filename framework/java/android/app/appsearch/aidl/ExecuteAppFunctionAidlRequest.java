@@ -22,6 +22,7 @@ import android.app.appsearch.functions.ExecuteAppFunctionRequest;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
@@ -34,19 +35,23 @@ import java.util.Objects;
 @SafeParcelable.Class(creator = "ExecuteAppFunctionAidlRequestCreator")
 public final class ExecuteAppFunctionAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final ExecuteAppFunctionAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<ExecuteAppFunctionAidlRequest> CREATOR =
             new ExecuteAppFunctionAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getClientRequest")
     private final ExecuteAppFunctionRequest mClientRequest;
+
     @NonNull
     @Field(id = 2, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @Field(id = 3, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 4, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
 
     @Constructor
     public ExecuteAppFunctionAidlRequest(

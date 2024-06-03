@@ -20,7 +20,6 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.app.appsearch.util.BundleUtil;
@@ -29,6 +28,8 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.ArrayMap;
 import android.util.ArraySet;
+
+import com.android.appsearch.flags.Flags;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,6 +54,7 @@ public final class GetByDocumentIdRequest extends AbstractSafeParcelable {
     @NonNull
     public static final Parcelable.Creator<GetByDocumentIdRequest> CREATOR =
             new GetByDocumentIdRequestCreator();
+
     /**
      * Schema type to be used in {@link GetByDocumentIdRequest.Builder#addProjection} to apply
      * property paths to all results, excepting any types that have had their own, specific property
@@ -113,9 +115,10 @@ public final class GetByDocumentIdRequest extends AbstractSafeParcelable {
         Set<String> schemas = mTypePropertyPaths.keySet();
         Map<String, List<String>> typePropertyPathsMap = new ArrayMap<>(schemas.size());
         for (String schema : schemas) {
-            typePropertyPathsMap.put(
-                    schema,
-                    Collections.unmodifiableList(mTypePropertyPaths.getStringArrayList(schema)));
+            List<String> propertyPaths = mTypePropertyPaths.getStringArrayList(schema);
+            if (propertyPaths != null) {
+                typePropertyPathsMap.put(schema, Collections.unmodifiableList(propertyPaths));
+            }
         }
         return typePropertyPathsMap;
     }
@@ -134,12 +137,14 @@ public final class GetByDocumentIdRequest extends AbstractSafeParcelable {
         Map<String, List<PropertyPath>> typePropertyPathsMap = new ArrayMap<>(schemas.size());
         for (String schema : schemas) {
             List<String> paths = mTypePropertyPaths.getStringArrayList(schema);
-            int pathsSize = paths.size();
-            List<PropertyPath> propertyPathList = new ArrayList<>(pathsSize);
-            for (int i = 0; i < pathsSize; i++) {
-                propertyPathList.add(new PropertyPath(paths.get(i)));
+            if (paths != null) {
+                int pathsSize = paths.size();
+                List<PropertyPath> propertyPathList = new ArrayList<>(pathsSize);
+                for (int i = 0; i < pathsSize; i++) {
+                    propertyPathList.add(new PropertyPath(paths.get(i)));
+                }
+                typePropertyPathsMap.put(schema, Collections.unmodifiableList(propertyPathList));
             }
-            typePropertyPathsMap.put(schema, Collections.unmodifiableList(propertyPathList));
         }
         return typePropertyPathsMap;
     }

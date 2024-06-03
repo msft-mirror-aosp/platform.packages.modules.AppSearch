@@ -20,13 +20,14 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.PackageIdentifierParcel;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.ArraySet;
+
+import com.android.appsearch.flags.Flags;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -87,9 +88,10 @@ public final class SchemaVisibilityConfig extends AbstractSafeParcelable {
     }
 
     /**
-     * Returns an array of Integers representing Android Permissions as defined in {@link
-     * SetSchemaRequest.AppSearchSupportedPermission} that the caller must hold to access the schema
-     * this {@link SchemaVisibilityConfig} represents.
+     * Returns an array of Integers representing Android Permissions that the caller must hold to
+     * access the schema this {@link SchemaVisibilityConfig} represents.
+     *
+     * @see SetSchemaRequest.Builder#addRequiredPermissionsForSchemaTypeVisibility(String, Set)
      */
     @NonNull
     public Set<Set<Integer>> getRequiredPermissions() {
@@ -98,12 +100,13 @@ public final class SchemaVisibilityConfig extends AbstractSafeParcelable {
             for (int i = 0; i < mRequiredPermissions.size(); i++) {
                 VisibilityPermissionConfig permissionConfig = mRequiredPermissions.get(i);
                 Set<Integer> requiredPermissions = permissionConfig.getAllRequiredPermissions();
-                if (requiredPermissions != null) {
+                if (mRequiredPermissionsCached != null && requiredPermissions != null) {
                     mRequiredPermissionsCached.add(requiredPermissions);
                 }
             }
         }
-        return mRequiredPermissionsCached;
+        // Added for nullness checker as it is @Nullable, we initialize it above if it is null.
+        return Objects.requireNonNull(mRequiredPermissionsCached);
     }
 
     /**
@@ -126,9 +129,16 @@ public final class SchemaVisibilityConfig extends AbstractSafeParcelable {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof SchemaVisibilityConfig)) return false;
+    public boolean equals(@Nullable Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null) {
+            return false;
+        }
+        if (!(o instanceof SchemaVisibilityConfig)) {
+            return false;
+        }
         SchemaVisibilityConfig that = (SchemaVisibilityConfig) o;
         return Objects.equals(mAllowedPackages, that.mAllowedPackages)
                 && Objects.equals(mRequiredPermissions, that.mRequiredPermissions)
@@ -151,7 +161,7 @@ public final class SchemaVisibilityConfig extends AbstractSafeParcelable {
     public static final class Builder {
         private List<PackageIdentifierParcel> mAllowedPackages = new ArrayList<>();
         private List<VisibilityPermissionConfig> mRequiredPermissions = new ArrayList<>();
-        private PackageIdentifierParcel mPubliclyVisibleTargetPackage;
+        @Nullable private PackageIdentifierParcel mPubliclyVisibleTargetPackage;
         private boolean mBuilt;
 
         /** Creates a {@link Builder} for a {@link SchemaVisibilityConfig}. */
@@ -244,6 +254,7 @@ public final class SchemaVisibilityConfig extends AbstractSafeParcelable {
          *     android.content.pm.PackageManager#canPackageQuery} to determine which packages can
          *     access this publicly visible schema.
          */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setPubliclyVisibleTargetPackage(
                 @Nullable PackageIdentifier packageIdentifier) {

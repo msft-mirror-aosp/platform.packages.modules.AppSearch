@@ -30,7 +30,7 @@ import java.util.Objects;
 import java.util.concurrent.Executor;
 
 /**
- * Implementation of {@link FrameworkAppSearchConfig} using {@link DeviceConfig}.
+ * Implementation of {@link ServiceAppSearchConfig} using {@link DeviceConfig}.
  *
  * <p>Though the latest flag values can always be retrieved by calling {@link
  * DeviceConfig#getProperty}, we want to cache some of those values. For example, the sampling
@@ -43,8 +43,8 @@ import java.util.concurrent.Executor;
  *
  * @hide
  */
-public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchConfig {
-    private static volatile FrameworkAppSearchConfigImpl sConfig;
+public final class FrameworkServiceAppSearchConfig implements ServiceAppSearchConfig {
+    private static volatile FrameworkServiceAppSearchConfig sConfig;
 
     /*
      * Keys for ALL the flags stored in DeviceConfig.
@@ -99,70 +99,71 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public static final String KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD =
             "icing_integer_index_bucket_split_threshold";
     public static final String KEY_ICING_LITE_INDEX_SORT_AT_INDEXING =
-        "icing_lite_index_sort_at_indexing";
-    public static final String KEY_ICING_LITE_INDEX_SORT_SIZE =
-        "icing_lite_index_sort_size";
-    public static final String KEY_SHOULD_RETRIEVE_PARENT_INFO =
-        "should_retrieve_parent_info";
+            "icing_lite_index_sort_at_indexing";
+    public static final String KEY_ICING_LITE_INDEX_SORT_SIZE = "icing_lite_index_sort_size";
+    public static final String KEY_SHOULD_RETRIEVE_PARENT_INFO = "should_retrieve_parent_info";
     public static final String KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX =
-        "use_new_qualified_id_join_index";
+            "use_new_qualified_id_join_index";
     public static final String KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS =
-        "build_property_existence_metadata_hits";
+            "build_property_existence_metadata_hits";
     public static final String KEY_APP_FUNCTION_CALL_TIMEOUT_MILLIS =
             "app_function_call_timeout_millis";
+    public static final String KEY_FULLY_PERSIST_JOB_INTERVAL = "fully_persist_job_interval";
+
     /**
-     * This config does not need to be cached in FrameworkAppSearchConfigImpl as it is only accessed
-     * statically. AppSearch retrieves this directly from DeviceConfig when needed.
+     * This config does not need to be cached in FrameworkServiceAppSearchConfig as it is only
+     * accessed statically. AppSearch retrieves this directly from DeviceConfig when needed.
      */
     public static final String KEY_USE_FIXED_EXECUTOR_SERVICE = "use_fixed_executor_service";
 
     // Array contains all the corresponding keys for the cached values.
     private static final String[] KEYS_TO_ALL_CACHED_VALUES = {
-            KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS,
-            KEY_SAMPLING_INTERVAL_DEFAULT,
-            KEY_SAMPLING_INTERVAL_FOR_BATCH_CALL_STATS,
-            KEY_SAMPLING_INTERVAL_FOR_PUT_DOCUMENT_STATS,
-            KEY_SAMPLING_INTERVAL_FOR_INITIALIZE_STATS,
-            KEY_SAMPLING_INTERVAL_FOR_SEARCH_STATS,
-            KEY_SAMPLING_INTERVAL_FOR_GLOBAL_SEARCH_STATS,
-            KEY_SAMPLING_INTERVAL_FOR_OPTIMIZE_STATS,
-            KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
-            KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
-            KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
-            KEY_BYTES_OPTIMIZE_THRESHOLD,
-            KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS,
-            KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
-            KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
-            KEY_API_CALL_STATS_LIMIT,
-            KEY_DENYLIST,
-            KEY_RATE_LIMIT_ENABLED,
-            KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-            KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-            KEY_RATE_LIMIT_API_COSTS,
-            KEY_ICING_MAX_TOKEN_LENGTH,
-            KEY_ICING_INDEX_MERGE_SIZE,
-            KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT,
-            KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD,
-            KEY_ICING_COMPRESSION_LEVEL,
-            KEY_ICING_USE_READ_ONLY_SEARCH,
-            KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
-            KEY_ICING_USE_PERSISTENT_HASHMAP,
-            KEY_ICING_MAX_PAGE_BYTES_LIMIT,
-            KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
-            KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
-            KEY_ICING_LITE_INDEX_SORT_SIZE,
-            KEY_SHOULD_RETRIEVE_PARENT_INFO,
-            KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX,
-            KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS,
-            KEY_APP_FUNCTION_CALL_TIMEOUT_MILLIS
+        KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS,
+        KEY_SAMPLING_INTERVAL_DEFAULT,
+        KEY_SAMPLING_INTERVAL_FOR_BATCH_CALL_STATS,
+        KEY_SAMPLING_INTERVAL_FOR_PUT_DOCUMENT_STATS,
+        KEY_SAMPLING_INTERVAL_FOR_INITIALIZE_STATS,
+        KEY_SAMPLING_INTERVAL_FOR_SEARCH_STATS,
+        KEY_SAMPLING_INTERVAL_FOR_GLOBAL_SEARCH_STATS,
+        KEY_SAMPLING_INTERVAL_FOR_OPTIMIZE_STATS,
+        KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
+        KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
+        KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
+        KEY_BYTES_OPTIMIZE_THRESHOLD,
+        KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+        KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
+        KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+        KEY_API_CALL_STATS_LIMIT,
+        KEY_DENYLIST,
+        KEY_RATE_LIMIT_ENABLED,
+        KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+        KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+        KEY_RATE_LIMIT_API_COSTS,
+        KEY_ICING_MAX_TOKEN_LENGTH,
+        KEY_ICING_INDEX_MERGE_SIZE,
+        KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT,
+        KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD,
+        KEY_ICING_COMPRESSION_LEVEL,
+        KEY_ICING_USE_READ_ONLY_SEARCH,
+        KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
+        KEY_ICING_USE_PERSISTENT_HASHMAP,
+        KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+        KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD,
+        KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
+        KEY_ICING_LITE_INDEX_SORT_SIZE,
+        KEY_SHOULD_RETRIEVE_PARENT_INFO,
+        KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX,
+        KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS,
+        KEY_APP_FUNCTION_CALL_TIMEOUT_MILLIS,
+        KEY_FULLY_PERSIST_JOB_INTERVAL
     };
 
     // Lock needed for all the operations in this class.
     private final Object mLock = new Object();
 
     /**
-     * Bundle to hold all the cached flag values corresponding to
-     * {@link FrameworkAppSearchConfigImpl#KEYS_TO_ALL_CACHED_VALUES}.
+     * Bundle to hold all the cached flag values corresponding to {@link
+     * FrameworkServiceAppSearchConfig#KEYS_TO_ALL_CACHED_VALUES}.
      */
     @GuardedBy("mLock")
     private final Bundle mBundleLocked = new Bundle();
@@ -171,10 +172,11 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     private Denylist mDenylistLocked = Denylist.EMPTY_INSTANCE;
 
     @GuardedBy("mLock")
-    private AppSearchRateLimitConfig mRateLimitConfigLocked = AppSearchRateLimitConfig.create(
-            DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-            DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-            DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+    private AppSearchRateLimitConfig mRateLimitConfigLocked =
+            AppSearchRateLimitConfig.create(
+                    DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                    DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                    DEFAULT_RATE_LIMIT_API_COSTS_STRING);
 
     @GuardedBy("mLock")
     private boolean mIsClosedLocked = false;
@@ -189,35 +191,34 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
                 updateCachedValues(properties);
             };
 
-    private FrameworkAppSearchConfigImpl() {
-    }
+    private FrameworkServiceAppSearchConfig() {}
 
     /**
-     * Creates an instance of {@link FrameworkAppSearchConfigImpl}.
+     * Creates an instance of {@link FrameworkServiceAppSearchConfig}.
      *
      * @param executor used to fetch and cache the flag values from DeviceConfig during creation or
-     *                 config change.
+     *     config change.
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PRIVATE)
     @NonNull
-    public static FrameworkAppSearchConfigImpl create(@NonNull Executor executor) {
+    public static FrameworkServiceAppSearchConfig create(@NonNull Executor executor) {
         Objects.requireNonNull(executor);
-        FrameworkAppSearchConfigImpl configManager = new FrameworkAppSearchConfigImpl();
+        FrameworkServiceAppSearchConfig configManager = new FrameworkServiceAppSearchConfig();
         configManager.initialize(executor);
         return configManager;
     }
 
     /**
-     * Gets an instance of {@link FrameworkAppSearchConfigImpl} to be used.
+     * Gets an instance of {@link FrameworkServiceAppSearchConfig} to be used.
      *
      * <p>If no instance has been initialized yet, a new one will be created. Otherwise, the
      * existing instance will be returned.
      */
     @NonNull
-    public static FrameworkAppSearchConfigImpl getInstance(@NonNull Executor executor) {
+    public static FrameworkServiceAppSearchConfig getInstance(@NonNull Executor executor) {
         Objects.requireNonNull(executor);
         if (sConfig == null) {
-            synchronized (FrameworkAppSearchConfigImpl.class) {
+            synchronized (FrameworkServiceAppSearchConfig.class) {
                 if (sConfig == null) {
                     sConfig = create(executor);
                 }
@@ -231,28 +232,33 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
      * queried statically and is therefore retrieved directly from DeviceConfig.
      */
     public static boolean getUseFixedExecutorService() {
-        return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_APPSEARCH,
-                KEY_USE_FIXED_EXECUTOR_SERVICE, DEFAULT_USE_FIXED_EXECUTOR_SERVICE);
+        return DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_USE_FIXED_EXECUTOR_SERVICE,
+                DEFAULT_USE_FIXED_EXECUTOR_SERVICE);
     }
 
     /**
-     * Initializes the {@link FrameworkAppSearchConfigImpl}
+     * Initializes the {@link FrameworkServiceAppSearchConfig}
      *
      * <p>It fetches the custom properties from DeviceConfig if available.
      *
      * @param executor listener would be run on to handle P/H flag change.
      */
     private void initialize(@NonNull Executor executor) {
-        executor.execute(() -> {
-            // Attach the callback to get updates on those properties.
-            DeviceConfig.addOnPropertiesChangedListener(DeviceConfig.NAMESPACE_APPSEARCH,
-                    executor,
-                    mOnDeviceConfigChangedListener);
+        executor.execute(
+                () -> {
+                    // Attach the callback to get updates on those properties.
+                    DeviceConfig.addOnPropertiesChangedListener(
+                            DeviceConfig.NAMESPACE_APPSEARCH,
+                            executor,
+                            mOnDeviceConfigChangedListener);
 
-            DeviceConfig.Properties properties = DeviceConfig.getProperties(
-                    DeviceConfig.NAMESPACE_APPSEARCH, KEYS_TO_ALL_CACHED_VALUES);
-            updateCachedValues(properties);
-        });
+                    DeviceConfig.Properties properties =
+                            DeviceConfig.getProperties(
+                                    DeviceConfig.NAMESPACE_APPSEARCH, KEYS_TO_ALL_CACHED_VALUES);
+                    updateCachedValues(properties);
+                });
     }
 
     // TODO(b/173532925) check this will be called. If we have a singleton instance for this
@@ -273,7 +279,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public long getCachedMinTimeIntervalBetweenSamplesMillis() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getLong(KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS,
+            return mBundleLocked.getLong(
+                    KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS,
                     DEFAULT_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS);
         }
     }
@@ -290,8 +297,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedSamplingIntervalForBatchCallStats() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_SAMPLING_INTERVAL_FOR_BATCH_CALL_STATS,
-                    getCachedSamplingIntervalDefault());
+            return mBundleLocked.getInt(
+                    KEY_SAMPLING_INTERVAL_FOR_BATCH_CALL_STATS, getCachedSamplingIntervalDefault());
         }
     }
 
@@ -299,7 +306,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedSamplingIntervalForPutDocumentStats() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_SAMPLING_INTERVAL_FOR_PUT_DOCUMENT_STATS,
+            return mBundleLocked.getInt(
+                    KEY_SAMPLING_INTERVAL_FOR_PUT_DOCUMENT_STATS,
                     getCachedSamplingIntervalDefault());
         }
     }
@@ -308,8 +316,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedSamplingIntervalForInitializeStats() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_SAMPLING_INTERVAL_FOR_INITIALIZE_STATS,
-                    getCachedSamplingIntervalDefault());
+            return mBundleLocked.getInt(
+                    KEY_SAMPLING_INTERVAL_FOR_INITIALIZE_STATS, getCachedSamplingIntervalDefault());
         }
     }
 
@@ -317,8 +325,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedSamplingIntervalForSearchStats() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_SAMPLING_INTERVAL_FOR_SEARCH_STATS,
-                    getCachedSamplingIntervalDefault());
+            return mBundleLocked.getInt(
+                    KEY_SAMPLING_INTERVAL_FOR_SEARCH_STATS, getCachedSamplingIntervalDefault());
         }
     }
 
@@ -326,7 +334,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedSamplingIntervalForGlobalSearchStats() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_SAMPLING_INTERVAL_FOR_GLOBAL_SEARCH_STATS,
+            return mBundleLocked.getInt(
+                    KEY_SAMPLING_INTERVAL_FOR_GLOBAL_SEARCH_STATS,
                     getCachedSamplingIntervalDefault());
         }
     }
@@ -335,8 +344,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedSamplingIntervalForOptimizeStats() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_SAMPLING_INTERVAL_FOR_OPTIMIZE_STATS,
-                    getCachedSamplingIntervalDefault());
+            return mBundleLocked.getInt(
+                    KEY_SAMPLING_INTERVAL_FOR_OPTIMIZE_STATS, getCachedSamplingIntervalDefault());
         }
     }
 
@@ -344,7 +353,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getMaxDocumentSizeBytes() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
+            return mBundleLocked.getInt(
+                    KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
                     DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES);
         }
     }
@@ -353,8 +363,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getMaxDocumentCount() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
-                    DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT);
+            return mBundleLocked.getInt(
+                    KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT, DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT);
         }
     }
 
@@ -362,7 +372,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getMaxSuggestionCount() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
+            return mBundleLocked.getInt(
+                    KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT,
                     DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT);
         }
     }
@@ -371,8 +382,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedBytesOptimizeThreshold() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_BYTES_OPTIMIZE_THRESHOLD,
-                    DEFAULT_BYTES_OPTIMIZE_THRESHOLD);
+            return mBundleLocked.getInt(
+                    KEY_BYTES_OPTIMIZE_THRESHOLD, DEFAULT_BYTES_OPTIMIZE_THRESHOLD);
         }
     }
 
@@ -380,8 +391,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedTimeOptimizeThresholdMs() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS,
-                    DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS);
+            return mBundleLocked.getInt(
+                    KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS, DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS);
         }
     }
 
@@ -389,8 +400,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedDocCountOptimizeThreshold() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_DOC_COUNT_OPTIMIZE_THRESHOLD,
-                    DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD);
+            return mBundleLocked.getInt(
+                    KEY_DOC_COUNT_OPTIMIZE_THRESHOLD, DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD);
         }
     }
 
@@ -398,7 +409,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedMinTimeOptimizeThresholdMs() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
+            return mBundleLocked.getInt(
+                    KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS,
                     DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS);
         }
     }
@@ -407,8 +419,7 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCachedApiCallStatsLimit() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_API_CALL_STATS_LIMIT,
-                    DEFAULT_API_CALL_STATS_LIMIT);
+            return mBundleLocked.getInt(KEY_API_CALL_STATS_LIMIT, DEFAULT_API_CALL_STATS_LIMIT);
         }
     }
 
@@ -424,8 +435,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getMaxTokenLength() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_ICING_MAX_TOKEN_LENGTH,
-                    IcingOptionsConfig.DEFAULT_MAX_TOKEN_LENGTH);
+            return mBundleLocked.getInt(
+                    KEY_ICING_MAX_TOKEN_LENGTH, IcingOptionsConfig.DEFAULT_MAX_TOKEN_LENGTH);
         }
     }
 
@@ -433,8 +444,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getIndexMergeSize() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_ICING_INDEX_MERGE_SIZE,
-                    IcingOptionsConfig.DEFAULT_INDEX_MERGE_SIZE);
+            return mBundleLocked.getInt(
+                    KEY_ICING_INDEX_MERGE_SIZE, IcingOptionsConfig.DEFAULT_INDEX_MERGE_SIZE);
         }
     }
 
@@ -442,7 +453,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public boolean getDocumentStoreNamespaceIdFingerprint() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getBoolean(KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT,
+            return mBundleLocked.getBoolean(
+                    KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT,
                     IcingOptionsConfig.DEFAULT_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT);
         }
     }
@@ -451,7 +463,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public float getOptimizeRebuildIndexThreshold() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getFloat(KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD,
+            return mBundleLocked.getFloat(
+                    KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD,
                     IcingOptionsConfig.DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD);
         }
     }
@@ -460,8 +473,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getCompressionLevel() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_ICING_COMPRESSION_LEVEL,
-                    IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL);
+            return mBundleLocked.getInt(
+                    KEY_ICING_COMPRESSION_LEVEL, IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL);
         }
     }
 
@@ -478,8 +491,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public boolean getUseReadOnlySearch() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getBoolean(KEY_ICING_USE_READ_ONLY_SEARCH,
-                    DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH);
+            return mBundleLocked.getBoolean(
+                    KEY_ICING_USE_READ_ONLY_SEARCH, DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH);
         }
     }
 
@@ -487,7 +500,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public boolean getUsePreMappingWithFileBackedVector() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getBoolean(KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
+            return mBundleLocked.getBoolean(
+                    KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR,
                     IcingOptionsConfig.DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR);
         }
     }
@@ -496,7 +510,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public boolean getUsePersistentHashMap() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getBoolean(KEY_ICING_USE_PERSISTENT_HASHMAP,
+            return mBundleLocked.getBoolean(
+                    KEY_ICING_USE_PERSISTENT_HASHMAP,
                     IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP);
         }
     }
@@ -505,7 +520,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     public int getMaxPageBytesLimit() {
         synchronized (mLock) {
             throwIfClosedLocked();
-            return mBundleLocked.getInt(KEY_ICING_MAX_PAGE_BYTES_LIMIT,
+            return mBundleLocked.getInt(
+                    KEY_ICING_MAX_PAGE_BYTES_LIMIT,
                     IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT);
         }
     }
@@ -531,8 +547,16 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
         synchronized (mLock) {
             throwIfClosedLocked();
             return mBundleLocked.getLong(
-                    KEY_APP_FUNCTION_CALL_TIMEOUT_MILLIS,
-                    DEFAULT_APP_FUNCTION_CALL_TIMEOUT_MILLIS);
+                    KEY_APP_FUNCTION_CALL_TIMEOUT_MILLIS, DEFAULT_APP_FUNCTION_CALL_TIMEOUT_MILLIS);
+        }
+    }
+
+    @Override
+    public long getCachedFullyPersistJobIntervalMillis() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getLong(
+                    KEY_FULLY_PERSIST_JOB_INTERVAL, DEFAULT_FULLY_PERSIST_JOB_INTERVAL);
         }
     }
 
@@ -551,8 +575,7 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
         synchronized (mLock) {
             throwIfClosedLocked();
             return mBundleLocked.getBoolean(
-                KEY_ICING_LITE_INDEX_SORT_AT_INDEXING,
-                DEFAULT_LITE_INDEX_SORT_AT_INDEXING);
+                    KEY_ICING_LITE_INDEX_SORT_AT_INDEXING, DEFAULT_LITE_INDEX_SORT_AT_INDEXING);
         }
     }
 
@@ -561,8 +584,7 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
         synchronized (mLock) {
             throwIfClosedLocked();
             return mBundleLocked.getInt(
-                KEY_ICING_LITE_INDEX_SORT_SIZE,
-                DEFAULT_LITE_INDEX_SORT_SIZE);
+                    KEY_ICING_LITE_INDEX_SORT_SIZE, DEFAULT_LITE_INDEX_SORT_SIZE);
         }
     }
 
@@ -571,8 +593,7 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
         synchronized (mLock) {
             throwIfClosedLocked();
             return mBundleLocked.getBoolean(
-                KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX,
-                DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX);
+                    KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX, DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX);
         }
     }
 
@@ -584,8 +605,8 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
 
     @Override
     public boolean shouldStoreParentInfoAsSyntheticProperty() {
-      // This option is always true in Framework.
-      return true;
+        // This option is always true in Framework.
+        return true;
     }
 
     @Override
@@ -593,8 +614,7 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
         synchronized (mLock) {
             throwIfClosedLocked();
             return mBundleLocked.getBoolean(
-                KEY_SHOULD_RETRIEVE_PARENT_INFO,
-                DEFAULT_SHOULD_RETRIEVE_PARENT_INFO);
+                    KEY_SHOULD_RETRIEVE_PARENT_INFO, DEFAULT_SHOULD_RETRIEVE_PARENT_INFO);
         }
     }
 
@@ -612,9 +632,9 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
         updateDerivedClasses();
     }
 
-    private void updateCachedValue(@NonNull String key,
-            @NonNull DeviceConfig.Properties properties) {
-        if (properties.getString(key, /*defaultValue=*/ null) == null) {
+    private void updateCachedValue(
+            @NonNull String key, @NonNull DeviceConfig.Properties properties) {
+        if (properties.getString(key, /* defaultValue= */ null) == null) {
             // Key is missing or value is just null. That is not expected if the key is
             // defined in the configuration.
             //
@@ -629,9 +649,10 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
         switch (key) {
             case KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS:
                 synchronized (mLock) {
-                    mBundleLocked.putLong(key,
-                            properties.getLong(key,
-                                    DEFAULT_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS));
+                    mBundleLocked.putLong(
+                            key,
+                            properties.getLong(
+                                    key, DEFAULT_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS));
                 }
                 break;
             case KEY_SAMPLING_INTERVAL_DEFAULT:
@@ -655,169 +676,205 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
             case KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT:
                 synchronized (mLock) {
                     mBundleLocked.putInt(
-                            key,
-                            properties.getInt(key, DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT));
+                            key, properties.getInt(key, DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT));
                 }
                 break;
             case KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT:
                 synchronized (mLock) {
                     mBundleLocked.putInt(
-                            key,
-                            properties.getInt(key, DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT));
+                            key, properties.getInt(key, DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT));
                 }
                 break;
             case KEY_BYTES_OPTIMIZE_THRESHOLD:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            DEFAULT_BYTES_OPTIMIZE_THRESHOLD));
+                    mBundleLocked.putInt(
+                            key, properties.getInt(key, DEFAULT_BYTES_OPTIMIZE_THRESHOLD));
                 }
                 break;
             case KEY_TIME_OPTIMIZE_THRESHOLD_MILLIS:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS));
+                    mBundleLocked.putInt(
+                            key, properties.getInt(key, DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS));
                 }
                 break;
             case KEY_DOC_COUNT_OPTIMIZE_THRESHOLD:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD));
+                    mBundleLocked.putInt(
+                            key, properties.getInt(key, DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD));
                 }
                 break;
             case KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS));
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(key, DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS));
                 }
                 break;
             case KEY_API_CALL_STATS_LIMIT:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key,
-                            properties.getInt(key, DEFAULT_API_CALL_STATS_LIMIT));
+                    mBundleLocked.putInt(key, properties.getInt(key, DEFAULT_API_CALL_STATS_LIMIT));
                 }
                 break;
             case KEY_DENYLIST:
                 String denylistString = properties.getString(key, /* defaultValue= */ "");
                 Denylist denylist =
-                        denylistString.isEmpty() ? Denylist.EMPTY_INSTANCE : Denylist.create(
-                                denylistString);
+                        denylistString.isEmpty()
+                                ? Denylist.EMPTY_INSTANCE
+                                : Denylist.create(denylistString);
                 synchronized (mLock) {
                     mDenylistLocked = denylist;
                 }
                 break;
             case KEY_RATE_LIMIT_ENABLED:
                 synchronized (mLock) {
-                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
-                            DEFAULT_RATE_LIMIT_ENABLED));
+                    mBundleLocked.putBoolean(
+                            key, properties.getBoolean(key, DEFAULT_RATE_LIMIT_ENABLED));
                 }
                 break;
             case KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(key, DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY));
                 }
                 break;
             case KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE:
                 synchronized (mLock) {
-                    mBundleLocked.putFloat(key, properties.getFloat(key,
-                            DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE));
+                    mBundleLocked.putFloat(
+                            key,
+                            properties.getFloat(
+                                    key,
+                                    DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE));
                 }
                 break;
             case KEY_RATE_LIMIT_API_COSTS:
                 synchronized (mLock) {
-                    mBundleLocked.putString(key, properties.getString(key,
-                            DEFAULT_RATE_LIMIT_API_COSTS_STRING));
+                    mBundleLocked.putString(
+                            key, properties.getString(key, DEFAULT_RATE_LIMIT_API_COSTS_STRING));
                 }
                 break;
             case KEY_ICING_MAX_TOKEN_LENGTH:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            IcingOptionsConfig.DEFAULT_MAX_TOKEN_LENGTH));
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(key, IcingOptionsConfig.DEFAULT_MAX_TOKEN_LENGTH));
                 }
                 break;
             case KEY_ICING_INDEX_MERGE_SIZE:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            IcingOptionsConfig.DEFAULT_INDEX_MERGE_SIZE));
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(key, IcingOptionsConfig.DEFAULT_INDEX_MERGE_SIZE));
                 }
                 break;
             case KEY_ICING_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT:
                 synchronized (mLock) {
-                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
-                            IcingOptionsConfig.DEFAULT_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT));
+                    mBundleLocked.putBoolean(
+                            key,
+                            properties.getBoolean(
+                                    key,
+                                    IcingOptionsConfig
+                                            .DEFAULT_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT));
                 }
                 break;
             case KEY_ICING_OPTIMIZE_REBUILD_INDEX_THRESHOLD:
                 synchronized (mLock) {
-                    mBundleLocked.putFloat(key, properties.getFloat(key,
-                            IcingOptionsConfig.DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD));
+                    mBundleLocked.putFloat(
+                            key,
+                            properties.getFloat(
+                                    key,
+                                    IcingOptionsConfig.DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD));
                 }
                 break;
             case KEY_ICING_COMPRESSION_LEVEL:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL));
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(key, IcingOptionsConfig.DEFAULT_COMPRESSION_LEVEL));
                 }
                 break;
             case KEY_ICING_USE_READ_ONLY_SEARCH:
                 synchronized (mLock) {
-                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
-                            DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH));
+                    mBundleLocked.putBoolean(
+                            key,
+                            properties.getBoolean(key, DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH));
                 }
                 break;
             case KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR:
                 synchronized (mLock) {
-                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
-                            IcingOptionsConfig.DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR));
+                    mBundleLocked.putBoolean(
+                            key,
+                            properties.getBoolean(
+                                    key,
+                                    IcingOptionsConfig
+                                            .DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR));
                 }
                 break;
             case KEY_ICING_USE_PERSISTENT_HASHMAP:
                 synchronized (mLock) {
-                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
-                            IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP));
+                    mBundleLocked.putBoolean(
+                            key,
+                            properties.getBoolean(
+                                    key, IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP));
                 }
                 break;
             case KEY_ICING_MAX_PAGE_BYTES_LIMIT:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT));
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(
+                                    key, IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT));
                 }
                 break;
             case KEY_ICING_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            IcingOptionsConfig.DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD));
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(
+                                    key,
+                                    IcingOptionsConfig
+                                            .DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD));
                 }
                 break;
             case KEY_ICING_LITE_INDEX_SORT_AT_INDEXING:
                 synchronized (mLock) {
-                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
-                            IcingOptionsConfig.DEFAULT_LITE_INDEX_SORT_AT_INDEXING));
+                    mBundleLocked.putBoolean(
+                            key,
+                            properties.getBoolean(
+                                    key, IcingOptionsConfig.DEFAULT_LITE_INDEX_SORT_AT_INDEXING));
                 }
                 break;
             case KEY_ICING_LITE_INDEX_SORT_SIZE:
                 synchronized (mLock) {
-                    mBundleLocked.putInt(key, properties.getInt(key,
-                            IcingOptionsConfig.DEFAULT_LITE_INDEX_SORT_SIZE));
+                    mBundleLocked.putInt(
+                            key,
+                            properties.getInt(
+                                    key, IcingOptionsConfig.DEFAULT_LITE_INDEX_SORT_SIZE));
                 }
                 break;
             case KEY_SHOULD_RETRIEVE_PARENT_INFO:
                 synchronized (mLock) {
-                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
-                            DEFAULT_SHOULD_RETRIEVE_PARENT_INFO));
+                    mBundleLocked.putBoolean(
+                            key, properties.getBoolean(key, DEFAULT_SHOULD_RETRIEVE_PARENT_INFO));
                 }
                 break;
             case KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX:
                 synchronized (mLock) {
-                    mBundleLocked.putBoolean(key, properties.getBoolean(key,
-                            DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX));
+                    mBundleLocked.putBoolean(
+                            key,
+                            properties.getBoolean(key, DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX));
                 }
                 break;
             case KEY_APP_FUNCTION_CALL_TIMEOUT_MILLIS:
                 synchronized (mLock) {
                     mBundleLocked.putLong(
-                            key,
-                            properties.getLong(key, DEFAULT_APP_FUNCTION_CALL_TIMEOUT_MILLIS));
+                            key, properties.getLong(key, DEFAULT_APP_FUNCTION_CALL_TIMEOUT_MILLIS));
+                }
+                break;
+            case KEY_FULLY_PERSIST_JOB_INTERVAL:
+                synchronized (mLock) {
+                    mBundleLocked.putLong(
+                            key, properties.getLong(key, DEFAULT_FULLY_PERSIST_JOB_INTERVAL));
                 }
                 break;
             case KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS:
@@ -831,16 +888,22 @@ public final class FrameworkAppSearchConfigImpl implements FrameworkAppSearchCon
     private void updateDerivedClasses() {
         if (getCachedRateLimitEnabled()) {
             synchronized (mLock) {
-                int taskQueueTotalCapacity = mBundleLocked.getInt(
-                        KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
-                        DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
-                float taskQueuePerPackagePercentage = mBundleLocked.getFloat(
-                        KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
-                        DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE);
-                String apiCostsString = mBundleLocked.getString(KEY_RATE_LIMIT_API_COSTS,
-                        DEFAULT_RATE_LIMIT_API_COSTS_STRING);
-                mRateLimitConfigLocked = mRateLimitConfigLocked.rebuildIfNecessary(
-                        taskQueueTotalCapacity, taskQueuePerPackagePercentage, apiCostsString);
+                int taskQueueTotalCapacity =
+                        mBundleLocked.getInt(
+                                KEY_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY,
+                                DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY);
+                float taskQueuePerPackagePercentage =
+                        mBundleLocked.getFloat(
+                                KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE,
+                                DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE);
+                String apiCostsString =
+                        mBundleLocked.getString(
+                                KEY_RATE_LIMIT_API_COSTS, DEFAULT_RATE_LIMIT_API_COSTS_STRING);
+                mRateLimitConfigLocked =
+                        mRateLimitConfigLocked.rebuildIfNecessary(
+                                taskQueueTotalCapacity,
+                                taskQueuePerPackagePercentage,
+                                apiCostsString);
             }
         }
     }

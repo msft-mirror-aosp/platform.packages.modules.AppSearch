@@ -20,10 +20,10 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.exceptions.AppSearchException;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.util.LogUtil;
 import android.util.Log;
 
+import com.android.appsearch.flags.Flags;
 import com.android.internal.util.Preconditions;
 
 import java.io.IOException;
@@ -109,7 +109,8 @@ public final class AppSearchResult<ValueType> {
     public static final int RESULT_DENIED = 9;
 
     /**
-     * The caller has hit AppSearch's rate limit and the requested operation has been rejected.
+     * The caller has hit AppSearch's rate limit and the requested operation has been rejected. The
+     * caller is recommended to reschedule tasks with exponential backoff.
      */
     @FlaggedApi(Flags.FLAG_ENABLE_RESULT_DENIED_AND_RESULT_RATE_LIMITED)
     public static final int RESULT_RATE_LIMITED = 10;
@@ -118,7 +119,7 @@ public final class AppSearchResult<ValueType> {
     @FlaggedApi(Flags.FLAG_ENABLE_APP_FUNCTIONS)
     public static final int RESULT_TIMED_OUT = 11;
 
-    private final @ResultCode int mResultCode;
+    @ResultCode private final int mResultCode;
     @Nullable private final ValueType mResultValue;
     @Nullable private final String mErrorMessage;
 
@@ -208,7 +209,7 @@ public final class AppSearchResult<ValueType> {
     @NonNull
     public static <ValueType> AppSearchResult<ValueType> newSuccessfulResult(
             @Nullable ValueType value) {
-        return new AppSearchResult<>(RESULT_OK, value, /*errorMessage=*/ null);
+        return new AppSearchResult<>(RESULT_OK, value, /* errorMessage= */ null);
     }
 
     /**
@@ -220,7 +221,7 @@ public final class AppSearchResult<ValueType> {
     @NonNull
     public static <ValueType> AppSearchResult<ValueType> newFailedResult(
             @ResultCode int resultCode, @Nullable String errorMessage) {
-        return new AppSearchResult<>(resultCode, /*resultValue=*/ null, errorMessage);
+        return new AppSearchResult<>(resultCode, /* resultValue= */ null, errorMessage);
     }
 
     /**

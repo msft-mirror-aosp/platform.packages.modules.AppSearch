@@ -25,11 +25,12 @@ import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppFunctionService;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
-import android.app.appsearch.flags.Flags;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.Process;
+
+import com.android.appsearch.flags.Flags;
 
 import java.util.function.Consumer;
 
@@ -72,22 +73,34 @@ public abstract class AppFunctionService extends Service {
                         @NonNull IAppSearchResultCallback callback) {
                     // TODO(b/327134039): Replace this check with the new permission
                     if (Binder.getCallingUid() != Process.SYSTEM_UID) {
-                         throw new SecurityException("Can only be called by the system server");
+                        throw new SecurityException("Can only be called by the system server");
                     }
                     SafeOneTimeAppSearchResultCallback safeCallback =
                             new SafeOneTimeAppSearchResultCallback(callback);
                     try {
                         AppFunctionService.this.onExecuteFunction(
                                 request,
-                                appFunctionResult ->
-                                        safeCallback.onResult(
-                                                new AppSearchResultParcel<>(appFunctionResult)));
+                                appFunctionResult -> {
+                                    AppSearchResultParcel appSearchResultParcel;
+                                    // Create result from value in success case and errorMessage in
+                                    // failure case.
+                                    if (appFunctionResult.isSuccess()) {
+                                        appSearchResultParcel =
+                                                AppSearchResultParcel
+                                                        .fromExecuteAppFunctionResponse(
+                                                                appFunctionResult.getResultValue());
+                                    } else {
+                                        appSearchResultParcel =
+                                                AppSearchResultParcel.fromFailedResult(
+                                                        appFunctionResult);
+                                    }
+                                    safeCallback.onResult(appSearchResultParcel);
+                                });
                     } catch (Exception ex) {
                         // Apps should handle exceptions. But if they don't, report the error on
                         // behalf of them.
-                        safeCallback.onResult(
-                                new AppSearchResultParcel<>(
-                                        AppSearchResult.throwableToFailedResult(ex)));
+                        AppSearchResult failedResult = AppSearchResult.throwableToFailedResult(ex);
+                        safeCallback.onResult(AppSearchResultParcel.fromFailedResult(failedResult));
                     }
                 }
             };
@@ -105,10 +118,10 @@ public abstract class AppFunctionService extends Service {
      * particular function you have registered and made available.
      *
      * <p>To ensure proper routing of function requests, assign a unique identifier to each
-     * function. This identifier doesn't need to be globally unique, but it must be unique
-     * within your app. For example, a function to order food could be identified as
-     * "orderFood". You can determine the specific function to invoke by calling
-     * {@link ExecuteAppFunctionRequest#getFunctionIdentifier()}.
+     * function. This identifier doesn't need to be globally unique, but it must be unique within
+     * your app. For example, a function to order food could be identified as "orderFood". You can
+     * determine the specific function to invoke by calling {@link
+     * ExecuteAppFunctionRequest#getFunctionIdentifier()}.
      *
      * <p>This method is always triggered in the main thread. You should run heavy tasks on a worker
      * thread and dispatch the result with the given callback. You should always report back the

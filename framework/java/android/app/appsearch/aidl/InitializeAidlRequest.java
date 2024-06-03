@@ -29,6 +29,7 @@ import java.util.Objects;
 /**
  * Encapsulates a request to make a binder call to create and initialize AppSearchImpl for the
  * calling application.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "InitializeAidlRequestCreator")
@@ -40,11 +41,14 @@ public class InitializeAidlRequest extends AbstractSafeParcelable {
     @NonNull
     @SafeParcelable.Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @NonNull
     @Field(id = 2, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 3, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
 
     /**
      * Creates and initializes AppSearchImpl for the calling app.

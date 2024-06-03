@@ -559,7 +559,7 @@ public final class AppSearchImpl implements Closeable {
                         databaseName,
                         // A CallerAccess object for internal use that has local access to this
                         // database.
-                        new CallerAccess(/*callingPackageName=*/ packageName));
+                        new CallerAccess(/* callingPackageName= */ packageName));
         long getOldSchemaEndTimeMillis = SystemClock.elapsedRealtime();
         if (setSchemaStatsBuilder != null) {
             setSchemaStatsBuilder
@@ -697,10 +697,10 @@ public final class AppSearchImpl implements Closeable {
 
                 if (sendNotification) {
                     mObserverManager.onSchemaChange(
-                            /*listeningPackageName=*/ listeningPackageName,
-                            /*targetPackageName=*/ packageName,
-                            /*databaseName=*/ databaseName,
-                            /*schemaName=*/ schemaName);
+                            /* listeningPackageName= */ listeningPackageName,
+                            /* targetPackageName= */ packageName,
+                            /* databaseName= */ databaseName,
+                            /* schemaName= */ schemaName);
                 }
             }
         }
@@ -1301,6 +1301,8 @@ public final class AppSearchImpl implements Closeable {
      */
     @NonNull
     @GuardedBy("mReadWriteLock")
+    // We only log getResultProto.toString() in fullPii trace for debugging.
+    @SuppressWarnings("LiteProtoToString")
     private DocumentProto getDocumentProtoByIdLocked(
             @NonNull String packageName,
             @NonNull String databaseName,
@@ -1473,16 +1475,12 @@ public final class AppSearchImpl implements Closeable {
             // SearchSpec that wants to query every visible package.
             Set<String> packageFilters = new ArraySet<>();
             if (!searchSpec.getFilterPackageNames().isEmpty()) {
-                if (searchSpec.getJoinSpec() == null) {
+                JoinSpec joinSpec = searchSpec.getJoinSpec();
+                if (joinSpec == null) {
                     packageFilters.addAll(searchSpec.getFilterPackageNames());
-                } else if (!searchSpec
-                        .getJoinSpec()
-                        .getNestedSearchSpec()
-                        .getFilterPackageNames()
-                        .isEmpty()) {
+                } else if (!joinSpec.getNestedSearchSpec().getFilterPackageNames().isEmpty()) {
                     packageFilters.addAll(searchSpec.getFilterPackageNames());
-                    packageFilters.addAll(
-                            searchSpec.getJoinSpec().getNestedSearchSpec().getFilterPackageNames());
+                    packageFilters.addAll(joinSpec.getNestedSearchSpec().getFilterPackageNames());
                 }
             }
 
@@ -1572,6 +1570,8 @@ public final class AppSearchImpl implements Closeable {
     }
 
     @GuardedBy("mReadWriteLock")
+    // We only log searchSpec, scoringSpec and resultSpec in fullPii trace for debugging.
+    @SuppressWarnings("LiteProtoToString")
     private SearchResultProto searchInIcingLocked(
             @NonNull SearchSpecProto searchSpec,
             @NonNull ResultSpecProto resultSpec,
@@ -1923,7 +1923,7 @@ public final class AppSearchImpl implements Closeable {
             checkSuccess(deleteResultProto.getStatus());
 
             // Update derived maps
-            updateDocumentCountAfterRemovalLocked(packageName, /*numDocumentsDeleted=*/ 1);
+            updateDocumentCountAfterRemovalLocked(packageName, /* numDocumentsDeleted= */ 1);
 
             // Prepare notifications
             if (schemaType != null) {
@@ -2399,7 +2399,7 @@ public final class AppSearchImpl implements Closeable {
                     finalSchema);
             SetSchemaResultProto setSchemaResultProto =
                     mIcingSearchEngineLocked.setSchema(
-                            finalSchema, /*ignoreErrorsAndDeleteDocuments=*/ true);
+                            finalSchema, /* ignoreErrorsAndDeleteDocuments= */ true);
             LogUtil.piiTrace(
                     TAG,
                     "clearPackageData.setSchema, response",
@@ -2846,16 +2846,20 @@ public final class AppSearchImpl implements Closeable {
             if (Log.isLoggable(icingTag, Log.VERBOSE)) {
                 boolean unused =
                         IcingSearchEngine.setLoggingLevel(
-                                LogSeverity.Code.VERBOSE, /*verbosity=*/ (short) 1);
+                                LogSeverity.Code.VERBOSE, /* verbosity= */ (short) 1);
                 return;
             } else if (Log.isLoggable(icingTag, Log.DEBUG)) {
-                IcingSearchEngine.setLoggingLevel(LogSeverity.Code.DBG);
+                boolean unused = IcingSearchEngine.setLoggingLevel(LogSeverity.Code.DBG);
                 return;
             }
         }
-        if (Log.isLoggable(icingTag, Log.INFO)) {
-            boolean unused = IcingSearchEngine.setLoggingLevel(LogSeverity.Code.INFO);
-        } else if (Log.isLoggable(icingTag, Log.WARN)) {
+        if (LogUtil.INFO) {
+            if (Log.isLoggable(icingTag, Log.INFO)) {
+                boolean unused = IcingSearchEngine.setLoggingLevel(LogSeverity.Code.INFO);
+                return;
+            }
+        }
+        if (Log.isLoggable(icingTag, Log.WARN)) {
             boolean unused = IcingSearchEngine.setLoggingLevel(LogSeverity.Code.WARNING);
         } else if (Log.isLoggable(icingTag, Log.ERROR)) {
             boolean unused = IcingSearchEngine.setLoggingLevel(LogSeverity.Code.ERROR);
@@ -2901,8 +2905,8 @@ public final class AppSearchImpl implements Closeable {
      *     code.
      * @return {@link AppSearchResult} error code
      */
-    private static @AppSearchResult.ResultCode int statusProtoToResultCode(
-            @NonNull StatusProto statusProto) {
+    @AppSearchResult.ResultCode
+    private static int statusProtoToResultCode(@NonNull StatusProto statusProto) {
         return ResultCodeToProtoConverter.toResultCode(statusProto.getCode());
     }
 }

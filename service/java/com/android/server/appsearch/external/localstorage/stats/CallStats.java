@@ -44,6 +44,7 @@ import java.util.Set;
  * @hide
  */
 public class CallStats {
+    /** Call types. */
     @IntDef(
             value = {
                 CALL_TYPE_UNKNOWN,
@@ -77,7 +78,7 @@ public class CallStats {
                 CALL_TYPE_REGISTER_OBSERVER_CALLBACK,
                 CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK,
                 CALL_TYPE_GLOBAL_GET_NEXT_PAGE,
-                CALL_TYPE_EXECUTE_APP_FUNCTION,
+                CALL_TYPE_EXECUTE_APP_FUNCTION
             })
     @Retention(RetentionPolicy.SOURCE)
     public @interface CallType {}
@@ -149,6 +150,7 @@ public class CallStats {
 
     @Nullable private final String mPackageName;
     @Nullable private final String mDatabase;
+
     /**
      * The status code returned by {@link AppSearchResult#getResultCode()} for the call or internal
      * state.

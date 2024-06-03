@@ -25,13 +25,11 @@ import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.UserHandle;
 
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Encapsulates a request to make a binder call to retrieve documents from the index.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "GetDocumentsAidlRequestCreator")
@@ -44,26 +42,33 @@ public class GetDocumentsAidlRequest extends AbstractSafeParcelable {
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     // The name of the package that owns this document.
     @NonNull
     @Field(id = 2, getter = "getTargetPackageName")
     private final String mTargetPackageName;
+
     // The name of the package that owns this document.
     @NonNull
     @Field(id = 3, getter = "getDatabaseName")
     private final String mDatabaseName;
+
     // The request to retrieve by namespace and IDs from the {@link
     // AppSearchSession} database for this document.
     @NonNull
     @Field(id = 4, getter = "getGetByDocumentIdRequest")
     private final GetByDocumentIdRequest mGetByDocumentIdRequest;
+
     // The Handle of the calling user.
     @NonNull
     @Field(id = 5, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     // The start timestamp of binder call in Millis.
     @Field(id = 6, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
+
     // Whether to query the user's enterprise profile AppSearch instance
     @Field(id = 7, getter = "isForEnterprise")
     private final boolean mIsForEnterprise;
@@ -74,7 +79,7 @@ public class GetDocumentsAidlRequest extends AbstractSafeParcelable {
      * @param callerAttributionSource The permission identity of the package that is getting this
      *     document.
      * @param targetPackageName The name of the package that owns this document.
-     * @param databaseName  The databaseName this document resides in.
+     * @param databaseName The databaseName this document resides in.
      * @param getByDocumentIdRequest The {@link GetByDocumentIdRequest} to retrieve document.
      * @param userHandle Handle of the calling user.
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis.
@@ -105,7 +110,7 @@ public class GetDocumentsAidlRequest extends AbstractSafeParcelable {
 
     @NonNull
     public String getTargetPackageName() {
-        return mTargetPackageName ;
+        return mTargetPackageName;
     }
 
     @NonNull

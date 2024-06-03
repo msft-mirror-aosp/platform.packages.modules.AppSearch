@@ -18,15 +18,15 @@ package android.app.appsearch.functions;
 
 import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.app.appsearch.GenericDocument;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.os.Parcelable;
+
+import com.android.appsearch.flags.Flags;
 
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -59,8 +59,7 @@ public final class ExecuteAppFunctionResponse extends AbstractSafeParcelable {
     @NonNull
     private final Bundle mExtras;
 
-    @NonNull
-    private final GenericDocument mResultCached;
+    @NonNull private final GenericDocument mResultCached;
 
     @Constructor
     ExecuteAppFunctionResponse(
@@ -100,16 +99,14 @@ public final class ExecuteAppFunctionResponse extends AbstractSafeParcelable {
     /** The builder for creating {@link ExecuteAppFunctionResponse} instances. */
     @FlaggedApi(Flags.FLAG_ENABLE_APP_FUNCTIONS)
     public static final class Builder {
-        @NonNull
-        private GenericDocument mResult = GenericDocument.EMPTY;
-        @NonNull
-        private Bundle mExtras = Bundle.EMPTY;
+        @NonNull private GenericDocument mResult = GenericDocument.EMPTY;
+        @NonNull private Bundle mExtras = Bundle.EMPTY;
 
         /**
-         * Sets the result of the app function execution. The result is stored within a
-         * {@link GenericDocument} under the property name {@link #PROPERTY_RESULT}.
-         * An empty {@link GenericDocument} indicates that the function does not produce a return
-         * value. Defaults to an empty {@link GenericDocument} if not set.
+         * Sets the result of the app function execution. The result is stored within a {@link
+         * GenericDocument} under the property name {@link #PROPERTY_RESULT}. An empty {@link
+         * GenericDocument} indicates that the function does not produce a return value. Defaults to
+         * an empty {@link GenericDocument} if not set.
          */
         @NonNull
         public Builder setResult(@NonNull GenericDocument result) {

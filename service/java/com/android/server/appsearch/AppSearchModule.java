@@ -19,6 +19,8 @@ package com.android.server.appsearch;
 import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.util.ExceptionUtil;
+import android.app.appsearch.util.LogUtil;
 import android.content.Context;
 import android.os.UserHandle;
 import android.util.Log;
@@ -26,20 +28,19 @@ import android.util.Log;
 import com.android.server.SystemService;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerMaintenanceService;
-import com.android.server.appsearch.contactsindexer.FrameworkContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerManagerService;
-import com.android.server.appsearch.util.ExceptionUtil;
+import com.android.server.appsearch.contactsindexer.FrameworkContactsIndexerConfig;
 
 import java.io.PrintWriter;
-import java.util.Objects;
 
+/** This class encapsulate the lifecycle methods of AppSearch module. */
 public class AppSearchModule {
     private static final String TAG = "AppSearchModule";
 
+    /** Lifecycle definition for AppSearch module. */
     public static final class Lifecycle extends SystemService {
         private AppSearchManagerService mAppSearchManagerService;
-        @Nullable
-        private ContactsIndexerManagerService mContactsIndexerManagerService;
+        @Nullable private ContactsIndexerManagerService mContactsIndexerManagerService;
 
         public Lifecycle(Context context) {
             super(context);
@@ -47,8 +48,8 @@ public class AppSearchModule {
 
         @Override
         public void onStart() {
-            mAppSearchManagerService = new AppSearchManagerService(
-                    getContext(), /* lifecycle= */ this);
+            mAppSearchManagerService =
+                    new AppSearchManagerService(getContext(), /* lifecycle= */ this);
 
             try {
                 mAppSearchManagerService.onStart();
@@ -64,8 +65,8 @@ public class AppSearchModule {
             // uses, starts before AppSearch.
             ContactsIndexerConfig contactsIndexerConfig = new FrameworkContactsIndexerConfig();
             if (contactsIndexerConfig.isContactsIndexerEnabled()) {
-                mContactsIndexerManagerService = new ContactsIndexerManagerService(getContext(),
-                        contactsIndexerConfig);
+                mContactsIndexerManagerService =
+                        new ContactsIndexerManagerService(getContext(), contactsIndexerConfig);
                 try {
                     mContactsIndexerManagerService.onStart();
                 } catch (Throwable t) {
@@ -74,7 +75,7 @@ public class AppSearchModule {
                     // system_server restart on a device reboot.
                     mContactsIndexerManagerService = null;
                 }
-            } else {
+            } else if (LogUtil.INFO) {
                 Log.i(TAG, "ContactsIndexer service is disabled.");
             }
         }
@@ -99,8 +100,8 @@ public class AppSearchModule {
         public void onUserUnlocking(@NonNull TargetUser user) {
             mAppSearchManagerService.onUserUnlocking(user);
             if (mContactsIndexerManagerService == null) {
-                ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(getContext(),
-                        user.getUserHandle());
+                ContactsIndexerMaintenanceService.cancelFullUpdateJobIfScheduled(
+                        getContext(), user.getUserHandle());
             } else {
                 mContactsIndexerManagerService.onUserUnlocking(user);
             }

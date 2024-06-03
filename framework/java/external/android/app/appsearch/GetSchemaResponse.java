@@ -22,13 +22,14 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.ArrayMap;
 import android.util.ArraySet;
+
+import com.android.appsearch.flags.Flags;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -87,8 +88,9 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
      * access the schema. All keys in the map are prefixed with the package-database prefix. We do
      * lazy fetch, the object will be created when you first time fetch it. The Map is constructed
      * in ANY-ALL cases. The querier could read the {@link GenericDocument} objects under the {@code
-     * schemaType} if they holds ALL required permissions of ANY combinations. The value set
-     * represents {@link android.app.appsearch.SetSchemaRequest.AppSearchSupportedPermission}.
+     * schemaType} if they hold ALL required permissions of ANY combinations.
+     *
+     * @see SetSchemaRequest.Builder#addRequiredPermissionsForSchemaTypeVisibility(String, Set)
      */
     @Nullable private Map<String, Set<Set<Integer>>> mSchemasVisibleToPermissionsCached;
 
@@ -300,6 +302,7 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
     public static final class Builder {
         private int mVersion = 0;
         private ArrayList<AppSearchSchema> mSchemas = new ArrayList<>();
+
         /**
          * Creates the object when we actually set them. If we never set visibility settings, we
          * should throw {@link UnsupportedOperationException} in the visibility getters.
@@ -424,6 +427,8 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
         // Getter getRequiredPermissionsForSchemaTypeVisibility returns a map for all schemaTypes.
         @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
+        // @SetSchemaRequest is an IntDef annotation applied to Set<Set<Integer>>.
+        @SuppressWarnings("SupportAnnotationUsage")
         @NonNull
         public Builder setRequiredPermissionsForSchemaTypeVisibility(
                 @NonNull String schemaType,
@@ -449,6 +454,7 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
          * @see SetSchemaRequest.Builder#setPubliclyVisibleSchema
          */
         // Merged list available from getPubliclyVisibleSchemas
+        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @FlaggedApi(Flags.FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA)
         @NonNull
@@ -491,6 +497,7 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
          *     call must to match to access the schema.
          */
         // Merged map available from getSchemasVisibleToConfigs
+        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @FlaggedApi(Flags.FLAG_ENABLE_SET_SCHEMA_VISIBLE_TO_CONFIGS)
         @NonNull
@@ -549,6 +556,10 @@ public final class GetSchemaResponse extends AbstractSafeParcelable {
         @NonNull
         private InternalVisibilityConfig.Builder getOrCreateVisibilityConfigBuilder(
                 @NonNull String schemaType) {
+            if (mVisibilityConfigBuilders == null) {
+                throw new IllegalStateException(
+                        "GetSchemaResponse is not configured with" + "visibility setting support");
+            }
             InternalVisibilityConfig.Builder builder = mVisibilityConfigBuilders.get(schemaType);
             if (builder == null) {
                 builder = new InternalVisibilityConfig.Builder(schemaType);

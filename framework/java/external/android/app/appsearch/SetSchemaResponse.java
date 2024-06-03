@@ -20,13 +20,13 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.util.ArraySet;
 
+import com.android.appsearch.flags.Flags;
 import com.android.internal.util.Preconditions;
 
 import java.util.ArrayList;
@@ -335,6 +335,7 @@ public final class SetSchemaResponse extends AbstractSafeParcelable {
         private final String mSchemaType;
 
         @Field(id = 4)
+        @Nullable
         final String mErrorMessage;
 
         @Field(id = 5)
@@ -345,7 +346,7 @@ public final class SetSchemaResponse extends AbstractSafeParcelable {
                 @Param(id = 1) @NonNull String namespace,
                 @Param(id = 2) @NonNull String documentId,
                 @Param(id = 3) @NonNull String schemaType,
-                @Param(id = 4) @NonNull String errorMessage,
+                @Param(id = 4) @Nullable String errorMessage,
                 @Param(id = 5) int resultCode) {
             mNamespace = namespace;
             mDocumentId = documentId;

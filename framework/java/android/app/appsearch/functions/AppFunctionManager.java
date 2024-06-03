@@ -29,10 +29,12 @@ import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.ExecuteAppFunctionAidlRequest;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
-import android.app.appsearch.flags.Flags;
 import android.content.Context;
+import android.os.Process;
 import android.os.RemoteException;
 import android.os.SystemClock;
+
+import com.android.appsearch.flags.Flags;
 
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -60,14 +62,13 @@ public final class AppFunctionManager {
             "android.permission.EXECUTE_APP_FUNCTION";
 
     /**
-     * Must be required by a {@link android.app.appsearch.functions.AppFunctionService},
-     * to ensure that only the system can bind to it.
+     * Must be required by a {@link android.app.appsearch.functions.AppFunctionService}, to ensure
+     * that only the system can bind to it.
      *
      * <p>Protection level: signature.
      */
     public static final String PERMISSION_BIND_APP_FUNCTION_SERVICE =
             "android.permission.BIND_APP_FUNCTION_SERVICE";
-
 
     private final IAppSearchManager mService;
     private final Context mContext;
@@ -93,11 +94,13 @@ public final class AppFunctionManager {
         Objects.requireNonNull(request);
         Objects.requireNonNull(callback);
 
-        ExecuteAppFunctionAidlRequest aidlRequest = new ExecuteAppFunctionAidlRequest(
-                request,
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                mContext.getUser(),
-                SystemClock.elapsedRealtime());
+        ExecuteAppFunctionAidlRequest aidlRequest =
+                new ExecuteAppFunctionAidlRequest(
+                        request,
+                        AppSearchAttributionSource.createAttributionSource(
+                                mContext, /* callingPid= */ Process.myPid()),
+                        mContext.getUser(),
+                        SystemClock.elapsedRealtime());
         try {
             mService.executeAppFunction(
                     aidlRequest,

@@ -19,14 +19,13 @@ package android.app.appsearch;
 import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import com.android.appsearch.flags.Flags;
 import com.android.internal.util.Preconditions;
 
 import java.lang.annotation.Retention;
@@ -172,14 +171,19 @@ public final class JoinSpec extends AbstractSafeParcelable {
      * perform a join, but keep the parent ranking signal.
      */
     public static final int AGGREGATION_SCORING_OUTER_RESULT_RANKING_SIGNAL = 0;
+
     /** Score the aggregation of joined documents by counting the number of results. */
     public static final int AGGREGATION_SCORING_RESULT_COUNT = 1;
+
     /** Score the aggregation of joined documents using the smallest ranking signal. */
     public static final int AGGREGATION_SCORING_MIN_RANKING_SIGNAL = 2;
+
     /** Score the aggregation of joined documents using the average ranking signal. */
     public static final int AGGREGATION_SCORING_AVG_RANKING_SIGNAL = 3;
+
     /** Score the aggregation of joined documents using the largest ranking signal. */
     public static final int AGGREGATION_SCORING_MAX_RANKING_SIGNAL = 4;
+
     /** Score the aggregation of joined documents using the sum of ranking signal. */
     public static final int AGGREGATION_SCORING_SUM_RANKING_SIGNAL = 5;
 
@@ -187,12 +191,12 @@ public final class JoinSpec extends AbstractSafeParcelable {
     JoinSpec(
             @Param(id = 1) @NonNull String nestedQuery,
             @Param(id = 2) @NonNull SearchSpec nestedSearchSpec,
-            @Param(id = 3) @Nullable String childPropertyExpression,
+            @Param(id = 3) @NonNull String childPropertyExpression,
             @Param(id = 4) int maxJoinedResultCount,
             @Param(id = 5) @AggregationScoringStrategy int aggregationScoringStrategy) {
         mNestedQuery = Objects.requireNonNull(nestedQuery);
         mNestedSearchSpec = Objects.requireNonNull(nestedSearchSpec);
-        mChildPropertyExpression = childPropertyExpression;
+        mChildPropertyExpression = Objects.requireNonNull(childPropertyExpression);
         mMaxJoinedResultCount = maxJoinedResultCount;
         mAggregationScoringStrategy = aggregationScoringStrategy;
     }
