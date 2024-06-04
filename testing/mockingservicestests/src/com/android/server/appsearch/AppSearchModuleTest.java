@@ -50,7 +50,7 @@ public class AppSearchModuleTest {
     private static final String KEY_CONTACTS_INDEXER_ENABLED = "contacts_indexer_enabled";
     private static final String KEY_APPS_INDEXER_ENABLED = "apps_indexer_enabled";
     private static final boolean DEFAULT_CONTACTS_INDEXER_ENABLED = true;
-    private static final boolean DEFAULT_APPS_INDEXER_ENABLED = false;
+    private static final boolean DEFAULT_APPS_INDEXER_ENABLED = true;
 
     private final ContactsIndexerManagerService mContactsIndexerService =
             mock(ContactsIndexerManagerService.class);
