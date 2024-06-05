@@ -2291,48 +2291,24 @@ public class AppSearchManagerService extends SystemService {
                 return;
             }
             boolean verbose = false;
-            boolean appSearch = false;
-            boolean contactsIndexer = false;
-            boolean unknownArg = false;
-            if (args != null && args.length > 0) {
+            if (args != null) {
                 for (int i = 0; i < args.length; i++) {
                     String arg = args[i];
-                    if ("-v".equalsIgnoreCase(arg)) {
+                    if ("-h".equals(arg)) {
+                        pw.println(
+                                "Dumps the internal state of AppSearch platform storage and "
+                                        + "AppSearch Contacts Indexer for the current user.");
+                        pw.println("-v, verbose mode");
+                        return;
+                    } else if ("-v".equals(arg) || "-a".equals(arg)) {
+                        // "-a" is included when adb dumps all services e.g. in adb bugreport so we
+                        // want to run in verbose mode when this happens
                         verbose = true;
-                    } else if ("-a".equalsIgnoreCase(arg)) {
-                        appSearch = true;
-                    } else if ("-c".equalsIgnoreCase(arg)) {
-                        contactsIndexer = true;
-                    } else {
-                        unknownArg = true;
-                        break;
                     }
                 }
-            } else {
-                // When there is no argument provided, dump appsearch and ContactsIndexer
-                // by default.
-                appSearch = true;
-                contactsIndexer = true;
             }
-            verbose = verbose && AdbDumpUtil.DEBUG;
-            if (unknownArg) {
-                pw.printf("Invalid args: %s\n", Arrays.toString(args));
-                pw.println(
-                        "-a, dump the internal state of AppSearch platform storage for the "
-                                + "current user.");
-                pw.println(
-                        "-c, dump the internal state of AppSearch Contacts Indexer for the "
-                                + "current user.");
-                if (AdbDumpUtil.DEBUG) {
-                    pw.println("-v, verbose mode");
-                }
-            }
-            if (appSearch) {
-                dumpAppSearch(pw, verbose);
-            }
-            if (contactsIndexer) {
-                dumpContactsIndexer(pw, verbose);
-            }
+            dumpAppSearch(pw, verbose);
+            dumpContactsIndexer(pw, verbose);
         }
     }
 

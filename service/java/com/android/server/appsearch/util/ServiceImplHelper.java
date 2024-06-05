@@ -30,6 +30,7 @@ import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -307,6 +308,7 @@ public class ServiceImplHelper {
      * @return true if the call is accepted by the executor and false otherwise.
      */
     @BinderThread
+    @CanIgnoreReturnValue
     public boolean executeLambdaForUserAsync(
             @NonNull UserHandle targetUser,
             @NonNull IAppSearchResultCallback errorCallback,

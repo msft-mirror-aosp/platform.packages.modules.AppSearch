@@ -37,12 +37,6 @@ import java.util.Objects;
  * A utility class for helper methods to process {@link DebugInfoProto}.
  */
 public class AdbDumpUtil {
-    /**
-     * If set to true, the adb dump of AppSearch will provide users with an option to enable verbose
-     * mode.
-     */
-    public static final boolean DEBUG = false;
-
     private static final String TAG = "AppSearchAdbDumpUtil";
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
 
