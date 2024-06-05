@@ -20,6 +20,7 @@ import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.content.Context;
 import android.util.ArrayMap;
 

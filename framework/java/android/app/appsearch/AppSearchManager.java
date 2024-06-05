@@ -16,13 +16,17 @@
 package android.app.appsearch;
 
 import android.annotation.CallbackExecutor;
+import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.SystemService;
 import android.annotation.UserHandleAware;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.IAppSearchManager;
+import android.app.appsearch.functions.AppFunctionManager;
 import android.content.Context;
+import android.os.Process;
 
+import com.android.appsearch.flags.Flags;
 import com.android.internal.util.Preconditions;
 
 import java.util.Objects;
@@ -37,11 +41,11 @@ import java.util.function.Consumer;
  * <ul>
  *   <li>APIs to index and retrieve data via full-text search.
  *   <li>An API for applications to explicitly grant read-access permission of their data to other
- *   applications.
- *   <b>See: {@link SetSchemaRequest.Builder#setSchemaTypeVisibilityForPackage}</b>
+ *       applications. <b>See: {@link
+ *       SetSchemaRequest.Builder#setSchemaTypeVisibilityForPackage}</b>
  *   <li>An API for applications to opt into or out of having their data displayed on System UI
- *   surfaces by the System-designated global querier.
- *   <b>See: {@link SetSchemaRequest.Builder#setSchemaTypeDisplayedBySystem}</b>
+ *       surfaces by the System-designated global querier. <b>See: {@link
+ *       SetSchemaRequest.Builder#setSchemaTypeDisplayedBySystem}</b>
  * </ul>
  *
  * <p>Applications create a database by opening an {@link AppSearchSession}.
@@ -76,7 +80,7 @@ import java.util.function.Consumer;
  * SetSchemaRequest request = new SetSchemaRequest.Builder().addSchema(emailSchemaType).build();
  * mAppSearchSession.set(request, mExecutor, appSearchResult -&gt; {
  *      if (appSearchResult.isSuccess()) {
- *           //Schema has been successfully set.
+ *           // Schema has been successfully set.
  *      }
  * });</pre>
  *
@@ -103,7 +107,7 @@ import java.util.function.Consumer;
  *     .build();
  * mAppSearchSession.put(request, mExecutor, appSearchBatchResult -&gt; {
  *      if (appSearchBatchResult.isSuccess()) {
- *           //All documents have been successfully indexed.
+ *           // All documents have been successfully indexed.
  *      }
  * });</pre>
  *
@@ -123,11 +127,13 @@ public class AppSearchManager {
 
     private final IAppSearchManager mService;
     private final Context mContext;
+    private final AppFunctionManager mAppFunctionManager;
 
     /** @hide */
     public AppSearchManager(@NonNull Context context, @NonNull IAppSearchManager service) {
         mContext = Objects.requireNonNull(context);
         mService = Objects.requireNonNull(service);
+        mAppFunctionManager = new AppFunctionManager(context, service);
     }
 
     /** Contains information about how to create the search session. */
@@ -209,7 +215,9 @@ public class AppSearchManager {
                 searchContext,
                 mService,
                 mContext.getUser(),
-                AppSearchAttributionSource.createAttributionSource(mContext),
+                AppSearchAttributionSource.createAttributionSource(
+                        mContext, /* callingPid= */ Process.myPid()),
+                AppSearchEnvironmentFactory.getEnvironmentInstance().getCacheDir(mContext),
                 executor,
                 callback);
     }
@@ -234,7 +242,48 @@ public class AppSearchManager {
         GlobalSearchSession.createGlobalSearchSession(
                 mService,
                 mContext.getUser(),
-                AppSearchAttributionSource.createAttributionSource(mContext),
-                executor, callback);
+                AppSearchAttributionSource.createAttributionSource(
+                        mContext, /* callingPid= */ Process.myPid()),
+                executor,
+                callback);
+    }
+
+    /**
+     * Creates a new {@link EnterpriseGlobalSearchSession}
+     *
+     * <p>EnterpriseGlobalSearchSession queries data from the user’s work profile, allowing apps
+     * running on the personal profile to access a limited subset of work profile data. Enterprise
+     * access must be explicitly enabled on schemas, and schemas may also specify additional
+     * permissions required for enterprise access.
+     *
+     * <p>This process requires an AppSearch native indexing file system. If it's not created, the
+     * initialization process will create one under the user's credential encrypted directory.
+     *
+     * @param executor Executor on which to invoke the callback.
+     * @param callback The {@link AppSearchResult}&lt;{@link EnterpriseGlobalSearchSession}&gt; of
+     *     performing this operation. Or a {@link AppSearchResult} with failure reason code and
+     *     error information.
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_ENTERPRISE_GLOBAL_SEARCH_SESSION)
+    @UserHandleAware
+    public void createEnterpriseGlobalSearchSession(
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull Consumer<AppSearchResult<EnterpriseGlobalSearchSession>> callback) {
+        Objects.requireNonNull(executor);
+        Objects.requireNonNull(callback);
+        EnterpriseGlobalSearchSession.createEnterpriseGlobalSearchSession(
+                mService,
+                mContext.getUser(),
+                AppSearchAttributionSource.createAttributionSource(
+                        mContext, /* callingPid= */ Process.myPid()),
+                executor,
+                callback);
+    }
+
+    /** Returns an instance of {@link android.app.appsearch.functions.AppFunctionManager}. */
+    @FlaggedApi(Flags.FLAG_ENABLE_APP_FUNCTIONS)
+    @NonNull
+    public AppFunctionManager getAppFunctionManager() {
+        return mAppFunctionManager;
     }
 }

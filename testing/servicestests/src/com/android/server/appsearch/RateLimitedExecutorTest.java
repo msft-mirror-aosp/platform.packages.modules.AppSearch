@@ -18,8 +18,9 @@ package com.android.server.appsearch;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import android.app.appsearch.AppSearchEnvironmentFactory;
+
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
-import com.android.server.appsearch.util.ExecutorManager;
 import com.android.server.appsearch.util.RateLimitedExecutor;
 
 import org.junit.Test;

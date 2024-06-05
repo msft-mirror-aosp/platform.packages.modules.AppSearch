@@ -28,7 +28,7 @@ android_test {
         "service-appsearch-for-tests",
         "services.core",
         "services.usage",
-        "truth-prebuilt",
+        "truth",
     ],
     libs: [
         "framework-appsearch.impl",

@@ -23,9 +23,10 @@ android_test {
         "CtsAppSearchTestUtils",
         "androidx.test.ext.junit",
         "androidx.test.rules",
+        "appsearch_flags_java_lib",
         "junit",
         "testng",
-        "truth-prebuilt",
+        "truth",
     ],
     libs: [
         "android.test.runner",

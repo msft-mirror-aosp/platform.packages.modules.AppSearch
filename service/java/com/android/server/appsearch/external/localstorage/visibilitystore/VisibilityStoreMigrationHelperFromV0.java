@@ -22,7 +22,6 @@ import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.PackageIdentifier;
-import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.util.ArrayMap;
 
@@ -45,6 +44,7 @@ import java.util.Set;
  */
 public class VisibilityStoreMigrationHelperFromV0 {
     private VisibilityStoreMigrationHelperFromV0() {}
+
     /** Prefix to add to all visibility document ids. IcingSearchEngine doesn't allow empty ids. */
     private static final String DEPRECATED_ID_PREFIX = "uri:";
 
@@ -148,9 +148,9 @@ public class VisibilityStoreMigrationHelperFromV0 {
                             appSearchImpl.getDocument(
                                     VisibilityStore.VISIBILITY_PACKAGE_NAME,
                                     VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                    VisibilityDocument.NAMESPACE,
+                                    VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                     getDeprecatedVisibilityDocumentId(packageName, databaseName),
-                                    /*typePropertyPaths=*/ Collections.emptyMap()));
+                                    /* typePropertyPaths= */ Collections.emptyMap()));
                 } catch (AppSearchException e) {
                     if (e.getResultCode() == AppSearchResult.RESULT_NOT_FOUND) {
                         // TODO(b/172068212): This indicates some desync error. We were expecting a
@@ -253,7 +253,7 @@ public class VisibilityStoreMigrationHelperFromV0 {
             @NonNull String schemaType) {
         VisibilityDocumentV1.Builder builder = documentBuilderMap.get(schemaType);
         if (builder == null) {
-            builder = new VisibilityDocumentV1.Builder(/*id=*/ schemaType);
+            builder = new VisibilityDocumentV1.Builder(/* id= */ schemaType);
             documentBuilderMap.put(schemaType, builder);
         }
         return builder;

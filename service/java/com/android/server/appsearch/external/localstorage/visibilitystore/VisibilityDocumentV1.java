@@ -20,6 +20,7 @@ import android.annotation.Nullable;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.PackageIdentifier;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.util.ArraySet;
 
 import java.util.Objects;
@@ -33,6 +34,7 @@ import java.util.Set;
 class VisibilityDocumentV1 extends GenericDocument {
     /** The Schema type for documents that hold AppSearch's metadata, e.g. visibility settings. */
     static final String SCHEMA_TYPE = "VisibilityType";
+
     /** Namespace of documents that contain visibility settings */
     static final String NAMESPACE = "";
 
@@ -148,12 +150,14 @@ class VisibilityDocumentV1 extends GenericDocument {
         }
 
         /** Sets whether this schema has opted out of platform surfacing. */
+        @CanIgnoreReturnValue
         @NonNull
         Builder setNotDisplayedBySystem(boolean notDisplayedBySystem) {
             return setPropertyBoolean(NOT_DISPLAYED_BY_SYSTEM_PROPERTY, notDisplayedBySystem);
         }
 
         /** Add {@link PackageIdentifier} of packages which has access to this schema. */
+        @CanIgnoreReturnValue
         @NonNull
         Builder addVisibleToPackages(@NonNull Set<PackageIdentifier> packageIdentifiers) {
             Objects.requireNonNull(packageIdentifiers);
@@ -162,6 +166,7 @@ class VisibilityDocumentV1 extends GenericDocument {
         }
 
         /** Add {@link PackageIdentifier} of packages which has access to this schema. */
+        @CanIgnoreReturnValue
         @NonNull
         Builder addVisibleToPackage(@NonNull PackageIdentifier packageIdentifier) {
             Objects.requireNonNull(packageIdentifier);
@@ -173,6 +178,7 @@ class VisibilityDocumentV1 extends GenericDocument {
          * Add a set of Android role that has access to the schema this {@link VisibilityDocumentV1}
          * represents.
          */
+        @CanIgnoreReturnValue
         @NonNull
         Builder setVisibleToRoles(@NonNull Set<Integer> visibleToRoles) {
             Objects.requireNonNull(visibleToRoles);
@@ -184,6 +190,7 @@ class VisibilityDocumentV1 extends GenericDocument {
          * Add a set of Android role that has access to the schema this {@link VisibilityDocumentV1}
          * represents.
          */
+        @CanIgnoreReturnValue
         @NonNull
         Builder setVisibleToPermissions(@NonNull Set<Integer> visibleToPermissions) {
             Objects.requireNonNull(visibleToPermissions);

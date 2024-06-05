@@ -36,6 +36,7 @@ import java.util.Objects;
  * @hide
  */
 public final class SearchStats {
+    /** Types of Visibility scopes available for search. */
     @IntDef(
             value = {
                 // Searches apps' own documents.
@@ -61,6 +62,7 @@ public final class SearchStats {
 
     @NonNull private final String mPackageName;
     @Nullable private final String mDatabase;
+
     /**
      * The status code returned by {@link AppSearchResult#getResultCode()} for the call or internal
      * state.
@@ -68,70 +70,98 @@ public final class SearchStats {
     @AppSearchResult.ResultCode private final int mStatusCode;
 
     private final int mTotalLatencyMillis;
+
     /** Time used to rewrite the search spec. */
     private final int mRewriteSearchSpecLatencyMillis;
+
     /** Time used to rewrite the search results. */
     private final int mRewriteSearchResultLatencyMillis;
+
     /** Time passed while waiting to acquire the lock during Java function calls. */
     private final int mJavaLockAcquisitionLatencyMillis;
+
     /**
      * Time spent on ACL checking. This is the time spent filtering namespaces based on package
      * permissions and Android permission access.
      */
     private final int mAclCheckLatencyMillis;
+
     /** Defines the scope the query is searching over. */
     @VisibilityScope private final int mVisibilityScope;
+
     /** Overall time used for the native function call. */
     private final int mNativeLatencyMillis;
+
     /** Number of terms in the query string. */
     private final int mNativeNumTerms;
+
     /** Length of the query string. */
     private final int mNativeQueryLength;
+
     /** Number of namespaces filtered. */
     private final int mNativeNumNamespacesFiltered;
+
     /** Number of schema types filtered. */
     private final int mNativeNumSchemaTypesFiltered;
+
     /** The requested number of results in one page. */
     private final int mNativeRequestedPageSize;
+
     /** The actual number of results returned in the current page. */
     private final int mNativeNumResultsReturnedCurrentPage;
+
     /**
      * Whether the function call is querying the first page. If it's not, Icing will fetch the
      * results from cache so that some steps may be skipped.
      */
     private final boolean mNativeIsFirstPage;
+
     /**
      * Time used to parse the query, including 2 parts: tokenizing and transforming tokens into an
      * iterator tree.
      */
     private final int mNativeParseQueryLatencyMillis;
+
     /** Strategy of scoring and ranking. */
     @SearchSpec.RankingStrategy private final int mNativeRankingStrategy;
+
     /** Number of documents scored. */
     private final int mNativeNumDocumentsScored;
+
     /** Time used to score the raw results. */
     private final int mNativeScoringLatencyMillis;
+
     /** Time used to rank the scored results. */
     private final int mNativeRankingLatencyMillis;
+
     /**
      * Time used to fetch the document protos. Note that it includes the time to snippet if {@link
      * SearchStats#mNativeNumResultsWithSnippets} is greater than 0.
      */
     private final int mNativeDocumentRetrievingLatencyMillis;
+
     /** How many snippets are calculated. */
     private final int mNativeNumResultsWithSnippets;
+
     /** Time passed while waiting to acquire the lock during native function calls. */
     private final int mNativeLockAcquisitionLatencyMillis;
+
     /** Time used to send data across the JNI boundary from java to native side. */
     private final int mJavaToNativeJniLatencyMillis;
+
     /** Time used to send data across the JNI boundary from native to java side. */
     private final int mNativeToJavaJniLatencyMillis;
+
     /** The type of join performed. Zero if no join is performed */
     @JoinableValueType private final int mJoinType;
+
     /** The total number of joined documents in the current page. */
     private final int mNativeNumJoinedResultsCurrentPage;
+
     /** Time taken to join documents together. */
     private final int mNativeJoinLatencyMillis;
+
+    @Nullable private final String mSearchSourceLogTag;
 
     SearchStats(@NonNull Builder builder) {
         Objects.requireNonNull(builder);
@@ -165,6 +195,7 @@ public final class SearchStats {
         mJoinType = builder.mJoinType;
         mNativeNumJoinedResultsCurrentPage = builder.mNativeNumJoinedResultsCurrentPage;
         mNativeJoinLatencyMillis = builder.mNativeJoinLatencyMillis;
+        mSearchSourceLogTag = builder.mSearchSourceLogTag;
     }
 
     /** Returns the package name of the session. */
@@ -337,6 +368,12 @@ public final class SearchStats {
         return mNativeJoinLatencyMillis;
     }
 
+    /** Returns a tag to indicate the source of this search, or {code null} if never set. */
+    @Nullable
+    public String getSearchSourceLogTag() {
+        return mSearchSourceLogTag;
+    }
+
     /** Builder for {@link SearchStats} */
     public static class Builder {
         @NonNull final String mPackageName;
@@ -369,6 +406,7 @@ public final class SearchStats {
         @JoinableValueType int mJoinType;
         int mNativeNumJoinedResultsCurrentPage;
         int mNativeJoinLatencyMillis;
+        @Nullable String mSearchSourceLogTag;
 
         /**
          * Constructor
@@ -592,6 +630,7 @@ public final class SearchStats {
         }
 
         /** Sets whether or not this is a join query */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setJoinType(@JoinableValueType int joinType) {
             mJoinType = joinType;
@@ -599,6 +638,7 @@ public final class SearchStats {
         }
 
         /** Set the total number of joined documents in a page. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeNumJoinedResultsCurrentPage(int nativeNumJoinedResultsCurrentPage) {
             mNativeNumJoinedResultsCurrentPage = nativeNumJoinedResultsCurrentPage;
@@ -606,9 +646,18 @@ public final class SearchStats {
         }
 
         /** Sets time it takes to join documents together in icing. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder setNativeJoinLatencyMillis(int nativeJoinLatencyMillis) {
             mNativeJoinLatencyMillis = nativeJoinLatencyMillis;
+            return this;
+        }
+
+        /** Sets a tag to indicate the source of this search. */
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder setSearchSourceLogTag(@Nullable String searchSourceLogTag) {
+            mSearchSourceLogTag = searchSourceLogTag;
             return this;
         }
 

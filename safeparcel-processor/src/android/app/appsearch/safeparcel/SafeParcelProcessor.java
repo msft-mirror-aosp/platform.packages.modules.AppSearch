@@ -44,7 +44,6 @@ import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -70,8 +69,12 @@ import javax.tools.JavaFileObject;
  */
 // Include the SafeParcel source code directly in AppSearch until it gets officially open-sourced.
 @SupportedAnnotationTypes({SafeParcelProcessor.CLASS_ANNOTATION_NAME})
-@SupportedSourceVersion(SourceVersion.RELEASE_17)
 public class SafeParcelProcessor extends AbstractProcessor {
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        return SourceVersion.latestSupported();
+    }
+
     public static final String SAFE_PARCELABLE_NAME =
             "android.app.appsearch.safeparcel.SafeParcelable";
     public static final String REFLECTED_PARCELABLE_NAME =
@@ -1504,6 +1507,19 @@ public class SafeParcelProcessor extends AbstractProcessor {
                                         (TypeElement) mTypes.asElement(mParcelableCreatorType),
                                         parcelableClass.asType())
                                 .toString();
+                TypeMirror parcelableType = parcelableClass.asType();
+                if (parcelableType instanceof DeclaredType) {
+                    DeclaredType declaredType = (DeclaredType) parcelableType; // Parcel<T>
+                    if (!declaredType.getTypeArguments().isEmpty()) {
+                        // If the ParcelableType is generic (ex: Parcelable.Creator<Parcel<T>>),
+                        // then expectedAlternativeCreatorTypeName needs to trim <T> part as
+                        // detectedAlternativeCreatorTypeName would only return Parcel resulting
+                        // in an incorrect ParcelCreatorType failure.
+                        String type = declaredType.getTypeArguments().get(0).toString(); // T
+                        expectedAlternativeCreatorTypeName =
+                                expectedAlternativeCreatorTypeName.replace("<" + type + ">", "");
+                    }
+                }
                 if (generatedClassName.equals(detectedCreatorTypeName)
                         || expectedAlternativeCreatorTypeName.equals(
                                 detectedAlternativeCreatorTypeName)) {
@@ -1552,6 +1568,10 @@ public class SafeParcelProcessor extends AbstractProcessor {
                 data.setValue("creator_name", cl.mGeneratedClassName.substring(index + 1));
             } else {
                 data.setValue("creator_name", cl.mGeneratedClassName);
+            }
+
+            if (cl.mAnnotation.creatorIsFinal()) {
+                data.setValue("creatorIsFinal", "true");
             }
 
             // Data class name

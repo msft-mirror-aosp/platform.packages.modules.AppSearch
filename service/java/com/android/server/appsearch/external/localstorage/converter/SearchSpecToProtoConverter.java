@@ -23,6 +23,8 @@ import static com.android.server.appsearch.external.localstorage.util.PrefixUtil
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.EmbeddingVector;
+import android.app.appsearch.FeatureConstants;
 import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchResult;
 import android.app.appsearch.SearchSpec;
@@ -63,18 +65,22 @@ public final class SearchSpecToProtoConverter {
     private static final String TAG = "AppSearchSearchSpecConv";
     private final String mQueryExpression;
     private final SearchSpec mSearchSpec;
+
     /** The union of allowed prefixes for the top-level SearchSpec and any nested SearchSpecs. */
     private final Set<String> mAllAllowedPrefixes;
+
     /**
      * The intersection of mAllAllowedPrefixes and prefixes requested in the SearchSpec currently
      * being handled.
      */
     private final Set<String> mCurrentSearchSpecPrefixFilters;
+
     /**
      * The intersected prefixed namespaces that are existing in AppSearch and also accessible to the
      * client.
      */
     private final Set<String> mTargetPrefixedNamespaceFilters;
+
     /**
      * The intersected prefixed schema types that are existing in AppSearch and also accessible to
      * the client.
@@ -186,11 +192,12 @@ public final class SearchSpecToProtoConverter {
     }
 
     /**
-     * @return whether this search's target filters are empty. If any target filter is empty, we
-     *     should skip send request to Icing.
-     *     <p>The nestedConverter is not checked as {@link SearchResult}s from the nested query have
-     *     to be joined to a {@link SearchResult} from the parent query. If the parent query has
-     *     nothing to search, then so does the child query.
+     * Returns whether this search's target filters are empty. If any target filter is empty, we
+     * should skip send request to Icing.
+     *
+     * <p>The nestedConverter is not checked as {@link SearchResult}s from the nested query have to
+     * be joined to a {@link SearchResult} from the parent query. If the parent query has nothing to
+     * search, then so does the child query.
      */
     public boolean hasNothingToSearch() {
         return mTargetPrefixedNamespaceFilters.isEmpty() || mTargetPrefixedSchemaFilters.isEmpty();
@@ -213,8 +220,8 @@ public final class SearchSpecToProtoConverter {
         removeInaccessibleSchemaFilterCached(
                 callerAccess,
                 visibilityStore,
-                /*inaccessibleSchemaPrefixes=*/ new ArraySet<>(),
-                /*accessibleSchemaPrefixes=*/ new ArraySet<>(),
+                /* inaccessibleSchemaPrefixes= */ new ArraySet<>(),
+                /* accessibleSchemaPrefixes= */ new ArraySet<>(),
                 visibilityChecker);
     }
 
@@ -286,6 +293,13 @@ public final class SearchSpecToProtoConverter {
                         .addAllSchemaTypeFilters(mTargetPrefixedSchemaFilters)
                         .setUseReadOnlySearch(mIcingOptionsConfig.getUseReadOnlySearch());
 
+        List<EmbeddingVector> searchEmbeddings = mSearchSpec.getSearchEmbeddings();
+        for (int i = 0; i < searchEmbeddings.size(); i++) {
+            protoBuilder.addEmbeddingQueryVectors(
+                    GenericDocumentToProtoConverter.embeddingVectorToVectorProto(
+                            searchEmbeddings.get(i)));
+        }
+
         // Convert type property filter map into type property mask proto.
         for (Map.Entry<String, List<String>> entry : mSearchSpec.getFilterProperties().entrySet()) {
             if (entry.getKey().equals(SearchSpec.SCHEMA_TYPE_WILDCARD)) {
@@ -315,6 +329,18 @@ public final class SearchSpecToProtoConverter {
         }
         protoBuilder.setTermMatchType(termMatchCodeProto);
 
+        @SearchSpec.EmbeddingSearchMetricType
+        int embeddingSearchMetricType = mSearchSpec.getDefaultEmbeddingSearchMetricType();
+        SearchSpecProto.EmbeddingQueryMetricType.Code embeddingSearchMetricTypeProto =
+                SearchSpecProto.EmbeddingQueryMetricType.Code.forNumber(embeddingSearchMetricType);
+        if (embeddingSearchMetricTypeProto == null
+                || embeddingSearchMetricTypeProto.equals(
+                        SearchSpecProto.EmbeddingQueryMetricType.Code.UNKNOWN)) {
+            throw new IllegalArgumentException(
+                    "Invalid embedding search metric type: " + embeddingSearchMetricType);
+        }
+        protoBuilder.setEmbeddingQueryMetricType(embeddingSearchMetricTypeProto);
+
         if (mNestedConverter != null && !mNestedConverter.hasNothingToSearch()) {
             JoinSpecProto.NestedSpecProto nestedSpec =
                     JoinSpecProto.NestedSpecProto.newBuilder()
@@ -338,19 +364,18 @@ public final class SearchSpecToProtoConverter {
             protoBuilder.setJoinSpec(joinSpecProtoBuilder);
         }
 
-        // TODO(b/208654892) Remove this field once EXPERIMENTAL_ICING_ADVANCED_QUERY is fully
-        //  supported.
-        boolean turnOnIcingAdvancedQuery =
-                mSearchSpec.isNumericSearchEnabled()
-                        || mSearchSpec.isVerbatimSearchEnabled()
-                        || mSearchSpec.isListFilterQueryLanguageEnabled();
-        if (turnOnIcingAdvancedQuery) {
-            protoBuilder.setSearchType(
-                    SearchSpecProto.SearchType.Code.EXPERIMENTAL_ICING_ADVANCED_QUERY);
+        if (mSearchSpec.isListFilterHasPropertyFunctionEnabled()
+                && !mIcingOptionsConfig.getBuildPropertyExistenceMetadataHits()) {
+            // This condition should never be reached as long as Features.isFeatureSupported() is
+            // consistent with IcingOptionsConfig.
+            throw new UnsupportedOperationException(
+                    FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION
+                            + " is currently not operational because the building process for the "
+                            + "associated metadata has not yet been turned on.");
         }
 
         // Set enabled features
-        protoBuilder.addAllEnabledFeatures(mSearchSpec.getEnabledFeatures());
+        protoBuilder.addAllEnabledFeatures(toIcingSearchFeatures(mSearchSpec.getEnabledFeatures()));
 
         return protoBuilder.build();
     }
@@ -411,7 +436,7 @@ public final class SearchSpecToProtoConverter {
                     joinSpec.getMaxJoinedResultCount());
         }
 
-        // Rewrites the typePropertyMasks that exist in {@code prefixes}.
+        // Add result groupings for the available prefixes
         int groupingType = mSearchSpec.getResultGroupingTypeFlags();
         ResultSpecProto.ResultGroupingType resultGroupingType =
                 ResultSpecProto.ResultGroupingType.NONE;
@@ -485,16 +510,21 @@ public final class SearchSpecToProtoConverter {
                 TypePropertyPathToProtoConverter.toTypePropertyMaskBuilderList(
                         mSearchSpec.getProjections());
         // Rewrite filters to include a database prefix.
-        resultSpecBuilder.clearTypePropertyMasks();
         for (int i = 0; i < typePropertyMaskBuilders.size(); i++) {
             String unprefixedType = typePropertyMaskBuilders.get(i).getSchemaType();
-            boolean isWildcard = unprefixedType.equals(SearchSpec.PROJECTION_SCHEMA_TYPE_WILDCARD);
-            // Qualify the given schema types
-            for (String prefix : mCurrentSearchSpecPrefixFilters) {
-                String prefixedType = isWildcard ? unprefixedType : prefix + unprefixedType;
-                if (isWildcard || mTargetPrefixedSchemaFilters.contains(prefixedType)) {
-                    resultSpecBuilder.addTypePropertyMasks(
-                            typePropertyMaskBuilders.get(i).setSchemaType(prefixedType).build());
+            if (unprefixedType.equals(SearchSpec.SCHEMA_TYPE_WILDCARD)) {
+                resultSpecBuilder.addTypePropertyMasks(typePropertyMaskBuilders.get(i).build());
+            } else {
+                // Qualify the given schema types
+                for (String prefix : mCurrentSearchSpecPrefixFilters) {
+                    String prefixedType = prefix + unprefixedType;
+                    if (mTargetPrefixedSchemaFilters.contains(prefixedType)) {
+                        resultSpecBuilder.addTypePropertyMasks(
+                                typePropertyMaskBuilders
+                                        .get(i)
+                                        .setSchemaType(prefixedType)
+                                        .build());
+                    }
                 }
             }
         }
@@ -520,6 +550,8 @@ public final class SearchSpecToProtoConverter {
         addTypePropertyWeights(mSearchSpec.getPropertyWeights(), protoBuilder);
 
         protoBuilder.setAdvancedScoringExpression(mSearchSpec.getAdvancedRankingExpression());
+        protoBuilder.addAllAdditionalAdvancedScoringExpressions(
+                mSearchSpec.getInformationalRankingExpressions());
 
         return protoBuilder.build();
     }
@@ -551,6 +583,26 @@ public final class SearchSpecToProtoConverter {
                 throw new IllegalArgumentException(
                         "Invalid result ranking strategy: " + rankingStrategyCode);
         }
+    }
+
+    /**
+     * Maps a list of AppSearch search feature strings to the list of the corresponding Icing
+     * feature strings.
+     *
+     * @param appSearchFeatures The list of AppSearch search feature strings.
+     */
+    @NonNull
+    private static List<String> toIcingSearchFeatures(@NonNull List<String> appSearchFeatures) {
+        List<String> result = new ArrayList<>();
+        for (int i = 0; i < appSearchFeatures.size(); i++) {
+            String appSearchFeature = appSearchFeatures.get(i);
+            if (appSearchFeature.equals(FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION)) {
+                result.add("HAS_PROPERTY_FUNCTION");
+            } else {
+                result.add(appSearchFeature);
+            }
+        }
+        return result;
     }
 
     /**
@@ -609,7 +661,7 @@ public final class SearchSpecToProtoConverter {
             String packageName = getPackageName(prefix);
             // Create a new prefix without the database name. This will allow us to group namespaces
             // that have the same name and package but a different database name together.
-            String emptyDatabasePrefix = createPrefix(packageName, /*databaseName*/ "");
+            String emptyDatabasePrefix = createPrefix(packageName, /* databaseName= */ "");
             for (String prefixedNamespace : prefixedNamespaces) {
                 String namespace;
                 try {

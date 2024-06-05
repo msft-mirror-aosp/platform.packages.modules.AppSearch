@@ -17,9 +17,9 @@
 package android.app.appsearch;
 
 import android.app.appsearch.aidl.AppSearchAttributionSource;
+import android.app.appsearch.aidl.GetDocumentsAidlRequest;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.exceptions.AppSearchException;
-import android.content.AttributionSource;
 import android.content.Context;
 import static com.google.common.truth.Truth.assertThat;
 
@@ -36,7 +36,6 @@ import com.google.common.util.concurrent.SettableFuture;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -62,6 +61,8 @@ public class GlobalSearchSessionUnitTest {
         ExecutorService executor = Executors.newCachedThreadPool();
         mAppSearch.createGlobalSearchSession(executor, future::set);
         mGlobalSearchSession = future.get().getResultValue();
+        assertThat(mGlobalSearchSession).isNotNull();
+        assertThat(mGlobalSearchSession.isForEnterprise()).isFalse();
 
         //mdb
         AppSearchManager.SearchContext searchContext =
@@ -84,25 +85,24 @@ public class GlobalSearchSessionUnitTest {
      */
     @Test
     public void testGlobalGetByDocId_invalidCallingPackageParam() throws Exception {
-        // get the mService
-        Field serviceField = mGlobalSearchSession.getClass().getDeclaredField("mService");
-        serviceField.setAccessible(true);
-        IAppSearchManager service = (IAppSearchManager)(serviceField.get(mGlobalSearchSession));
+        IAppSearchManager service = mGlobalSearchSession.getService();
 
         CompletableFuture<Throwable> errorFuture = new CompletableFuture<>();
 
         String invalidPackageName = "not_this_package";
 
+
         service.getDocuments(
-                new AppSearchAttributionSource(invalidPackageName,
-                        android.os.Process.myUid()),
-                /*targetPackageName=*/mContext.getPackageName(),
-                /*databaseName*/"testDb",
-                /*namespace=*/"namespace",
-                /*ids=*/ImmutableList.of("uri1"),
-                /*typePropertyPaths=*/ImmutableMap.of(),
+                new GetDocumentsAidlRequest(
+                        new AppSearchAttributionSource(invalidPackageName,
+                                android.os.Process.myUid(), android.os.Process.myPid()),
+                /*targetPackageName=*/ mContext.getPackageName(),
+                /*databaseName*/ "testDb",
+                new GetByDocumentIdRequest.Builder("namespace")
+                        .addIds(/*ids=*/ ImmutableList.of("uri1")).build(),
                 android.os.Process.myUserHandle(),
                 SystemClock.elapsedRealtime(),
+                /*isForEnterprise=*/ false),
                 SearchSessionUtil.createGetDocumentCallback(mExecutor,
                         new BatchResultCallback<String, GenericDocument>() {
                             @Override

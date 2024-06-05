@@ -1,0 +1,160 @@
+package: "com.android.appsearch.flags"
+container: "com.android.appsearch"
+
+#
+# all the flags we are adding in V have to be is_fixed_read_only true.
+#
+
+flag {
+    name: "enable_safe_parcelable_2"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Use SafeParcelable to serialize data through binder"
+    bug: "275629842"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_grouping_type_per_schema"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable result grouping by schema type"
+    bug: "258715421"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_generic_document_copy_constructor"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable GenericDocument to take another GenericDocument to copy construct."
+    bug: "171882200"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_list_filter_has_property_function"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable the hasProperty function in list filter query expressions."
+    bug: "309826655"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_put_documents_request_add_taken_actions"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable addTakenActions API in PutDocumentsRequest."
+    bug: "314026345"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_set_publicly_visible_schema"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable setPubliclyVisibleSchema API in SetSchemaRequest."
+    bug: "325262525"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_generic_document_builder_hidden_methods"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable GenericDocument.Builder to use previously hidden methods."
+    bug: "318408639"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_search_spec_filter_properties"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable addFilterProperties API in SearchSpec and SearchSuggestionSpec."
+    bug: "296088047"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_search_spec_set_search_source_log_tag"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable the setSearchSourceLogTag API in SearchSpec."
+    bug: "315370764"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_enterprise_global_search_session"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable personal profile to search over allowed enterprise profile data in AppSearch through enterprise global search session."
+    bug: "237388235"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_set_schema_visible_to_configs"
+    is_exported: true
+    namespace: "appsearch"
+    description: "Enable the addSchemaTypeVisibleToConfig API in the setSchemaRequest."
+    bug: "300162279"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "enable_app_functions"
+    namespace: "appsearch"
+    description: "Guards everything related to AppFunction."
+    bug: "327134039"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+flag {
+    name: "enable_result_denied_and_result_rate_limited"
+    namespace: "appsearch"
+    description: "Enable previously hidden constants in AppSearchResult."
+    bug: "279047435"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+flag {
+    name: "enable_get_parent_types_and_indexable_nested_properties"
+    namespace: "appsearch"
+    description: "Enable previously hidden APIs in AppSearchSchema."
+    bug: "291122592"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+flag {
+    name: "enable_schema_embedding_property_config"
+    namespace: "appsearch"
+    description: "Enables embedding vectors to be used for searches in AppSearch"
+    bug: "326656531"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+flag {
+    name: "enable_informational_ranking_expressions"
+    namespace: "appsearch"
+    description: "Enables the additional informational ranking expression API"
+    bug: "332642571"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+
+flag {
+    name: "enable_list_filter_tokenize_function"
+    namespace: "appsearch"
+    description: "Enables the tokenize function in the list filter language"
+    bug: "332620561"
+    is_fixed_read_only: true
+    is_exported: true
+}

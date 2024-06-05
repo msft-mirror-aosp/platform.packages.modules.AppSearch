@@ -18,9 +18,9 @@ package com.android.server.appsearch.external.localstorage.visibilitystore;
 
 import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
-import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.util.ArraySet;
 
@@ -66,9 +66,9 @@ public class VisibilityStoreMigrationHelperFromV1 {
                                 appSearchImpl.getDocument(
                                         VisibilityStore.VISIBILITY_PACKAGE_NAME,
                                         VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
+                                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                         allPrefixedSchemaTypes.get(i),
-                                        /*typePropertyPaths=*/ Collections.emptyMap())));
+                                        /* typePropertyPaths= */ Collections.emptyMap())));
             } catch (AppSearchException e) {
                 if (e.getResultCode() == AppSearchResult.RESULT_NOT_FOUND) {
                     // TODO(b/172068212): This indicates some desync error. We were expecting a
@@ -90,13 +90,13 @@ public class VisibilityStoreMigrationHelperFromV1 {
      * @param visibilityDocumentV1s The deprecated Visibility Document we found.
      */
     @NonNull
-    static List<VisibilityDocument> toVisibilityDocumentsV2(
+    static List<InternalVisibilityConfig> toVisibilityDocumentsV2(
             @NonNull List<VisibilityDocumentV1> visibilityDocumentV1s) {
-        List<VisibilityDocument> latestVisibilityDocuments =
+        List<InternalVisibilityConfig> latestVisibilityDocuments =
                 new ArrayList<>(visibilityDocumentV1s.size());
         for (int i = 0; i < visibilityDocumentV1s.size(); i++) {
             VisibilityDocumentV1 visibilityDocumentV1 = visibilityDocumentV1s.get(i);
-            Set<Set<Integer>> visibleToPermissions = new ArraySet<>();
+            Set<Set<Integer>> visibleToPermissionSets = new ArraySet<>();
             Set<Integer> deprecatedVisibleToRoles = visibilityDocumentV1.getVisibleToRoles();
             if (deprecatedVisibleToRoles != null) {
                 for (int deprecatedVisibleToRole : deprecatedVisibleToRoles) {
@@ -110,29 +110,28 @@ public class VisibilityStoreMigrationHelperFromV1 {
                                     SetSchemaRequest.READ_ASSISTANT_APP_SEARCH_DATA);
                             break;
                     }
-                    visibleToPermissions.add(visibleToPermission);
+                    visibleToPermissionSets.add(visibleToPermission);
                 }
             }
             Set<Integer> deprecatedVisibleToPermissions =
                     visibilityDocumentV1.getVisibleToPermissions();
             if (deprecatedVisibleToPermissions != null) {
-                visibleToPermissions.add(deprecatedVisibleToPermissions);
+                visibleToPermissionSets.add(deprecatedVisibleToPermissions);
             }
 
-            Set<PackageIdentifier> packageIdentifiers = new ArraySet<>();
+            InternalVisibilityConfig.Builder latestVisibilityDocumentBuilder =
+                    new InternalVisibilityConfig.Builder(visibilityDocumentV1.getId())
+                            .setNotDisplayedBySystem(visibilityDocumentV1.isNotDisplayedBySystem());
             String[] packageNames = visibilityDocumentV1.getPackageNames();
             byte[][] sha256Certs = visibilityDocumentV1.getSha256Certs();
             if (packageNames.length == sha256Certs.length) {
                 for (int j = 0; j < packageNames.length; j++) {
-                    packageIdentifiers.add(new PackageIdentifier(packageNames[j], sha256Certs[j]));
+                    latestVisibilityDocumentBuilder.addVisibleToPackage(
+                            new PackageIdentifier(packageNames[j], sha256Certs[j]));
                 }
             }
-            VisibilityDocument.Builder latestVisibilityDocumentBuilder =
-                    new VisibilityDocument.Builder(visibilityDocumentV1.getId())
-                            .setNotDisplayedBySystem(visibilityDocumentV1.isNotDisplayedBySystem())
-                            .addVisibleToPackages(packageIdentifiers);
-            if (!visibleToPermissions.isEmpty()) {
-                latestVisibilityDocumentBuilder.setVisibleToPermissions(visibleToPermissions);
+            for (Set<Integer> visibleToPermissions : visibleToPermissionSets) {
+                latestVisibilityDocumentBuilder.addVisibleToPermissions(visibleToPermissions);
             }
             latestVisibilityDocuments.add(latestVisibilityDocumentBuilder.build());
         }

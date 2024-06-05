@@ -24,14 +24,17 @@ import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
 import com.android.server.appsearch.external.localstorage.stats.PutDocumentStats;
 import com.android.server.appsearch.external.localstorage.stats.RemoveStats;
+import com.android.server.appsearch.external.localstorage.stats.SearchIntentStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
+
+import java.util.List;
 
 /**
  * An interface for implementing client-defined logging AppSearch operations stats.
  *
  * <p>Any implementation needs to provide general information on how to log all the stats types.
- * (e.g. {@link CallStats})
+ * (for example {@link CallStats})
  *
  * <p>All implementations of this interface must be thread safe.
  *
@@ -61,6 +64,9 @@ public interface AppSearchLogger {
 
     /** Logs {@link SchemaMigrationStats} */
     void logStats(@NonNull SchemaMigrationStats stats);
+
+    /** Logs a collection of {@link SearchIntentStats} */
+    void logStats(@NonNull List<SearchIntentStats> searchIntentsStats);
 
     // TODO(b/173532925) Add remaining logStats once we add all the stats.
 }

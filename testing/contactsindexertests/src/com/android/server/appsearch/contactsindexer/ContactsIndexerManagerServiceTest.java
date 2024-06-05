@@ -19,7 +19,7 @@ package com.android.server.appsearch.contactsindexer;
 import static android.Manifest.permission.INTERACT_ACROSS_USERS_FULL;
 import static android.Manifest.permission.RECEIVE_BOOT_COMPLETED;
 
-import static com.android.server.appsearch.contactsindexer.ContactsIndexerMaintenanceService.MIN_INDEXER_JOB_ID;
+import static com.android.server.appsearch.contactsindexer.ContactsIndexerMaintenanceConfig.MIN_CONTACTS_INDEXER_JOB_ID;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -34,18 +34,14 @@ import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.observer.SchemaChangeInfo;
 import android.app.appsearch.testutil.AppSearchSessionShimImpl;
 import android.app.appsearch.testutil.GlobalSearchSessionShimImpl;
+import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
-import android.content.Context;
-import android.content.ContextWrapper;
 import android.content.pm.UserInfo;
-import android.os.UserHandle;
 import android.provider.ContactsContract;
-import android.test.ProviderTestCase2;
 
 import androidx.annotation.NonNull;
-import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 
@@ -66,39 +62,18 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
-public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeContactsProvider> {
+public class ContactsIndexerManagerServiceTest extends FakeContactsProviderTestBase {
     private static final String TAG = "ContactsIndexerManagerServiceTest";
 
     private final ExecutorService mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
     private ContactsIndexerManagerService mContactsIndexerManagerService;
     private UiAutomation mUiAutomation;
 
-    public ContactsIndexerManagerServiceTest() {
-        super(FakeContactsProvider.class, FakeContactsProvider.AUTHORITY);
-    }
-
     @Override
     @Before
     public void setUp() throws Exception {
         super.setUp();
-        Context context = ApplicationProvider.getApplicationContext();
         mUiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
-        mContext = new ContextWrapper(context) {
-            @Override
-            public Context getApplicationContext() {
-                return this;
-            }
-
-            @Override
-            public Context createContextAsUser(@NonNull UserHandle user, int flags) {
-                return this;
-            }
-
-            @Override
-            public ContentResolver getContentResolver() {
-                return getMockContentResolver();
-            }
-        };
         // INTERACT_ACROSS_USERS_FULL: needed when we do registerReceiverForAllUsers for getting
         // package change notifications.
         mUiAutomation.adoptShellPermissionIdentity(INTERACT_ACROSS_USERS_FULL);
@@ -188,7 +163,7 @@ public class ContactsIndexerManagerServiceTest extends ProviderTestCase2<FakeCon
         fullUpdateLatch.await(30L, TimeUnit.SECONDS);
 
         // Verify that a periodic full-update job is scheduled still.
-        assertThat(getJobState(MIN_INDEXER_JOB_ID + userId)).contains("waiting");
+        assertThat(getJobState(MIN_CONTACTS_INDEXER_JOB_ID + userId)).contains("waiting");
 
         // Verify the stats for the ContactsIndexer. Two full updates are triggered at this
         // point, and the timestamps for 1st update must have been persisted.

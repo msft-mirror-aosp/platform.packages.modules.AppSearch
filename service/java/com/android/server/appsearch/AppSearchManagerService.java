@@ -16,9 +16,15 @@
 package com.android.server.appsearch;
 
 import static android.app.appsearch.AppSearchResult.RESULT_DENIED;
+import static android.app.appsearch.AppSearchResult.RESULT_INTERNAL_ERROR;
+import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
+import static android.app.appsearch.AppSearchResult.RESULT_NOT_FOUND;
 import static android.app.appsearch.AppSearchResult.RESULT_OK;
 import static android.app.appsearch.AppSearchResult.RESULT_RATE_LIMITED;
+import static android.app.appsearch.AppSearchResult.RESULT_SECURITY_ERROR;
+import static android.app.appsearch.AppSearchResult.RESULT_TIMED_OUT;
 import static android.app.appsearch.AppSearchResult.throwableToFailedResult;
+import static android.app.appsearch.functions.AppFunctionManager.PERMISSION_BIND_APP_FUNCTION_SERVICE;
 import static android.os.Process.INVALID_UID;
 
 import static com.android.server.appsearch.external.localstorage.stats.SearchStats.VISIBILITY_SCOPE_GLOBAL;
@@ -27,68 +33,100 @@ import static com.android.server.appsearch.util.ServiceImplHelper.invokeCallback
 import static com.android.server.appsearch.util.ServiceImplHelper.invokeCallbackOnResult;
 
 import android.annotation.BinderThread;
-import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.UserIdInt;
 import android.annotation.WorkerThread;
 import android.app.appsearch.AppSearchBatchResult;
+import android.app.appsearch.AppSearchEnvironment;
+import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.AppSearchMigrationHelper;
 import android.app.appsearch.AppSearchResult;
-import android.app.appsearch.AppSearchSchema;
-import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
 import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SearchSuggestionResult;
-import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.SetSchemaResponse;
+import android.app.appsearch.SetSchemaResponse.MigrationFailure;
 import android.app.appsearch.StorageInfo;
-import android.app.appsearch.VisibilityDocument;
-import android.app.appsearch.aidl.AppSearchAttributionSource;
+import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
-import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.ExecuteAppFunctionAidlRequest;
+import android.app.appsearch.aidl.GetDocumentsAidlRequest;
+import android.app.appsearch.aidl.GetNamespacesAidlRequest;
+import android.app.appsearch.aidl.GetNextPageAidlRequest;
+import android.app.appsearch.aidl.GetSchemaAidlRequest;
+import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
+import android.app.appsearch.aidl.GlobalSearchAidlRequest;
+import android.app.appsearch.aidl.IAppFunctionService;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
+import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
+import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
+import android.app.appsearch.aidl.ReportUsageAidlRequest;
+import android.app.appsearch.aidl.SearchAidlRequest;
+import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
+import android.app.appsearch.aidl.SetSchemaAidlRequest;
+import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
-import android.app.appsearch.observer.ObserverSpec;
+import android.app.appsearch.functions.AppFunctionService;
+import android.app.appsearch.functions.ExecuteAppFunctionRequest;
+import android.app.appsearch.functions.SafeOneTimeAppSearchResultCallback;
+import android.app.appsearch.functions.ServiceCallHelper;
+import android.app.appsearch.functions.ServiceCallHelper.ServiceUsageCompleteListener;
+import android.app.appsearch.functions.ServiceCallHelperImpl;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.stats.SchemaMigrationStats;
+import android.app.appsearch.util.ExceptionUtil;
 import android.app.appsearch.util.LogUtil;
-import android.content.AttributionSource;
+import android.app.role.RoleManager;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageStats;
+import android.content.pm.ResolveInfo;
+import android.content.pm.ServiceInfo;
 import android.net.Uri;
 import android.os.Binder;
-import android.os.Bundle;
-import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
+import android.text.TextUtils;
 import android.util.ArraySet;
 import android.util.Log;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.LocalManagerRegistry;
 import com.android.server.SystemService;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
+import com.android.server.appsearch.external.localstorage.usagereporting.SearchIntentStatsExtractor;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
-import com.android.server.appsearch.util.ApiCallRecord;
+import com.android.server.appsearch.transformer.EnterpriseSearchResultPageTransformer;
+import com.android.server.appsearch.transformer.EnterpriseSearchSpecTransformer;
 import com.android.server.appsearch.util.AdbDumpUtil;
-import com.android.server.appsearch.util.ExceptionUtil;
+import com.android.server.appsearch.util.ApiCallRecord;
 import com.android.server.appsearch.util.ExecutorManager;
-import com.android.server.appsearch.util.RateLimitedExecutor;
+import com.android.server.appsearch.util.PackageManagerUtil;
 import com.android.server.appsearch.util.ServiceImplHelper;
 import com.android.server.appsearch.visibilitystore.FrameworkCallerAccess;
 import com.android.server.usage.StorageStatsManagerLocal;
@@ -107,7 +145,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -121,6 +158,8 @@ import java.util.concurrent.Executor;
  */
 public class AppSearchManagerService extends SystemService {
     private static final String TAG = "AppSearchManagerService";
+    @VisibleForTesting
+    static final String SYSTEM_UI_INTELLIGENCE = "android.app.role.SYSTEM_UI_INTELLIGENCE";
 
     /**
      * An executor for system activity not tied to any particular user.
@@ -134,34 +173,50 @@ public class AppSearchManagerService extends SystemService {
     private final Context mContext;
     private final ExecutorManager mExecutorManager;
     private final AppSearchEnvironment mAppSearchEnvironment;
-    private final FrameworkAppSearchConfig mAppSearchConfig;
+    private final ServiceAppSearchConfig mAppSearchConfig;
 
     private PackageManager mPackageManager;
+    private RoleManager mRoleManager;
     private ServiceImplHelper mServiceImplHelper;
     private AppSearchUserInstanceManager mAppSearchUserInstanceManager;
 
     // Keep a reference for the lifecycle instance, so we can access other services like
     // ContactsIndexer for dumpsys purpose.
     private final AppSearchModule.Lifecycle mLifecycle;
+    private final ServiceCallHelper<IAppFunctionService> mAppFunctionServiceCallHelper;
+    private final SearchIntentStatsExtractor mSearchIntentStatsExtractor;
 
     public AppSearchManagerService(Context context, AppSearchModule.Lifecycle lifecycle) {
+        this(context, lifecycle, new ServiceCallHelperImpl<>(
+                context, IAppFunctionService.Stub::asInterface, SHARED_EXECUTOR));
+    }
+
+    @VisibleForTesting
+    public AppSearchManagerService(
+            Context context,
+            AppSearchModule.Lifecycle lifecycle,
+            ServiceCallHelper<IAppFunctionService> appFunctionServiceCallHelper) {
         super(context);
-        mContext = context;
-        mLifecycle = lifecycle;
+        mContext = Objects.requireNonNull(context);
+        mLifecycle = Objects.requireNonNull(lifecycle);
         mAppSearchEnvironment = AppSearchEnvironmentFactory.getEnvironmentInstance();
-        mAppSearchConfig = AppSearchEnvironmentFactory.getConfigInstance(SHARED_EXECUTOR);
+        mAppSearchConfig = AppSearchComponentFactory.getConfigInstance(SHARED_EXECUTOR);
         mExecutorManager = new ExecutorManager(mAppSearchConfig);
+        mAppFunctionServiceCallHelper = Objects.requireNonNull(appFunctionServiceCallHelper);
+        mSearchIntentStatsExtractor = new SearchIntentStatsExtractor();
     }
 
     @Override
     public void onStart() {
         publishBinderService(Context.APP_SEARCH_SERVICE, new Stub());
         mPackageManager = getContext().getPackageManager();
+        mRoleManager = getContext().getSystemService(RoleManager.class);
         mServiceImplHelper = new ServiceImplHelper(mContext, mExecutorManager);
         mAppSearchUserInstanceManager = AppSearchUserInstanceManager.getInstance();
         registerReceivers();
         LocalManagerRegistry.getManager(StorageStatsManagerLocal.class)
                 .registerStorageStatsAugmenter(new AppSearchStorageStatsAugmenter(), TAG);
+        LocalManagerRegistry.addManager(LocalService.class, new LocalService());
     }
 
     @Override
@@ -279,7 +334,7 @@ public class AppSearchManagerService extends SystemService {
                                     mAppSearchConfig);
                     instance.getAppSearchImpl().clearPackageData(packageName);
                     dispatchChangeNotifications(instance);
-                    instance.getLogger().removeCachedUidForPackage(packageName);
+                    instance.getLogger().removeCacheForPackage(packageName);
                 } catch (AppSearchException | RuntimeException e) {
                     Log.e(TAG, "Unable to remove data for package: " + packageName, e);
                     ExceptionUtil.handleException(e);
@@ -293,10 +348,13 @@ public class AppSearchManagerService extends SystemService {
         Objects.requireNonNull(user);
         UserHandle userHandle = user.getUserHandle();
         mServiceImplHelper.setUserIsLocked(userHandle, false);
-        mExecutorManager.getOrCreateUserExecutor(userHandle).execute(() -> {
-            try {
-                // Only clear the package's data if AppSearch exists for this user.
-                if (mAppSearchEnvironment.getAppSearchDir(mContext, userHandle).exists()) {
+
+        // Only schedule task if AppSearch exists for this user.
+        if (mAppSearchEnvironment.getAppSearchDir(mContext, userHandle).exists()) {
+            mExecutorManager.getOrCreateUserExecutor(userHandle).execute(() -> {
+                // Try to prune garbage package data, this is to recover if user remove a package
+                // and reboot the device before we prune the package data.
+                try {
                     Context userContext = mAppSearchEnvironment
                             .createContextAsUser(mContext, userHandle);
                     AppSearchUserInstance instance =
@@ -313,12 +371,22 @@ public class AppSearchManagerService extends SystemService {
                     }
                     packagesToKeep.add(VisibilityStore.VISIBILITY_PACKAGE_NAME);
                     instance.getAppSearchImpl().prunePackageData(packagesToKeep);
+                } catch (AppSearchException | RuntimeException e) {
+                    Log.e(TAG, "Unable to prune packages for " + user, e);
+                    ExceptionUtil.handleException(e);
                 }
-            } catch (AppSearchException | RuntimeException e) {
-                Log.e(TAG, "Unable to prune packages for " + user, e);
-                ExceptionUtil.handleException(e);
-            }
-        });
+
+                // Try to schedule fully persist job.
+                try {
+                    AppSearchMaintenanceService.scheduleFullyPersistJob(mContext,
+                            userHandle.getIdentifier(),
+                            mAppSearchConfig.getCachedFullyPersistJobIntervalMillis());
+                } catch (RuntimeException e) {
+                    Log.e(TAG, "Unable to schedule fully persist job for " + user, e);
+                    ExceptionUtil.handleException(e);
+                }
+            });
+        }
     }
 
     @Override
@@ -329,49 +397,53 @@ public class AppSearchManagerService extends SystemService {
 
     private void onUserStopping(@NonNull UserHandle userHandle) {
         Objects.requireNonNull(userHandle);
-        Log.i(TAG, "Shutting down AppSearch for user " + userHandle);
+        if (LogUtil.INFO) {
+            Log.i(TAG, "Shutting down AppSearch for user " + userHandle);
+        }
         try {
             mServiceImplHelper.setUserIsLocked(userHandle, true);
             mExecutorManager.shutDownAndRemoveUserExecutor(userHandle);
             mAppSearchUserInstanceManager.closeAndRemoveUserInstance(userHandle);
-            Log.i(TAG, "Removed AppSearchImpl instance for: " + userHandle);
+            AppSearchMaintenanceService.cancelFullyPersistJobIfScheduled(
+                    mContext, userHandle.getIdentifier());
+            if (LogUtil.INFO) {
+                Log.i(TAG, "Removed AppSearchImpl instance for: " + userHandle);
+            }
         } catch (InterruptedException | RuntimeException e) {
             Log.e(TAG, "Unable to remove data for: " + userHandle, e);
             ExceptionUtil.handleException(e);
         }
     }
 
+    class LocalService {
+        /** Persist all pending mutation operation to disk for the given user. */
+        public void doFullyPersistForUser(@UserIdInt int userId) throws AppSearchException {
+            UserHandle targetUser = UserHandle.getUserHandleForUid(userId);
+            AppSearchUserInstance instance =
+                mAppSearchUserInstanceManager.getUserInstance(targetUser);
+            instance.getAppSearchImpl().persistToDisk(PersistType.Code.FULL);
+        }
+    }
+
     private class Stub extends IAppSearchManager.Stub {
         @Override
         public void setSchema(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull List<Bundle> schemaBundles,
-                @NonNull List<VisibilityDocument> visibilityDocuments,
-                boolean forceOverride,
-                int schemaVersion,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
-                @SchemaMigrationStats.SchemaMigrationCallType int schemaMigrationCallType,
+                @NonNull SetSchemaAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(schemaBundles);
-            Objects.requireNonNull(visibilityDocuments);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             long verifyIncomingCallLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName, CallStats.CALL_TYPE_SET_SCHEMA,
-                    callback, targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
+                    CallStats.CALL_TYPE_SET_SCHEMA, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -386,31 +458,23 @@ public class AppSearchManagerService extends SystemService {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
                 SetSchemaStats.Builder setSchemaStatsBuilder = new SetSchemaStats.Builder(
-                        callingPackageName, databaseName);
+                        callingPackageName, request.getDatabaseName());
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
-                    long rebuildFromBundleLatencyStartTimeMillis = SystemClock.elapsedRealtime();
-                    List<AppSearchSchema> schemas = new ArrayList<>(schemaBundles.size());
-                    for (int i = 0; i < schemaBundles.size(); i++) {
-                        schemas.add(new AppSearchSchema(schemaBundles.get(i)));
-                    }
-                    long rebuildFromBundleLatencyEndTimeMillis = SystemClock.elapsedRealtime();
-
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     InternalSetSchemaResponse internalSetSchemaResponse =
                             instance.getAppSearchImpl().setSchema(
                                     callingPackageName,
-                                    databaseName,
-                                    schemas,
-                                    visibilityDocuments,
-                                    forceOverride,
-                                    schemaVersion,
+                                    request.getDatabaseName(),
+                                    request.getSchemas(),
+                                    request.getVisibilityConfigs(),
+                                    request.isForceOverride(),
+                                    request.getSchemaVersion(),
                                     setSchemaStatsBuilder);
                     ++operationSuccessCount;
-                    invokeCallbackOnResult(callback,
-                            AppSearchResult.newSuccessfulResult(
-                                    internalSetSchemaResponse.getBundle()));
+                    invokeCallbackOnResult(callback, AppSearchResultParcel
+                            .fromInternalSetSchemaResponse(internalSetSchemaResponse));
 
                     // Schedule a task to dispatch change notifications. See requirements for where
                     // the method is called documented in the method description.
@@ -419,7 +483,7 @@ public class AppSearchManagerService extends SystemService {
                     long dispatchNotificationLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                     // setSchema will sync the schemas in the request to AppSearch, any existing
-                    // schemas which  is not included in the request will be delete if we force
+                    // schemas which are not included in the request will be deleted if we force
                     // override incompatible schemas. And all documents of these types will be
                     // deleted as well. We should checkForOptimize for these deletion.
                     long checkForOptimizeLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -433,9 +497,8 @@ public class AppSearchManagerService extends SystemService {
                             .setExecutorAcquisitionLatencyMillis(
                                     (int) (waitExecutorEndTimeMillis
                                             - waitExecutorStartTimeMillis))
-                            .setRebuildFromBundleLatencyMillis(
-                                    (int) (rebuildFromBundleLatencyEndTimeMillis
-                                            - rebuildFromBundleLatencyStartTimeMillis))
+                            // This operation no longer exists, so this latency is always 0
+                            .setRebuildFromBundleLatencyMillis(0)
                             .setDispatchChangeNotificationsLatencyMillis(
                                     (int) (dispatchNotificationLatencyEndTimeMillis
                                             - dispatchNotificationLatencyStartTimeMillis))
@@ -446,16 +509,18 @@ public class AppSearchManagerService extends SystemService {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis -
+                                        request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_SET_SCHEMA)
@@ -468,50 +533,53 @@ public class AppSearchManagerService extends SystemService {
                                 .build());
                         instance.getLogger().logStats(setSchemaStatsBuilder
                                 .setStatusCode(statusCode)
-                                .setSchemaMigrationCallType(schemaMigrationCallType)
+                                .setSchemaMigrationCallType(request.getSchemaMigrationCallType())
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .build());
                     }
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
-                        CallStats.CALL_TYPE_SET_SCHEMA, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
+                        CallStats.CALL_TYPE_SET_SCHEMA, targetUser,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                        /*numOperations=*/ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void getSchema(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String targetPackageName,
-                @NonNull String databaseName,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull GetSchemaAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(targetPackageName);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            boolean global = !callingPackageName.equals(targetPackageName);
+            // Get the enterprise user for enterprise calls
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(request.isForEnterprise(),
+                    targetUser);
+            if (userToQuery == null) {
+                // Return an empty response if we tried to and couldn't get the enterprise user
+                invokeCallbackOnResult(callback, AppSearchResultParcel.fromGetSchemaResponse(
+                        new GetSchemaResponse.Builder().build()));
+                return;
+            }
+            boolean global = isGlobalCall(callingPackageName, request.getTargetPackageName(),
+                    request.isForEnterprise());
             // We deny based on the calling package and calling database names. If the calling
             // package does not match the target package, then the call is global and the target
             // database is not a calling database.
-            String callingDatabaseName = global ? null : databaseName;
+            String callingDatabaseName = global ? null : request.getDatabaseName();
             int callType = global ? CallStats.CALL_TYPE_GLOBAL_GET_SCHEMA
                     : CallStats.CALL_TYPE_GET_SCHEMA;
             if (checkCallDenied(callingPackageName, callingDatabaseName, callType, callback,
-                    targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    targetUser, request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -522,34 +590,36 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
-                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
 
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callingPackageName);
                     GetSchemaResponse response =
                             instance.getAppSearchImpl().getSchema(
-                                    targetPackageName,
-                                    databaseName,
-                                    new FrameworkCallerAccess(callerAttributionSource,
-                                            callerHasSystemAccess));
+                                    request.getTargetPackageName(),
+                                    request.getDatabaseName(),
+                                    new FrameworkCallerAccess(request.getCallerAttributionSource(),
+                                            callerHasSystemAccess, request.isForEnterprise()));
                     ++operationSuccessCount;
-                    invokeCallbackOnResult(
-                            callback,
-                            AppSearchResult.newSuccessfulResult(response.getBundle()));
+                    invokeCallbackOnResult(callback, AppSearchResultParcel
+                            .fromGetSchemaResponse(response)
+                    );
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(callType)
@@ -565,34 +635,28 @@ public class AppSearchManagerService extends SystemService {
             });
             if (!callAccepted) {
                 logRateLimitedOrCallDeniedCallStats(callingPackageName, callingDatabaseName,
-                        callType, targetUser, binderCallStartTimeMillis,
+                        callType, targetUser, request.getBinderCallStartTimeMillis(),
                         totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void getNamespaces(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull GetNamespacesAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_GET_NAMESPACES, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -606,24 +670,27 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     List<String> namespaces =
                             instance.getAppSearchImpl().getNamespaces(
-                                    callingPackageName, databaseName);
+                                    callingPackageName, request.getDatabaseName());
                     ++operationSuccessCount;
-                    invokeCallbackOnResult(
-                            callback, AppSearchResult.newSuccessfulResult(namespaces));
+                    invokeCallbackOnResult(callback, AppSearchResultParcel
+                            .fromStringList(namespaces)
+                    );
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_GET_NAMESPACES)
@@ -638,37 +705,31 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
-                        CallStats.CALL_TYPE_GET_NAMESPACES, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis, /*numOperations=*/ 1, RESULT_RATE_LIMITED);
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
+                        CallStats.CALL_TYPE_GET_NAMESPACES, targetUser,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                        /*numOperations=*/ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void putDocuments(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull DocumentsParcel documentsParcel,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull PutDocumentsAidlRequest request,
                 @NonNull IAppSearchBatchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(documentsParcel);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName, CallStats.CALL_TYPE_PUT_DOCUMENTS,
-                    callback, targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
-                    /* numOperations= */ documentsParcel.getDocuments().size())) {
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
+                    CallStats.CALL_TYPE_PUT_DOCUMENTS, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ request.getDocumentsParcel().getTotalDocumentCount())) {
                 return;
             }
             boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
@@ -677,17 +738,24 @@ public class AppSearchManagerService extends SystemService {
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
+                List<GenericDocument> takenActionGenericDocuments = null;  // initialize later
+
                 try {
                     AppSearchBatchResult.Builder<String, Void> resultBuilder =
                             new AppSearchBatchResult.Builder<>();
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-                    List<GenericDocument> documents = documentsParcel.getDocuments();
-                    for (int i = 0; i < documents.size(); i++) {
-                        GenericDocument document = documents.get(i);
+                    List<GenericDocumentParcel> documentParcels =
+                            request.getDocumentsParcel().getDocumentParcels();
+                    List<GenericDocumentParcel> takenActionDocumentParcels =
+                            request.getDocumentsParcel().getTakenActionGenericDocumentParcels();
+
+                    // Write GenericDocument of general documents
+                    for (int i = 0; i < documentParcels.size(); i++) {
+                        GenericDocument document = new GenericDocument(documentParcels.get(i));
                         try {
                             instance.getAppSearchImpl().putDocument(
                                     callingPackageName,
-                                    databaseName,
+                                    request.getDatabaseName(),
                                     document,
                                     /* sendChangeNotifications= */ true,
                                     instance.getLogger());
@@ -704,9 +772,41 @@ public class AppSearchManagerService extends SystemService {
                             ++operationFailureCount;
                         }
                     }
+
+                    // Write GenericDocument of taken actions
+                    if (!takenActionDocumentParcels.isEmpty()) {
+                        takenActionGenericDocuments =
+                                new ArrayList<>(takenActionDocumentParcels.size());
+                    }
+                    for (int i = 0; i < takenActionDocumentParcels.size(); i++) {
+                        GenericDocument document =
+                                new GenericDocument(takenActionDocumentParcels.get(i));
+                        takenActionGenericDocuments.add(document);
+                        try {
+                            instance.getAppSearchImpl().putDocument(
+                                    callingPackageName,
+                                    request.getDatabaseName(),
+                                    document,
+                                    /* sendChangeNotifications= */ true,
+                                    instance.getLogger());
+                            resultBuilder.setSuccess(document.getId(), /* value= */ null);
+                            ++operationSuccessCount;
+                        } catch (AppSearchException | RuntimeException e) {
+                            // We don't rethrow here, so we can keep trying with the
+                            // following documents.
+                            AppSearchResult<Void> result = throwableToFailedResult(e);
+                            resultBuilder.setResult(document.getId(), result);
+                            // Since we can only include one status code in the atom,
+                            // for failures, we would just save the one for the last failure
+                            statusCode = result.getResultCode();
+                            ++operationFailureCount;
+                        }
+                    }
+
                     // Now that the batch has been written. Persist the newly written data.
                     instance.getAppSearchImpl().persistToDisk(PersistType.Code.LITE);
-                    invokeCallbackOnResult(callback, resultBuilder.build());
+                    invokeCallbackOnResult(callback, AppSearchBatchResultParcel
+                            .fromStringToVoid(resultBuilder.build()));
 
                     // Schedule a task to dispatch change notifications. See requirements for where
                     // the method is called documented in the method description.
@@ -715,7 +815,10 @@ public class AppSearchManagerService extends SystemService {
                     // The existing documents with same ID will be deleted, so there may be some
                     // resources that could be released after optimize().
                     checkForOptimize(
-                            targetUser, instance, /* mutateBatchSize= */ documents.size());
+                            targetUser,
+                            instance,
+                            /* mutateBatchSize= */
+                            request.getDocumentsParcel().getTotalDocumentCount());
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -725,12 +828,13 @@ public class AppSearchManagerService extends SystemService {
                     // TODO(b/261959320) add outstanding latency fields in AppSearch stats
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_PUT_DOCUMENTS)
@@ -741,55 +845,67 @@ public class AppSearchManagerService extends SystemService {
                                 .setNumOperationsSucceeded(operationSuccessCount)
                                 .setNumOperationsFailed(operationFailureCount)
                                 .build());
+
+                        // Extract metrics from taken action generic documents and add log.
+                        if (takenActionGenericDocuments != null
+                                && !takenActionGenericDocuments.isEmpty()) {
+                            instance.getLogger()
+                                    .logStats(mSearchIntentStatsExtractor.extract(
+                                            callingPackageName,
+                                            request.getDatabaseName(),
+                                            takenActionGenericDocuments));
+                        }
                     }
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
-                        CallStats.CALL_TYPE_PUT_DOCUMENTS, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis, /* numOperations= */
-                        documentsParcel.getDocuments().size(), RESULT_RATE_LIMITED);
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
+                        CallStats.CALL_TYPE_PUT_DOCUMENTS, targetUser,
+                        request.getBinderCallStartTimeMillis(),
+                        totalLatencyStartTimeMillis,
+                        /* numOperations= */
+                        request.getDocumentsParcel().getTotalDocumentCount(), RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void getDocuments(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String targetPackageName,
-                @NonNull String databaseName,
-                @NonNull String namespace,
-                @NonNull List<String> ids,
-                @NonNull Map<String, List<String>> typePropertyPaths,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull GetDocumentsAidlRequest request,
                 @NonNull IAppSearchBatchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(targetPackageName);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(namespace);
-            Objects.requireNonNull(ids);
-            Objects.requireNonNull(typePropertyPaths);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            boolean global = !callingPackageName.equals(targetPackageName);
+            // Get the enterprise user for enterprise calls
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(
+                    request.isForEnterprise(), targetUser);
+            if (userToQuery == null) {
+                // Return an empty batch result if we tried to and couldn't get the enterprise user
+                invokeCallbackOnResult(callback, AppSearchBatchResultParcel
+                        .fromStringToGenericDocumentParcel(new AppSearchBatchResult
+                                .Builder<String, GenericDocumentParcel>().build()));
+                return;
+            }
+            // TODO(b/319315074): consider removing local getDocument and just use globalGetDocument
+            //  instead; this would simplify the code and assure us that enterprise calls definitely
+            //  go through visibility checks
+            boolean global = isGlobalCall(callingPackageName, request.getTargetPackageName(),
+                    request.isForEnterprise());
             // We deny based on the calling package and calling database names. If the calling
             // package does not match the target package, then the call is global and the target
             // database is not a calling database.
-            String callingDatabaseName = global ? null : databaseName;
+            String callingDatabaseName = global ? null : request.getDatabaseName();
             int callType = global ? CallStats.CALL_TYPE_GLOBAL_GET_DOCUMENT_BY_ID
                     : CallStats.CALL_TYPE_GET_DOCUMENTS;
             if (checkCallDenied(callingPackageName, callingDatabaseName, callType, callback,
-                    targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
-                    /* numOperations= */ ids.size())) {
+                    targetUser, request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ request.getGetByDocumentIdRequest().getIds().size())) {
                 return;
             }
             boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
@@ -799,47 +915,64 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
-                    AppSearchBatchResult.Builder<String, Bundle> resultBuilder =
+                    AppSearchBatchResult.Builder<String, GenericDocumentParcel> resultBuilder =
                             new AppSearchBatchResult.Builder<>();
-                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-                    for (int i = 0; i < ids.size(); i++) {
-                        String id = ids.get(i);
+                    instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
+                    for (String id : request.getGetByDocumentIdRequest().getIds()) {
                         try {
                             GenericDocument document;
                             if (global) {
                                 boolean callerHasSystemAccess = instance.getVisibilityChecker()
-                                        .doesCallerHaveSystemAccess(callerAttributionSource
-                                                .getPackageName());
+                                        .doesCallerHaveSystemAccess(
+                                                request.getCallerAttributionSource()
+                                                        .getPackageName());
+                                Map<String, List<String>> typePropertyPaths =
+                                        request.getGetByDocumentIdRequest().getProjections();
+                                if (request.isForEnterprise()) {
+                                    EnterpriseSearchSpecTransformer.transformPropertiesMap(
+                                            typePropertyPaths);
+                                }
                                 document = instance.getAppSearchImpl().globalGetDocument(
-                                        targetPackageName,
-                                        databaseName,
-                                        namespace,
+                                        request.getTargetPackageName(),
+                                        request.getDatabaseName(),
+                                        request.getGetByDocumentIdRequest().getNamespace(),
                                         id,
                                         typePropertyPaths,
-                                        new FrameworkCallerAccess(callerAttributionSource,
-                                                callerHasSystemAccess));
+                                        new FrameworkCallerAccess(
+                                                request.getCallerAttributionSource(),
+                                                callerHasSystemAccess,
+                                                request.isForEnterprise()));
+                                if (request.isForEnterprise()) {
+                                    document =
+                                            EnterpriseSearchResultPageTransformer.transformDocument(
+                                                    request.getTargetPackageName(),
+                                                    request.getDatabaseName(),
+                                                    document);
+                                }
                             } else {
                                 document = instance.getAppSearchImpl().getDocument(
-                                        targetPackageName,
-                                        databaseName,
-                                        namespace,
+                                        request.getTargetPackageName(),
+                                        request.getDatabaseName(),
+                                        request.getGetByDocumentIdRequest().getNamespace(),
                                         id,
-                                        typePropertyPaths);
+                                        request.getGetByDocumentIdRequest().getProjections());
                             }
                             ++operationSuccessCount;
-                            resultBuilder.setSuccess(id, document.getBundle());
+                            resultBuilder.setSuccess(id, document.getDocumentParcel());
                         } catch (AppSearchException | RuntimeException e) {
                             // Since we can only include one status code in the atom,
                             // for failures, we would just save the one for the last failure
                             // Also, we don't rethrow here, so we can keep trying for
                             // the following ones.
-                            AppSearchResult<Bundle> result = throwableToFailedResult(e);
+                            AppSearchResult<GenericDocumentParcel> result =
+                                    throwableToFailedResult(e);
                             resultBuilder.setResult(id, result);
                             statusCode = result.getResultCode();
                             ++operationFailureCount;
                         }
                     }
-                    invokeCallbackOnResult(callback, resultBuilder.build());
+                    invokeCallbackOnResult(callback, AppSearchBatchResultParcel
+                            .fromStringToGenericDocumentParcel(resultBuilder.build()));
                 } catch (RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -849,12 +982,13 @@ public class AppSearchManagerService extends SystemService {
                     // TODO(b/261959320) add outstanding latency fields in AppSearch stats
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis -
+                                        request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(callType)
@@ -870,39 +1004,31 @@ public class AppSearchManagerService extends SystemService {
             });
             if (!callAccepted) {
                 logRateLimitedOrCallDeniedCallStats(callingPackageName, callingDatabaseName,
-                        callType, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis, /* numOperations= */ ids.size(),
+                        callType, targetUser, request.getBinderCallStartTimeMillis(),
+                        totalLatencyStartTimeMillis,
+                        /* numOperations= */ request.getGetByDocumentIdRequest().getIds().size(),
                         RESULT_RATE_LIMITED);
 
             }
         }
 
         @Override
-        public void query(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull String queryExpression,
-                @NonNull Bundle searchSpecBundle,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+        public void search(
+                @NonNull SearchAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(queryExpression);
-            Objects.requireNonNull(searchSpecBundle);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName, CallStats.CALL_TYPE_SEARCH,
-                    callback, targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
+                    CallStats.CALL_TYPE_SEARCH, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -916,28 +1042,29 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     SearchResultPage searchResultPage = instance.getAppSearchImpl().query(
                             callingPackageName,
-                            databaseName,
-                            queryExpression,
-                            new SearchSpec(searchSpecBundle),
+                            request.getDatabaseName(),
+                            request.getSearchExpression(),
+                            request.getSearchSpec(),
                             instance.getLogger());
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
-                            AppSearchResult.newSuccessfulResult(searchResultPage.getBundle()));
+                            AppSearchResultParcel.fromSearchResultPage(searchResultPage));
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
-                        int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                        int estimatedBinderLatencyMillis = 2 * (int) (totalLatencyStartTimeMillis
+                                - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_SEARCH)
@@ -952,38 +1079,39 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
-                        CallStats.CALL_TYPE_SEARCH, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis,
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
+                        CallStats.CALL_TYPE_SEARCH, targetUser,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
-        public void globalQuery(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String queryExpression,
-                @NonNull Bundle searchSpecBundle,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+        public void globalSearch(
+                @NonNull GlobalSearchAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(queryExpression);
-            Objects.requireNonNull(searchSpecBundle);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
+            // Get the enterprise user for enterprise calls
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(request.isForEnterprise(),
+                    targetUser);
+            if (userToQuery == null) {
+                // Return an empty result if we tried to and couldn't get the enterprise user
+                invokeCallbackOnResult(callback,
+                        AppSearchResultParcel.fromSearchResultPage(new SearchResultPage()));
+                return;
+            }
             if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                     CallStats.CALL_TYPE_GLOBAL_SEARCH, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -994,30 +1122,37 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 try {
-                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-
+                    instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callingPackageName);
-
+                    SearchSpec querySearchSpec = request.isForEnterprise()
+                            ? EnterpriseSearchSpecTransformer.transformSearchSpec(
+                            request.getSearchSpec()) : request.getSearchSpec();
                     SearchResultPage searchResultPage = instance.getAppSearchImpl().globalQuery(
-                            queryExpression,
-                            new SearchSpec(searchSpecBundle),
-                            new FrameworkCallerAccess(callerAttributionSource,
-                                    callerHasSystemAccess),
+                            request.getSearchExpression(),
+                            querySearchSpec,
+                            new FrameworkCallerAccess(request.getCallerAttributionSource(),
+                                    callerHasSystemAccess, request.isForEnterprise()),
                             instance.getLogger());
+                    if (request.isForEnterprise()) {
+                        searchResultPage =
+                                EnterpriseSearchResultPageTransformer.transformSearchResultPage(
+                                        searchResultPage);
+                    }
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
-                            AppSearchResult.newSuccessfulResult(searchResultPage.getBundle()));
+                            AppSearchResultParcel.fromSearchResultPage(searchResultPage));
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
-                        int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                        int estimatedBinderLatencyMillis = 2 * (int) (totalLatencyStartTimeMillis
+                                - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
@@ -1038,37 +1173,40 @@ public class AppSearchManagerService extends SystemService {
             if (!callAccepted) {
                 logRateLimitedOrCallDeniedCallStats(callingPackageName,
                         /* callingDatabaseName= */ null, CallStats.CALL_TYPE_GLOBAL_SEARCH,
-                        targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
-                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+                        targetUser, request.getBinderCallStartTimeMillis(),
+                        totalLatencyStartTimeMillis, /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void getNextPage(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @Nullable String databaseName,
-                long nextPageToken,
-                @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinType,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull GetNextPageAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            boolean global = databaseName == null;
+            // Get the enterprise user for enterprise calls
+            UserHandle userToQuery = mServiceImplHelper.getUserToQuery(request.isForEnterprise(),
+                    targetUser);
+            if (userToQuery == null) {
+                // Return an empty result if we tried to and couldn't get the enterprise user
+                invokeCallbackOnResult(callback,
+                        AppSearchResultParcel.fromSearchResultPage(new SearchResultPage()));
+                return;
+            }
+            // Enterprise session calls are considered global for CallStats logging
+            boolean global = request.getDatabaseName() == null || request.isForEnterprise();
             int callType = global ? CallStats.CALL_TYPE_GLOBAL_GET_NEXT_PAGE
                     : CallStats.CALL_TYPE_GET_NEXT_PAGE;
-            if (checkCallDenied(callingPackageName, databaseName, callType, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(), callType, callback,
+                    targetUser, request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1082,37 +1220,42 @@ public class AppSearchManagerService extends SystemService {
                 if (global) {
                     statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_GLOBAL,
                             callingPackageName)
-                            .setJoinType(joinType);
+                            .setJoinType(request.getJoinType());
                 } else {
                     statsBuilder = new SearchStats.Builder(VISIBILITY_SCOPE_LOCAL,
                             callingPackageName)
-                            .setDatabase(databaseName)
-                            .setJoinType(joinType);
+                            .setDatabase(request.getDatabaseName())
+                            .setJoinType(request.getJoinType());
                 }
                 try {
-                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                     SearchResultPage searchResultPage =
-                            instance.getAppSearchImpl().getNextPage(
-                                    callingPackageName, nextPageToken,
-                                    statsBuilder);
+                            instance.getAppSearchImpl().getNextPage(callingPackageName,
+                                    request.getNextPageToken(), statsBuilder);
+                    if (request.isForEnterprise()) {
+                        searchResultPage =
+                                EnterpriseSearchResultPageTransformer.transformSearchResultPage(
+                                        searchResultPage);
+                    }
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
                             callback,
-                            AppSearchResult.newSuccessfulResult(searchResultPage.getBundle()));
+                            AppSearchResultParcel.fromSearchResultPage(searchResultPage));
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
-                        int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                        int estimatedBinderLatencyMillis = 2 * (int) (totalLatencyStartTimeMillis
+                                - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         CallStats.Builder builder = new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(callType)
@@ -1128,30 +1271,31 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName, callType,
-                        targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
-                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
+                        callType, targetUser, request.getBinderCallStartTimeMillis(),
+                        totalLatencyStartTimeMillis, /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
-        public void invalidateNextPageToken(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                long nextPageToken,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(userHandle);
+        public void invalidateNextPageToken(@NonNull InvalidateNextPageTokenAidlRequest request) {
+            Objects.requireNonNull(request);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
-                        callerAttributionSource, userHandle);
-                String callingPackageName =
-                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                        request.getCallerAttributionSource(), request.getUserHandle());
+                // Get the enterprise user for enterprise calls
+                UserHandle userToQuery = mServiceImplHelper.getUserToQuery(
+                        request.isForEnterprise(), targetUser);
+                if (userToQuery == null) {
+                    // Return if we tried to and couldn't get the enterprise user
+                    return;
+                }
+                String callingPackageName = request.getCallerAttributionSource().getPackageName();
                 if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                         CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1)) {
                     return;
                 }
@@ -1163,9 +1307,9 @@ public class AppSearchManagerService extends SystemService {
                     int operationSuccessCount = 0;
                     int operationFailureCount = 0;
                     try {
-                        instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                        instance = mAppSearchUserInstanceManager.getUserInstance(userToQuery);
                         instance.getAppSearchImpl().invalidateNextPageToken(
-                                callingPackageName, nextPageToken);
+                                callingPackageName, request.getNextPageToken());
                         operationSuccessCount++;
                     } catch (AppSearchException | RuntimeException e) {
                         ++operationFailureCount;
@@ -1176,7 +1320,7 @@ public class AppSearchManagerService extends SystemService {
                         if (instance != null) {
                             int estimatedBinderLatencyMillis =
                                     2 * (int) (totalLatencyStartTimeMillis
-                                            - binderCallStartTimeMillis);
+                                            - request.getBinderCallStartTimeMillis());
                             int totalLatencyMillis =
                                     (int) (SystemClock.elapsedRealtime()
                                             - totalLatencyStartTimeMillis);
@@ -1200,7 +1344,7 @@ public class AppSearchManagerService extends SystemService {
                     logRateLimitedOrCallDeniedCallStats(
                             callingPackageName, /* callingDatabaseName= */ null,
                             CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, targetUser,
-                            binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                            request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                             /* numOperations= */ 1, RESULT_RATE_LIMITED);
                 }
             } catch (RuntimeException e) {
@@ -1210,34 +1354,22 @@ public class AppSearchManagerService extends SystemService {
         }
 
         @Override
-        public void writeQueryResultsToFile(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull ParcelFileDescriptor fileDescriptor,
-                @NonNull String queryExpression,
-                @NonNull Bundle searchSpecBundle,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+        public void writeSearchResultsToFile(
+                @NonNull WriteSearchResultsToFileAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(fileDescriptor);
-            Objects.requireNonNull(queryExpression);
-            Objects.requireNonNull(searchSpecBundle);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1251,19 +1383,19 @@ public class AppSearchManagerService extends SystemService {
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     // we don't need to append the file. The file is always brand new.
-                    try (DataOutputStream outputStream = new DataOutputStream(
-                            new FileOutputStream(fileDescriptor.getFileDescriptor()))) {
+                    try (DataOutputStream outputStream = new DataOutputStream(new FileOutputStream(
+                            request.getParcelFileDescriptor().getFileDescriptor()))) {
                         SearchResultPage searchResultPage = instance.getAppSearchImpl().query(
                                 callingPackageName,
-                                databaseName,
-                                queryExpression,
-                                new SearchSpec(searchSpecBundle),
+                                request.getDatabaseName(),
+                                request.getSearchExpression(),
+                                request.getSearchSpec(),
                                 /* logger= */ null);
                         while (!searchResultPage.getResults().isEmpty()) {
                             for (int i = 0; i < searchResultPage.getResults().size(); i++) {
-                                AppSearchMigrationHelper.writeBundleToOutputStream(
-                                        outputStream, searchResultPage.getResults().get(i)
-                                                .getGenericDocument().getBundle());
+                                AppSearchMigrationHelper.writeDocumentToOutputStream(
+                                        outputStream,
+                                        searchResultPage.getResults().get(i).getGenericDocument());
                             }
                             operationSuccessCount += searchResultPage.getResults().size();
                             // TODO(b/173532925): Implement logging for statsBuilder
@@ -1273,21 +1405,22 @@ public class AppSearchManagerService extends SystemService {
                                     /* sStatsBuilder= */ null);
                         }
                     }
-                    invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromVoid());
                 } catch (AppSearchException | IOException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
-                        int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                        int estimatedBinderLatencyMillis = 2 * (int) (totalLatencyStartTimeMillis
+                                - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE)
@@ -1302,43 +1435,32 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
                         CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void putDocumentsFromFile(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull ParcelFileDescriptor fileDescriptor,
-                @NonNull UserHandle userHandle,
-                @NonNull SchemaMigrationStats schemaMigrationStats,
-                @ElapsedRealtimeLong long totalLatencyStartTimeMillis,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull PutDocumentsFromFileAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(fileDescriptor);
-            Objects.requireNonNull(userHandle);
-            Objects.requireNonNull(schemaMigrationStats);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long callStatsTotalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             // Since we don't read from the given file, we don't know the number of documents so we
             // just set numOperations to 1 instead
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, callback, targetUser,
-                    binderCallStartTimeMillis, callStatsTotalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), callStatsTotalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1350,14 +1472,14 @@ public class AppSearchManagerService extends SystemService {
                 int operationSuccessCount = 0;
                 int operationFailureCount = 0;
                 SchemaMigrationStats.Builder schemaMigrationStatsBuilder = new SchemaMigrationStats
-                        .Builder(schemaMigrationStats);
+                        .Builder(request.getSchemaMigrationStats());
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
 
                     GenericDocument document;
-                    ArrayList<Bundle> migrationFailureBundles = new ArrayList<>();
-                    try (DataInputStream inputStream = new DataInputStream(
-                            new FileInputStream(fileDescriptor.getFileDescriptor()))) {
+                    ArrayList<MigrationFailure> migrationFailures = new ArrayList<>();
+                    try (DataInputStream inputStream = new DataInputStream(new FileInputStream(
+                            request.getParcelFileDescriptor().getFileDescriptor()))) {
                         while (true) {
                             try {
                                 document = AppSearchMigrationHelper
@@ -1371,7 +1493,7 @@ public class AppSearchManagerService extends SystemService {
                                 // notifications are not dispatched.
                                 instance.getAppSearchImpl().putDocument(
                                         callingPackageName,
-                                        databaseName,
+                                        request.getDatabaseName(),
                                         document,
                                         /* sendChangeNotifications= */ false,
                                         /* logger= */ null);
@@ -1382,12 +1504,11 @@ public class AppSearchManagerService extends SystemService {
                                 ++operationFailureCount;
                                 AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                                 statusCode = failedResult.getResultCode();
-                                migrationFailureBundles.add(new SetSchemaResponse.MigrationFailure(
+                                migrationFailures.add(new SetSchemaResponse.MigrationFailure(
                                         document.getNamespace(),
                                         document.getId(),
                                         document.getSchemaType(),
-                                        failedResult)
-                                        .getBundle());
+                                        failedResult));
                             }
                         }
                     }
@@ -1395,21 +1516,22 @@ public class AppSearchManagerService extends SystemService {
 
                     schemaMigrationStatsBuilder
                             .setTotalSuccessMigratedDocumentCount(operationSuccessCount)
-                            .setMigrationFailureCount(migrationFailureBundles.size());
-                    invokeCallbackOnResult(callback,
-                            AppSearchResult.newSuccessfulResult(migrationFailureBundles));
+                            .setMigrationFailureCount(migrationFailures.size());
+                    invokeCallbackOnResult(callback, AppSearchResultParcel
+                            .fromMigrationFailuresList(migrationFailures));
                 } catch (AppSearchException | IOException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
                         long latencyEndTimeMillis =
                                 SystemClock.elapsedRealtime();
                         int estimatedBinderLatencyMillis =
                                 2 * (int) (callStatsTotalLatencyStartTimeMillis
-                                        - binderCallStartTimeMillis);
+                                        - request.getBinderCallStartTimeMillis());
                         int callStatsTotalLatencyMillis =
                                 (int) (latencyEndTimeMillis - callStatsTotalLatencyStartTimeMillis);
                         // totalLatencyStartTimeMillis is captured in the SDK side, and
@@ -1417,13 +1539,13 @@ public class AppSearchManagerService extends SystemService {
                         // This should includes whole schema migration process.
                         // Like get old schema, first and second set schema, query old
                         // documents, transform documents and save migrated documents.
-                        int totalLatencyMillis =
-                                (int) (latencyEndTimeMillis - totalLatencyStartTimeMillis);
-                        int saveDocumentLatencyMillis =
-                                (int) (latencyEndTimeMillis - binderCallStartTimeMillis);
+                        int totalLatencyMillis = (int) (latencyEndTimeMillis
+                                - request.getTotalLatencyStartTimeMillis());
+                        int saveDocumentLatencyMillis = (int) (latencyEndTimeMillis
+                                - request.getBinderCallStartTimeMillis());
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(callStatsTotalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE)
@@ -1443,40 +1565,31 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
                         CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE, targetUser,
-                        binderCallStartTimeMillis, callStatsTotalLatencyStartTimeMillis,
-                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
+                        request.getBinderCallStartTimeMillis(),
+                        callStatsTotalLatencyStartTimeMillis, /* numOperations= */ 1,
+                        RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void searchSuggestion(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull String searchQueryExpression,
-                @NonNull Bundle searchSuggestionSpecBundle,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull SearchSuggestionAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(searchQueryExpression);
-            Objects.requireNonNull(searchSuggestionSpecBundle);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_SEARCH_SUGGESTION, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1493,33 +1606,29 @@ public class AppSearchManagerService extends SystemService {
                     List<SearchSuggestionResult> searchSuggestionResults =
                             instance.getAppSearchImpl().searchSuggestion(
                                     callingPackageName,
-                                    databaseName,
-                                    searchQueryExpression,
-                                    new SearchSuggestionSpec(searchSuggestionSpecBundle));
-                    List<Bundle> searchSuggestionResultBundles =
-                            new ArrayList<>(searchSuggestionResults.size());
-                    for (int i = 0; i < searchSuggestionResults.size(); i++) {
-                        searchSuggestionResultBundles.add(
-                                searchSuggestionResults.get(i).getBundle());
-                    }
+                                    request.getDatabaseName(),
+                                    request.getSuggestionQueryExpression(),
+                                    request.getSearchSuggestionSpec());
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
-                            callback,
-                            AppSearchResult.newSuccessfulResult(searchSuggestionResultBundles));
+                            callback, AppSearchResultParcel
+                                    .fromSearchSuggestionResultList(searchSuggestionResults));
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_SEARCH_SUGGESTION)
@@ -1534,49 +1643,36 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
                         CallStats.CALL_TYPE_SEARCH_SUGGESTION, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void reportUsage(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String targetPackageName,
-                @NonNull String databaseName,
-                @NonNull String namespace,
-                @NonNull String documentId,
-                long usageTimeMillis,
-                boolean systemUsage,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull ReportUsageAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(targetPackageName);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(namespace);
-            Objects.requireNonNull(documentId);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
             // We deny based on the calling package and calling database names. If the API call is
             // intended for system usage, then the call is global, and the target database is not a
             // calling database.
-            String callingDatabaseName = systemUsage ? null : databaseName;
-            int callType = systemUsage ? CallStats.CALL_TYPE_REPORT_SYSTEM_USAGE
+            String callingDatabaseName = request.isSystemUsage()
+                    ? null : request.getDatabaseName();
+            int callType = request.isSystemUsage() ? CallStats.CALL_TYPE_REPORT_SYSTEM_USAGE
                     : CallStats.CALL_TYPE_REPORT_USAGE;
             if (checkCallDenied(callingPackageName, callingDatabaseName, callType, callback,
-                    targetUser, binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    targetUser, request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1589,41 +1685,46 @@ public class AppSearchManagerService extends SystemService {
                 int operationFailureCount = 0;
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-                    if (systemUsage) {
+                    if (request.isSystemUsage()) {
                         if (!instance.getVisibilityChecker().doesCallerHaveSystemAccess(
                                 callingPackageName)) {
-                            throw new AppSearchException(AppSearchResult.RESULT_SECURITY_ERROR,
+                            throw new AppSearchException(RESULT_SECURITY_ERROR,
                                     callingPackageName
                                             + " does not have access to report system usage");
                         }
                     } else {
-                        if (!callingPackageName.equals(targetPackageName)) {
-                            throw new AppSearchException(AppSearchResult.RESULT_SECURITY_ERROR,
+                        if (!callingPackageName.equals(request.getTargetPackageName())) {
+                            throw new AppSearchException(RESULT_SECURITY_ERROR,
                                     "Cannot report usage to different package: "
-                                            + targetPackageName + " from package: "
+                                            + request.getTargetPackageName() + " from package: "
                                             + callingPackageName);
                         }
                     }
 
-                    instance.getAppSearchImpl().reportUsage(targetPackageName, databaseName,
-                            namespace, documentId, usageTimeMillis, systemUsage);
+                    instance.getAppSearchImpl().reportUsage(request.getTargetPackageName(),
+                            request.getDatabaseName(),
+                            request.getReportUsageRequest().getNamespace(),
+                            request.getReportUsageRequest().getDocumentId(),
+                            request.getReportUsageRequest().getUsageTimestampMillis(),
+                            request.isSystemUsage());
                     ++operationSuccessCount;
-                    invokeCallbackOnResult(
-                            callback, AppSearchResult.newSuccessfulResult(/* value= */ null));
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromVoid());
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis -
+                                        request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(callType)
@@ -1639,7 +1740,7 @@ public class AppSearchManagerService extends SystemService {
             });
             if (!callAccepted) {
                 logRateLimitedOrCallDeniedCallStats(callingPackageName, callingDatabaseName,
-                        callType, targetUser, binderCallStartTimeMillis,
+                        callType, targetUser, request.getBinderCallStartTimeMillis(),
                         totalLatencyStartTimeMillis,
                         /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
@@ -1647,32 +1748,22 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void removeByDocumentId(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull String namespace,
-                @NonNull List<String> ids,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull RemoveByDocumentIdAidlRequest request,
                 @NonNull IAppSearchBatchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(namespace);
-            Objects.requireNonNull(ids);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
-                    /* numOperations= */ ids.size())) {
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ request.getRemoveByDocumentIdRequest().getIds().size())) {
                 return;
             }
             boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
@@ -1686,19 +1777,18 @@ public class AppSearchManagerService extends SystemService {
                     AppSearchBatchResult.Builder<String, Void> resultBuilder =
                             new AppSearchBatchResult.Builder<>();
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
-                    for (int i = 0; i < ids.size(); i++) {
-                        String id = ids.get(i);
+                    for (String id : request.getRemoveByDocumentIdRequest().getIds()) {
                         try {
                             instance.getAppSearchImpl().remove(
                                     callingPackageName,
-                                    databaseName,
-                                    namespace,
+                                    request.getDatabaseName(),
+                                    request.getRemoveByDocumentIdRequest().getNamespace(),
                                     id,
                                     /* removeStatsBuilder= */ null);
                             ++operationSuccessCount;
                             resultBuilder.setSuccess(id, /*result= */ null);
                         } catch (AppSearchException | RuntimeException e) {
-                            // We don't rethrow here so we can still keep trying for the following
+                            // We don't rethrow here, so we can still keep trying for the following
                             // ones.
                             AppSearchResult<Void> result = throwableToFailedResult(e);
                             resultBuilder.setResult(id, result);
@@ -1710,13 +1800,15 @@ public class AppSearchManagerService extends SystemService {
                     }
                     // Now that the batch has been written. Persist the newly written data.
                     instance.getAppSearchImpl().persistToDisk(PersistType.Code.LITE);
-                    invokeCallbackOnResult(callback, resultBuilder.build());
+                    invokeCallbackOnResult(callback, AppSearchBatchResultParcel.fromStringToVoid(
+                            resultBuilder.build()));
 
                     // Schedule a task to dispatch change notifications. See requirements for where
                     // the method is called documented in the method description.
                     dispatchChangeNotifications(instance);
 
-                    checkForOptimize(targetUser, instance, ids.size());
+                    checkForOptimize(targetUser, instance,
+                            request.getRemoveByDocumentIdRequest().getIds().size());
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -1726,12 +1818,13 @@ public class AppSearchManagerService extends SystemService {
                     // TODO(b/261959320) add outstanding latency fields in AppSearch stats
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID)
@@ -1746,40 +1839,31 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
                         CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
-                        /* numOperations= */ ids.size(), RESULT_RATE_LIMITED);
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                        /* numOperations= */ request.getRemoveByDocumentIdRequest().getIds().size(),
+                        RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void removeByQuery(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull String queryExpression,
-                @NonNull Bundle searchSpecBundle,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull RemoveByQueryAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(queryExpression);
-            Objects.requireNonNull(searchSpecBundle);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1794,14 +1878,14 @@ public class AppSearchManagerService extends SystemService {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     instance.getAppSearchImpl().removeByQuery(
                             callingPackageName,
-                            databaseName,
-                            queryExpression,
-                            new SearchSpec(searchSpecBundle),
+                            request.getDatabaseName(),
+                            request.getQueryExpression(),
+                            request.getSearchSpec(),
                             /* removeStatsBuilder= */ null);
                     // Now that the batch has been written. Persist the newly written data.
                     instance.getAppSearchImpl().persistToDisk(PersistType.Code.LITE);
                     ++operationSuccessCount;
-                    invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromVoid());
 
                     // Schedule a task to dispatch change notifications. See requirements for where
                     // the method is called documented in the method description.
@@ -1812,17 +1896,19 @@ public class AppSearchManagerService extends SystemService {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     // TODO(b/261959320) add outstanding latency fields in AppSearch stats
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH)
@@ -1837,36 +1923,30 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
                         CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
         public void getStorageInfo(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String databaseName,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull GetStorageInfoAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(databaseName);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
-            if (checkCallDenied(callingPackageName, databaseName,
+            if (checkCallDenied(callingPackageName, request.getDatabaseName(),
                     CallStats.CALL_TYPE_GET_STORAGE_INFO, callback, targetUser,
-                    binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                     /* numOperations= */ 1)) {
                 return;
             }
@@ -1879,25 +1959,26 @@ public class AppSearchManagerService extends SystemService {
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     StorageInfo storageInfo = instance.getAppSearchImpl().getStorageInfoForDatabase(
-                            callingPackageName, databaseName);
-                    Bundle storageInfoBundle = storageInfo.getBundle();
+                            callingPackageName, request.getDatabaseName());
                     ++operationSuccessCount;
                     invokeCallbackOnResult(
-                            callback, AppSearchResult.newSuccessfulResult(storageInfoBundle));
+                            callback, AppSearchResultParcel.fromStorageInfo(storageInfo));
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
                                 .setPackageName(callingPackageName)
-                                .setDatabase(databaseName)
+                                .setDatabase(request.getDatabaseName())
                                 .setStatusCode(statusCode)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 .setCallType(CallStats.CALL_TYPE_GET_STORAGE_INFO)
@@ -1912,29 +1993,26 @@ public class AppSearchManagerService extends SystemService {
                 }
             });
             if (!callAccepted) {
-                logRateLimitedOrCallDeniedCallStats(callingPackageName, databaseName,
-                        CallStats.CALL_TYPE_GET_STORAGE_INFO, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis, /* numOperations= */ 1, RESULT_RATE_LIMITED);
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, request.getDatabaseName(),
+                        CallStats.CALL_TYPE_GET_STORAGE_INFO, targetUser,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1, RESULT_RATE_LIMITED);
             }
         }
 
         @Override
-        public void persistToDisk(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(userHandle);
+        public void persistToDisk(@NonNull PersistToDiskAidlRequest request) {
+            Objects.requireNonNull(request);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
-                        callerAttributionSource, userHandle);
-                String callingPackageName =
-                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                        request.getCallerAttributionSource(), request.getUserHandle());
+                String callingPackageName = request.getCallerAttributionSource().getPackageName();
                 if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
-                        CallStats.CALL_TYPE_FLUSH, targetUser, binderCallStartTimeMillis,
-                        totalLatencyStartTimeMillis, /* numOperations= */ 1)) {
+                        CallStats.CALL_TYPE_FLUSH, targetUser,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1)) {
                     return;
                 }
                 boolean callAccepted = mServiceImplHelper.executeLambdaForUserNoCallbackAsync(
@@ -1959,7 +2037,7 @@ public class AppSearchManagerService extends SystemService {
                         if (instance != null) {
                             int estimatedBinderLatencyMillis =
                                     2 * (int) (totalLatencyStartTimeMillis
-                                            - binderCallStartTimeMillis);
+                                            - request.getBinderCallStartTimeMillis());
                             int totalLatencyMillis =
                                     (int) (SystemClock.elapsedRealtime()
                                             - totalLatencyStartTimeMillis);
@@ -1981,9 +2059,9 @@ public class AppSearchManagerService extends SystemService {
                 if (!callAccepted) {
                     logRateLimitedOrCallDeniedCallStats(
                             callingPackageName, /* callingDatabaseName= */ null,
-                            CallStats.CALL_TYPE_FLUSH, targetUser, binderCallStartTimeMillis,
-                            totalLatencyStartTimeMillis, /* numOperations= */ 1,
-                            RESULT_RATE_LIMITED);
+                            CallStats.CALL_TYPE_FLUSH, targetUser,
+                            request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                            /* numOperations= */ 1, RESULT_RATE_LIMITED);
                 }
             } catch (RuntimeException e) {
                 Log.e(TAG, "Unable to persist the data to disk", e);
@@ -1993,16 +2071,9 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public AppSearchResultParcel<Void> registerObserverCallback(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String targetPackageName,
-                @NonNull Bundle observerSpecBundle,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull RegisterObserverCallbackAidlRequest request,
                 @NonNull IAppSearchObserverProxy observerProxyStub) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(targetPackageName);
-            Objects.requireNonNull(observerSpecBundle);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(observerProxyStub);
 
             @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -2015,15 +2086,14 @@ public class AppSearchManagerService extends SystemService {
             // AppSearch APIs
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
-                        callerAttributionSource, userHandle);
-                callingPackageName =
-                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                        request.getCallerAttributionSource(), request.getUserHandle());
+                callingPackageName = request.getCallerAttributionSource().getPackageName();
                 if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                         CallStats.CALL_TYPE_REGISTER_OBSERVER_CALLBACK, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1)) {
-                    return new AppSearchResultParcel<>(
-                            AppSearchResult.newFailedResult(RESULT_DENIED, null));
+                    return AppSearchResultParcel.fromFailedResult(AppSearchResult.newFailedResult(
+                            RESULT_DENIED, null));
                 }
                 long callingIdentity = Binder.clearCallingIdentity();
                 try {
@@ -2037,21 +2107,22 @@ public class AppSearchManagerService extends SystemService {
                     final AppSearchUserInstance finalInstance = instance;
                     observerProxyStub.asBinder().linkToDeath(
                             () -> finalInstance.getAppSearchImpl()
-                                    .unregisterObserverCallback(targetPackageName, observerProxy),
+                                    .unregisterObserverCallback(
+                                            request.getTargetPackageName(), observerProxy),
                             /* flags= */ 0);
 
                     // Register the observer.
                     boolean callerHasSystemAccess = instance.getVisibilityChecker()
                             .doesCallerHaveSystemAccess(callingPackageName);
                     instance.getAppSearchImpl().registerObserverCallback(
-                            new FrameworkCallerAccess(
-                                    callerAttributionSource, callerHasSystemAccess),
-                            targetPackageName,
-                            new ObserverSpec(observerSpecBundle),
+                            new FrameworkCallerAccess(request.getCallerAttributionSource(),
+                                    callerHasSystemAccess, /*isForEnterprise=*/ false),
+                            request.getTargetPackageName(),
+                            request.getObserverSpec(),
                             mExecutorManager.getOrCreateUserExecutor(targetUser),
                             new AppSearchObserverProxy(observerProxyStub));
                     ++operationSuccessCount;
-                    return new AppSearchResultParcel<>(AppSearchResult.newSuccessfulResult(null));
+                    return AppSearchResultParcel.fromVoid();
                 } finally {
                     Binder.restoreCallingIdentity(callingIdentity);
                 }
@@ -2059,11 +2130,12 @@ public class AppSearchManagerService extends SystemService {
                 ++operationFailureCount;
                 AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                 statusCode = failedResult.getResultCode();
-                return new AppSearchResultParcel<>(failedResult);
+                return AppSearchResultParcel.fromFailedResult(failedResult);
             } finally {
                 if (instance != null) {
                     int estimatedBinderLatencyMillis =
-                            2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                            2 * (int) (totalLatencyStartTimeMillis
+                                    - request.getBinderCallStartTimeMillis());
                     int totalLatencyMillis =
                             (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                     instance.getLogger().logStats(new CallStats.Builder()
@@ -2084,14 +2156,9 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public AppSearchResultParcel<Void> unregisterObserverCallback(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull String observedPackage,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull UnregisterObserverCallbackAidlRequest request,
                 @NonNull IAppSearchObserverProxy observerProxyStub) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(observedPackage);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(observerProxyStub);
 
             @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -2103,24 +2170,23 @@ public class AppSearchManagerService extends SystemService {
             // AppSearch APIs
             try {
                 UserHandle targetUser = mServiceImplHelper.verifyIncomingCall(
-                        callerAttributionSource, userHandle);
-                String callingPackageName =
-                        Objects.requireNonNull(callerAttributionSource.getPackageName());
+                        request.getCallerAttributionSource(), request.getUserHandle());
+                String callingPackageName = request.getCallerAttributionSource().getPackageName();
                 if (checkCallDenied(callingPackageName, /* callingDatabaseName= */ null,
                         CallStats.CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK, targetUser,
-                        binderCallStartTimeMillis, totalLatencyStartTimeMillis,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
                         /* numOperations= */ 1)) {
-                    return new AppSearchResultParcel<>(
-                            AppSearchResult.newFailedResult(RESULT_DENIED, null));
+                    return AppSearchResultParcel.fromFailedResult(AppSearchResult.newFailedResult(
+                            RESULT_DENIED, null));
                 }
                 long callingIdentity = Binder.clearCallingIdentity();
                 try {
                     instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
                     instance.getAppSearchImpl().unregisterObserverCallback(
-                            observedPackage,
+                            request.getObservedPackage(),
                             new AppSearchObserverProxy(observerProxyStub));
                     ++operationSuccessCount;
-                    return new AppSearchResultParcel<>(AppSearchResult.newSuccessfulResult(null));
+                    return AppSearchResultParcel.fromVoid();
                 } finally {
                     Binder.restoreCallingIdentity(callingIdentity);
                 }
@@ -2128,14 +2194,16 @@ public class AppSearchManagerService extends SystemService {
                 ++operationFailureCount;
                 AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                 statusCode = failedResult.getResultCode();
-                return new AppSearchResultParcel<>(failedResult);
+                return AppSearchResultParcel.fromFailedResult(failedResult);
             } finally {
                 if (instance != null) {
                     int estimatedBinderLatencyMillis =
-                            2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                            2 * (int) (totalLatencyStartTimeMillis
+                                    - request.getBinderCallStartTimeMillis());
                     int totalLatencyMillis =
                             (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
-                    String callingPackageName = callerAttributionSource.getPackageName();
+                    String callingPackageName = request.getCallerAttributionSource()
+                            .getPackageName();
                     instance.getLogger().logStats(new CallStats.Builder()
                             .setPackageName(callingPackageName)
                             .setStatusCode(statusCode)
@@ -2154,19 +2222,15 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void initialize(
-                @NonNull AppSearchAttributionSource callerAttributionSource,
-                @NonNull UserHandle userHandle,
-                @ElapsedRealtimeLong long binderCallStartTimeMillis,
+                @NonNull InitializeAidlRequest request,
                 @NonNull IAppSearchResultCallback callback) {
-            Objects.requireNonNull(callerAttributionSource);
-            Objects.requireNonNull(userHandle);
+            Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
-                    callerAttributionSource, userHandle, callback);
-            String callingPackageName =
-                    Objects.requireNonNull(callerAttributionSource.getPackageName());
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
             if (targetUser == null) {
                 return;  // Verification failed; verifyIncomingCall triggered callback.
             }
@@ -2174,8 +2238,8 @@ public class AppSearchManagerService extends SystemService {
                     CallStats.CALL_TYPE_INITIALIZE)) {
                 // Note: can't log CallStats here since UserInstance isn't guaranteed to (and most
                 // likely does not) exist
-                invokeCallbackOnResult(callback,
-                        AppSearchResult.newFailedResult(RESULT_DENIED, null));
+                invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                        AppSearchResult.newFailedResult(RESULT_DENIED, null)));
                 return;
             }
             mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, callingPackageName,
@@ -2186,22 +2250,24 @@ public class AppSearchManagerService extends SystemService {
                 int operationFailureCount = 0;
                 try {
                     Context targetUserContext = mAppSearchEnvironment
-                            .createContextAsUser(mContext, userHandle);
+                            .createContextAsUser(mContext, request.getUserHandle());
                     instance = mAppSearchUserInstanceManager.getOrCreateUserInstance(
                             targetUserContext,
                             targetUser,
                             mAppSearchConfig);
                     ++operationSuccessCount;
-                    invokeCallbackOnResult(callback, AppSearchResult.newSuccessfulResult(null));
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromVoid());
                 } catch (AppSearchException | RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
                     statusCode = failedResult.getResultCode();
-                    invokeCallbackOnResult(callback, failedResult);
+                    invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                            failedResult));
                 } finally {
                     if (instance != null) {
                         int estimatedBinderLatencyMillis =
-                                2 * (int) (totalLatencyStartTimeMillis - binderCallStartTimeMillis);
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
                         int totalLatencyMillis =
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
                         instance.getLogger().logStats(new CallStats.Builder()
@@ -2219,6 +2285,213 @@ public class AppSearchManagerService extends SystemService {
                     }
                 }
             });
+        }
+
+        @Override
+        public void executeAppFunction(
+                @NonNull ExecuteAppFunctionAidlRequest request,
+                @NonNull IAppSearchResultCallback callback) {
+            Objects.requireNonNull(request);
+            Objects.requireNonNull(callback);
+
+            long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
+
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
+            UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
+                    request.getCallerAttributionSource(), request.getUserHandle(), callback);
+            if (targetUser == null) {
+                return;  // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(
+                    callingPackageName, /* databaseName= */ null,
+                    CallStats.CALL_TYPE_EXECUTE_APP_FUNCTION, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
+            }
+
+            // Log the stats as well whenever we invoke the AppSearchResultCallback.
+            final SafeOneTimeAppSearchResultCallback safeCallback =
+                    new SafeOneTimeAppSearchResultCallback(callback, result -> {
+                        AppSearchUserInstance instance =
+                                mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                        int totalLatencyMillis =
+                                (int) (SystemClock.elapsedRealtime() - totalLatencyStartTimeMillis);
+                        int estimatedBinderLatencyMillis =
+                                2 * (int) (totalLatencyStartTimeMillis
+                                        - request.getBinderCallStartTimeMillis());
+                        instance.getLogger().logStats(new CallStats.Builder()
+                                .setPackageName(callingPackageName)
+                                .setStatusCode(result.getResultCode())
+                                .setTotalLatencyMillis(totalLatencyMillis)
+                                .setCallType(CallStats.CALL_TYPE_EXECUTE_APP_FUNCTION)
+                                .setEstimatedBinderLatencyMillis(estimatedBinderLatencyMillis)
+                                .build());
+                    });
+
+            // TODO(b/327134039): Add a new policy for this in W timeframe.
+            if (mServiceImplHelper.isUserOrganizationManaged(targetUser)) {
+                safeCallback.onFailedResult(AppSearchResult.newFailedResult(
+                        RESULT_SECURITY_ERROR,
+                        "Cannot run on a device with a device owner or from the managed profile."));
+                return;
+            }
+
+            String targetPackageName = request.getClientRequest().getTargetPackageName();
+            if (TextUtils.isEmpty(targetPackageName)) {
+                safeCallback.onFailedResult(AppSearchResult.newFailedResult(
+                        RESULT_INVALID_ARGUMENT,
+                        "targetPackageName cannot be empty."));
+                return;
+            }
+            if (!verifyExecuteAppFunctionCaller(
+                    callingPackageName,
+                    targetPackageName,
+                    targetUser)) {
+                safeCallback.onFailedResult(AppSearchResult.newFailedResult(
+                        RESULT_SECURITY_ERROR,
+                        callingPackageName + " is not allowed to call executeAppFunction"));
+                return;
+            }
+
+            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(
+                    targetUser, callback, callingPackageName,
+                    CallStats.CALL_TYPE_EXECUTE_APP_FUNCTION,
+                    () -> executeAppFunctionUnchecked(
+                            request.getClientRequest(),
+                            targetUser,
+                            safeCallback));
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(callingPackageName, /* databaseName= */ null,
+                        CallStats.CALL_TYPE_EXECUTE_APP_FUNCTION, targetUser,
+                        request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                        /*numOperations=*/ 1, RESULT_RATE_LIMITED);
+            }
+        }
+
+        /**
+         * The same as {@link #executeAppFunction}, except this is without the caller check.
+         * This method runs on the user-local thread pool.
+         */
+        @WorkerThread
+        private void executeAppFunctionUnchecked(
+                @NonNull ExecuteAppFunctionRequest request,
+                @NonNull UserHandle userHandle,
+                @NonNull SafeOneTimeAppSearchResultCallback safeCallback) {
+            Intent serviceIntent = new Intent(AppFunctionService.SERVICE_INTERFACE);
+            serviceIntent.setPackage(request.getTargetPackageName());
+
+            Context userContext = mAppSearchEnvironment.createContextAsUser(mContext, userHandle);
+            ResolveInfo resolveInfo = userContext.getPackageManager()
+                    .resolveService(serviceIntent, 0);
+            if (resolveInfo == null || resolveInfo.serviceInfo == null) {
+                safeCallback.onFailedResult(AppSearchResult.newFailedResult(
+                        RESULT_NOT_FOUND, "Cannot find the target service."));
+                return;
+            }
+            ServiceInfo serviceInfo = resolveInfo.serviceInfo;
+            if (!PERMISSION_BIND_APP_FUNCTION_SERVICE.equals(serviceInfo.permission)) {
+                safeCallback.onFailedResult(AppSearchResult.newFailedResult(
+                        RESULT_NOT_FOUND,
+                        "Failed to find a valid target service. The resolved service is missing "
+                                + "the BIND_APP_FUNCTION_SERVICE permission."));
+                return;
+            }
+            serviceIntent.setComponent(
+                    new ComponentName(serviceInfo.packageName, serviceInfo.name));
+
+            if (request.getSha256Certificate() != null) {
+                if (!PackageManagerUtil.hasSigningCertificate(
+                        mContext, request.getTargetPackageName(), request.getSha256Certificate())) {
+                    safeCallback.onFailedResult(
+                            AppSearchResult.newFailedResult(
+                                    RESULT_NOT_FOUND, "Cannot find the target service"));
+                    return;
+                }
+            }
+
+            boolean bindServiceResult = mAppFunctionServiceCallHelper.runServiceCall(
+                    serviceIntent,
+                    Context.BIND_ALLOW_BACKGROUND_ACTIVITY_STARTS | Context.BIND_AUTO_CREATE,
+                    mAppSearchConfig.getAppFunctionCallTimeoutMillis(),
+                    userHandle,
+                    new ServiceCallHelper.RunServiceCallCallback<>() {
+                        @Override
+                        public void onServiceConnected(
+                                @NonNull IAppFunctionService service,
+                                @NonNull ServiceUsageCompleteListener completeListener) {
+                            try {
+                                service.executeAppFunction(
+                                        request,
+                                        new IAppSearchResultCallback.Stub() {
+                                            @Override
+                                            public void onResult(
+                                                    AppSearchResultParcel resultParcel) {
+                                                safeCallback.onResult(resultParcel);
+                                                completeListener.onCompleted();
+                                            }
+                                        });
+                            } catch (Exception e) {
+                                safeCallback.onFailedResult(AppSearchResult
+                                        .throwableToFailedResult(e));
+                                completeListener.onCompleted();
+                            }
+                        }
+
+                        @Override
+                        public void onFailedToConnect() {
+                            safeCallback.onFailedResult(
+                                    AppSearchResult.newFailedResult(RESULT_INTERNAL_ERROR, null));
+                        }
+
+                        @Override
+                        public void onTimedOut() {
+                            safeCallback.onFailedResult(
+                                    AppSearchResult.newFailedResult(RESULT_TIMED_OUT, null));
+                        }
+                    });
+            if (!bindServiceResult) {
+                safeCallback.onFailedResult(AppSearchResult.newFailedResult(
+                        RESULT_INTERNAL_ERROR, "Failed to bind the target service."));
+            }
+        }
+
+        /**
+         * Determines whether the caller is authorized to execute an app function via
+         * {@link #executeAppFunction}.
+         * <p>
+         * Authorization is granted under the following conditions:
+         * <ul>
+         *     <li>The caller is the same app that owns the target function.</li>
+         *     <li>The caller possesses the SYSTEM_UI_INTELLIGENCE role for the target user. </li>
+         * </ul>
+         *
+         * @param callingPackage The validated package name of the calling app.
+         * @param targetPackage  The package name of the target app.
+         * @param targetUser     The target user.
+         * @return               {@code true} if the caller is authorized, {@code false} otherwise.
+         */
+        private boolean verifyExecuteAppFunctionCaller(
+                @NonNull String callingPackage,
+                @NonNull String targetPackage,
+                @NonNull UserHandle targetUser) {
+            // While adding new system role-based permissions through mainline updates is possible,
+            // granting them to system apps in previous android versions is not. System apps must
+            // request permissions in their prebuilt APKs included in the system image. We cannot
+            // modify prebuilts in older images anymore.
+            // TODO(b/327134039): Enforce permission checking for Android V+ or W+, depending on
+            // whether the new prebuilt can be included in the system image on time.
+            if (callingPackage.equals(targetPackage)) {
+                return true;
+            }
+            long originalToken = Binder.clearCallingIdentity();
+            try {
+                List<String> systemUiIntelligencePackages =
+                        mRoleManager.getRoleHoldersAsUser(SYSTEM_UI_INTELLIGENCE, targetUser);
+                return systemUiIntelligencePackages.contains(callingPackage);
+            } finally {
+                Binder.restoreCallingIdentity(originalToken);
+            }
         }
 
         @BinderThread
@@ -2294,13 +2567,13 @@ public class AppSearchManagerService extends SystemService {
             if (args != null) {
                 for (int i = 0; i < args.length; i++) {
                     String arg = args[i];
-                    if ("-h".equals(arg)) {
+                    if (Objects.equals(arg, "-h")) {
                         pw.println(
                                 "Dumps the internal state of AppSearch platform storage and "
                                         + "AppSearch Contacts Indexer for the current user.");
                         pw.println("-v, verbose mode");
                         return;
-                    } else if ("-v".equals(arg) || "-a".equals(arg)) {
+                    } else if (Objects.equals(arg, "-v") || Objects.equals(arg, "-a")) {
                         // "-a" is included when adb dumps all services e.g. in adb bugreport so we
                         // want to run in verbose mode when this happens
                         verbose = true;
@@ -2500,9 +2773,22 @@ public class AppSearchManagerService extends SystemService {
     }
 
     /**
+     * An API call is considered global if the calling package and target package names do not
+     * match.
+     * <p>
+     * Enterprise session calls do not necessarily have access to same-package data; therefore, even
+     * if the calling and target packages are the same, enterprise session calls must always be
+     * global to go through the proper visibility checks. (Enterprise session calls are also always
+     * considered global for CallStats logging.)
+     */
+    private boolean isGlobalCall(@NonNull String callingPackageName,
+            @NonNull String targetPackageName, boolean isForEnterprise) {
+        return !callingPackageName.equals(targetPackageName) || isForEnterprise;
+    }
+
+    /**
      * Logs rate-limited or denied calls to CallStats.
      */
-    @WorkerThread
     private void logRateLimitedOrCallDeniedCallStats(@NonNull String callingPackageName,
             @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
             @NonNull UserHandle targetUser, long binderCallStartTimeMillis,
@@ -2533,7 +2819,6 @@ public class AppSearchManagerService extends SystemService {
      * @return true if the given api call should be denied for the given calling package and calling
      * database; otherwise false
      */
-    @WorkerThread
     private boolean checkCallDenied(@NonNull String callingPackageName,
             @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
             @NonNull UserHandle targetUser, long binderCallStartTimeMillis,
@@ -2558,14 +2843,14 @@ public class AppSearchManagerService extends SystemService {
      * @return true if the given api call should be denied for the given calling package and calling
      * database; otherwise false
      */
-    @WorkerThread
     private boolean checkCallDenied(@NonNull String callingPackageName,
             @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
             @NonNull IAppSearchResultCallback callback, @NonNull UserHandle targetUser,
             long binderCallStartTimeMillis, long totalLatencyStartTimeMillis, int numOperations) {
         if (checkCallDenied(callingPackageName, callingDatabaseName, apiType, targetUser,
                 binderCallStartTimeMillis, totalLatencyStartTimeMillis, numOperations)) {
-            invokeCallbackOnResult(callback, AppSearchResult.newFailedResult(RESULT_DENIED, null));
+            invokeCallbackOnResult(callback, AppSearchResultParcel.fromFailedResult(
+                    AppSearchResult.newFailedResult(RESULT_DENIED, null)));
             return true;
         }
         return false;
@@ -2579,7 +2864,6 @@ public class AppSearchManagerService extends SystemService {
      * @return true if the given api call should be denied for the given calling package and calling
      * database; otherwise false
      */
-    @WorkerThread
     private boolean checkCallDenied(@NonNull String callingPackageName,
             @Nullable String callingDatabaseName, @CallStats.CallType int apiType,
             @NonNull IAppSearchBatchResultCallback callback, @NonNull UserHandle targetUser,

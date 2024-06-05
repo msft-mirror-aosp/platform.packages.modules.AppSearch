@@ -33,6 +33,10 @@ import java.util.Objects;
 public class FrameworkCallerAccess extends CallerAccess {
     private final AppSearchAttributionSource mAttributionSource;
     private final boolean mCallerHasSystemAccess;
+    // A caller requiring enterprise access will not have default access to its own package schemas
+    // or to package schemas visible to system. The caller will only have access to the enterprise
+    // schemas for which it passes the required permissions checks.
+    private final boolean mIsForEnterprise;
 
     /**
      * Constructs a new {@link CallerAccess}.
@@ -41,13 +45,16 @@ public class FrameworkCallerAccess extends CallerAccess {
      * @param callerHasSystemAccess Whether {@code callingPackageName} has access to schema types
      *     marked visible to system via {@link
      *     android.app.appsearch.SetSchemaRequest.Builder#setSchemaTypeDisplayedBySystem}.
+     * @param isForEnterprise Whether the caller requires enterprise access.
      */
     public FrameworkCallerAccess(
             @NonNull AppSearchAttributionSource callerAttributionSource,
-            boolean callerHasSystemAccess) {
-        super(Objects.requireNonNull(callerAttributionSource.getPackageName()));
+            boolean callerHasSystemAccess,
+            boolean isForEnterprise) {
+        super(callerAttributionSource.getPackageName());
         mAttributionSource = callerAttributionSource;
         mCallerHasSystemAccess = callerHasSystemAccess;
+        mIsForEnterprise = isForEnterprise;
     }
 
     /** Returns the permission identity {@link AttributionSource} of the caller. */
@@ -65,18 +72,36 @@ public class FrameworkCallerAccess extends CallerAccess {
         return mCallerHasSystemAccess;
     }
 
+    /** Returns whether the caller requires enterprise access. */
+    public boolean isForEnterprise() {
+        return mIsForEnterprise;
+    }
+
+    @Override
+    public boolean doesCallerHaveSelfAccess() {
+        // Don't check self access if we need to check enterprise access, since the caller will not
+        // have access to data in its own package if it doesn't pass the enterprise checks
+        return !mIsForEnterprise;
+    }
+
     @Override
     public boolean equals(@Nullable Object o) {
-        if (this == o) return true;
-        if (!(o instanceof FrameworkCallerAccess)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof FrameworkCallerAccess)) {
+            return false;
+        }
         FrameworkCallerAccess that = (FrameworkCallerAccess) o;
         return super.equals(o)
                 && mCallerHasSystemAccess == that.mCallerHasSystemAccess
-                && Objects.equals(mAttributionSource, that.mAttributionSource);
+                && Objects.equals(mAttributionSource, that.mAttributionSource)
+                && mIsForEnterprise == that.mIsForEnterprise;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), mAttributionSource, mCallerHasSystemAccess);
+        return Objects.hash(
+                super.hashCode(), mAttributionSource, mCallerHasSystemAccess, mIsForEnterprise);
     }
 }
