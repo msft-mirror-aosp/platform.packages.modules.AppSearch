@@ -39,10 +39,124 @@ public final class Flags {
     //
     // The name of the each static variable should be "FLAG_" + capitalized value of the flag.
 
+    /** Enable SafeParcelable related features. */
+    public static final String FLAG_ENABLE_SAFE_PARCELABLE_2 =
+            FLAG_PREFIX + "enable_safe_parcelable_2";
+
+    /** Enable the "hasProperty" function in list filter query expressions. */
+    public static final String FLAG_ENABLE_LIST_FILTER_HAS_PROPERTY_FUNCTION =
+            FLAG_PREFIX + "enable_list_filter_has_property_function";
+
+    /** Enable Schema Type Grouping related features. */
+    public static final String FLAG_ENABLE_GROUPING_TYPE_PER_SCHEMA =
+            FLAG_PREFIX + "enable_grouping_type_per_schema";
+
+    /** Enable GenericDocument to take another GenericDocument to copy construct. */
+    public static final String FLAG_ENABLE_GENERIC_DOCUMENT_COPY_CONSTRUCTOR =
+            FLAG_PREFIX + "enable_generic_document_copy_constructor";
+
     /**
-     * Enable SafeParcelable related features.
-     *
-     * @hide
+     * Enable the {@link android.app.appsearch.SearchSpec.Builder#addFilterProperties} and {@link
+     * android.app.appsearch.SearchSuggestionSpec.Builder#addFilterProperties}.
      */
-    public static final String FLAG_ENABLE_SAFE_PARCELABLE = FLAG_PREFIX + "enable_safe_parcelable";
+    public static final String FLAG_ENABLE_SEARCH_SPEC_FILTER_PROPERTIES =
+            FLAG_PREFIX + "enable_search_spec_filter_properties";
+    /** Enable the {@link android.app.appsearch.SearchSpec.Builder#setSearchSourceLogTag} method. */
+    public static final String FLAG_ENABLE_SEARCH_SPEC_SET_SEARCH_SOURCE_LOG_TAG =
+            FLAG_PREFIX + "enable_search_spec_set_search_source_log_tag";
+
+    /** Enable addTakenActions API in PutDocumentsRequest. */
+    public static final String FLAG_ENABLE_PUT_DOCUMENTS_REQUEST_ADD_TAKEN_ACTIONS =
+            FLAG_PREFIX + "enable_put_documents_request_add_taken_actions";
+
+    /** Enable setPubliclyVisibleSchema in SetSchemaRequest. */
+    public static final String FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA =
+            FLAG_PREFIX + "enable_set_publicly_visible_schema";
+
+    /**
+     * Enable {@link android.app.appsearch.GenericDocument.Builder} to use previously hidden
+     * methods.
+     */
+    public static final String FLAG_ENABLE_GENERIC_DOCUMENT_BUILDER_HIDDEN_METHODS =
+            FLAG_PREFIX + "enable_generic_document_builder_hidden_methods";
+
+    public static final String FLAG_ENABLE_SET_SCHEMA_VISIBLE_TO_CONFIGS =
+            FLAG_PREFIX + "enable_set_schema_visible_to_configs";
+
+    /** Enable {@link android.app.appsearch.EnterpriseGlobalSearchSession}. */
+    public static final String FLAG_ENABLE_ENTERPRISE_GLOBAL_SEARCH_SESSION =
+            FLAG_PREFIX + "enable_enterprise_global_search_session";
+
+    // Whether the features should be enabled.
+    //
+    // In Jetpack, those should always return true.
+
+    /** Whether SafeParcelable should be enabled. */
+    public static boolean enableSafeParcelable() {
+        return true;
+    }
+
+    /** Whether the "hasProperty" function in list filter query expressions should be enabled. */
+    public static boolean enableListFilterHasPropertyFunction() {
+        return true;
+    }
+
+    /** Whether Schema Type Grouping should be enabled. */
+    public static boolean enableGroupingTypePerSchema() {
+        return true;
+    }
+
+    /** Whether Generic Document Copy Constructing should be enabled. */
+    public static boolean enableGenericDocumentCopyConstructor() {
+        return true;
+    }
+
+    /**
+     * Whether the {@link android.app.appsearch.SearchSpec.Builder#addFilterProperties} and {@link
+     * android.app.appsearch.SearchSuggestionSpec.Builder#addFilterProperties} should be enabled.
+     */
+    public static boolean enableSearchSpecFilterProperties() {
+        return true;
+    }
+
+    /**
+     * Whether the {@link android.app.appsearch.SearchSpec.Builder#setSearchSourceLogTag} should be
+     * enabled.
+     */
+    public static boolean enableSearchSpecSetSearchSourceLogTag() {
+        return true;
+    }
+
+    /** Whether addTakenActions API in PutDocumentsRequest should be enabled. */
+    public static boolean enablePutDocumentsRequestAddTakenActions() {
+        return true;
+    }
+
+    /** Whether setPubliclyVisibleSchema in SetSchemaRequest.Builder should be enabled. */
+    public static boolean enableSetPubliclyVisibleSchema() {
+        return true;
+    }
+
+    /**
+     * Whether {@link android.app.appsearch.GenericDocument.Builder#setNamespace(String)}, {@link
+     * android.app.appsearch.GenericDocument.Builder#setId(String)}, {@link
+     * android.app.appsearch.GenericDocument.Builder#setSchemaType(String)}, and {@link
+     * android.app.appsearch.GenericDocument.Builder#clearProperty(String)} should be enabled.
+     */
+    public static boolean enableGenericDocumentBuilderHiddenMethods() {
+        return true;
+    }
+
+    /**
+     * Whether {@link android.app.appsearch.SetSchemaRequest.Builder
+     * #setSchemaTypeVisibilityForConfigs} should be enabled.
+     */
+    public static boolean enableSetSchemaVisibleToConfigs() {
+        return true;
+    }
+
+    /** Whether {@link android.app.appsearch.EnterpriseGlobalSearchSession} should be enabled. */
+    public static boolean enableEnterpriseGlobalSearchSession() {
+        return true;
+    }
 }

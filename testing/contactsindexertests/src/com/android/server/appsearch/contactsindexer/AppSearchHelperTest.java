@@ -27,7 +27,6 @@ import static org.mockito.ArgumentMatchers.any;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
-import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.AppSearchSessionShim;
 import android.app.appsearch.BatchResultCallback;
@@ -39,6 +38,7 @@ import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.testutil.AppSearchSessionShimImpl;
+import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
@@ -52,8 +52,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -63,9 +61,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-// Since AppSearchHelper mainly just calls AppSearch's api to index/remove files, we shouldn't
-// worry too much about it since AppSearch has good test coverage. Here just add some simple checks.
 public class AppSearchHelperTest {
+    // These are hidden constants in SetSchemaRequest
+    private static final int ENTERPRISE_ACCESS = 7;
+    private static final int MANAGED_PROFILE_CONTACTS_ACCESS = 8;
+
     private final Executor mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
 
     private Context mContext;
@@ -135,12 +135,11 @@ public class AppSearchHelperTest {
         AppSearchResult<GetSchemaResponse> result = responseFuture.get();
         assertThat(result.isSuccess()).isTrue();
         GetSchemaResponse response = result.getResultValue();
-        assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).hasSize(2);
-        assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).containsKey(
-                ContactPoint.SCHEMA_TYPE);
-        assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).containsEntry(
+        assertThat(response.getRequiredPermissionsForSchemaTypeVisibility()).containsExactly(
                 Person.SCHEMA_TYPE,
-                ImmutableSet.of(ImmutableSet.of(SetSchemaRequest.READ_CONTACTS)));
+                ImmutableSet.of(Collections.singleton(SetSchemaRequest.READ_CONTACTS),
+                        ImmutableSet.of(SetSchemaRequest.READ_CONTACTS, ENTERPRISE_ACCESS,
+                                MANAGED_PROFILE_CONTACTS_ACCESS)));
     }
 
     @Test

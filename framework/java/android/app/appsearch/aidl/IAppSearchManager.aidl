@@ -24,103 +24,88 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.GetNamespacesAidlRequest;
+import android.app.appsearch.aidl.GetNextPageAidlRequest;
+import android.app.appsearch.aidl.GetSchemaAidlRequest;
+import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
+import android.app.appsearch.aidl.GlobalSearchAidlRequest;
+import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
+import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
+import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
+import android.app.appsearch.aidl.SearchAidlRequest;
+import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
+import android.app.appsearch.aidl.SetSchemaAidlRequest;
+import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
 import android.app.appsearch.stats.SchemaMigrationStats;
-import android.app.appsearch.VisibilityDocument;
+import android.app.appsearch.AppSearchSchema;
+import android.app.appsearch.InternalVisibilityConfig;
+import android.app.appsearch.SearchSpec;
+import android.app.appsearch.SearchSuggestionSpec;
 import android.content.AttributionSource;
 import android.os.ParcelFileDescriptor;
 
 /** {@hide} */
+// Always add new functions in the end with the commented transaction id.
 interface IAppSearchManager {
     /**
      * Creates and initializes AppSearchImpl for the calling app.
      *
-     * @param callerAttributionSource The permission identity of the package to initialize for.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link InitializeAidlRequest} contains the input parameters for initialize
+     *     operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Void}&gt;.
      */
     void initialize(
-        in AppSearchAttributionSource callerAttributionSource,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in InitializeAidlRequest request,
+        in IAppSearchResultCallback callback) = 0;
 
     /**
      * Updates the AppSearch schema for this database.
      *
-     * @param callerAttributionSource The permission identity of the package that owns this schema.
-     * @param databaseName  The name of the database where this schema lives.
-     * @param schemaBundles List of {@link AppSearchSchema} bundles.
-     * @param visibilityDocs List of {@link VisibilityDocument} docs.
-     * @param forceOverride Whether to apply the new schema even if it is incompatible. All
-     *     incompatible documents will be deleted.
-     * @param schemaVersion  The overall schema version number of the request.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param schemaMigrationCallType Indicates how a SetSchema call relative to SchemaMigration
-     *     case.
+     * @param request {@link SetSchemaAidlRequest} contains the input parameters for set schema
+     *     operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
-     *     {@link AppSearchResult}&lt;{@link Bundle}&gt;, where the value are
-     *     {@link SetSchemaResponse} bundle.
+     *     {@link AppSearchResult}&lt;{@link InternalSetSchemaResponse}&gt;.
      */
     void setSchema(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in List<Bundle> schemaBundles,
-        in List<VisibilityDocument> visibilityDocs,
-        boolean forceOverride,
-        in int schemaVersion,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in int schemaMigrationCallType,
-        in IAppSearchResultCallback callback);
+        in SetSchemaAidlRequest request,
+        in IAppSearchResultCallback callback) = 1;
 
     /**
      * Retrieves the AppSearch schema for this database.
      *
-     * @param callerAttributionSource The permission identity of the package making this call.
-     * @param targetPackageName The name of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link GetSchemaAidlRequest} contains the input parameters for get schema
+     *     operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Bundle}&gt; where the bundle is a GetSchemaResponse.
      */
     void getSchema(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String targetPackageName,
-        in String databaseName,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in GetSchemaAidlRequest request,
+        in IAppSearchResultCallback callback) = 2;
 
     /**
      * Retrieves the set of all namespaces in the current database with at least one document.
      *
-     * @param callerAttributionSource The permission identity of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link GetNamespacesAidlRequest} contains the input parameters for get
+     *     namespaces operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link List}&lt;{@link String}&gt;&gt;.
      */
     void getNamespaces(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in GetNamespacesAidlRequest request,
+        in IAppSearchResultCallback callback) = 3;
 
     /**
      * Inserts documents into the index.
      *
-     * @param callerAttributionSource The permission identity of the package that owns this
-     *     document.
-     * @param databaseName  The name of the database where this document lives.
-     * @param documentsParcel Parcelable object contains a list of GenericDocument.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link PutDocumentsAidlRequest} contains the input parameters for
+     *     put documents operation.
      * @param callback
      *     If the call fails to start, {@link IAppSearchBatchResultCallback#onSystemError}
      *     will be called with the cause throwable. Otherwise,
@@ -129,12 +114,8 @@ interface IAppSearchManager {
      *     where the keys are document IDs, and the values are {@code null}.
      */
     void putDocuments(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in DocumentsParcel documentsParcel,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchBatchResultCallback callback);
+        in PutDocumentsAidlRequest request,
+        in IAppSearchBatchResultCallback callback) = 4;
 
     /**
      * Retrieves documents from the index.
@@ -149,6 +130,7 @@ interface IAppSearchManager {
      *     result.
      * @param userHandle Handle of the calling user.
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis.
+     * @param isForEnterprise Whether to query the user's enterprise profile AppSearch instance
      * @param callback
      *     If the call fails to start, {@link IAppSearchBatchResultCallback#onSystemError}
      *     will be called with the cause throwable. Otherwise,
@@ -165,164 +147,98 @@ interface IAppSearchManager {
         in Map<String, List<String>> typePropertyPaths,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchBatchResultCallback callback);
+        in boolean isForEnterprise,
+        in IAppSearchBatchResultCallback callback) = 5;
 
     /**
      * Searches a document based on a given specifications.
      *
-     * @param callerAttributionSource The permission identity of the package to query over.
-     * @param databaseName The databaseName this query for.
-     * @param queryExpression String to search for
-     * @param searchSpecBundle SearchSpec bundle
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param callback {@link AppSearchResult}&lt;{@link Bundle}&gt; of performing this
-     *         operation.
+     * @param request {@link QueryAidlRequest} that contains the input parameters for the search
+     *     operation
+     * @param callback {@link AppSearchResult}&lt;{@link SearchResultPage}&gt; of performing this
+     *     operation.
      */
-    void query(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in String queryExpression,
-        in Bundle searchSpecBundle,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+    void search(
+        in SearchAidlRequest request,
+        in IAppSearchResultCallback callback) = 6;
 
     /**
-     * Executes a global query, i.e. over all permitted databases, against the AppSearch index and
+     * Executes a global search, i.e. over all permitted databases, against the AppSearch index and
      * returns results.
      *
-     * @param callerAttributionSource The permission identity of the package making the query.
-     * @param queryExpression String to search for
-     * @param searchSpecBundle SearchSpec bundle
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param callback {@link AppSearchResult}&lt;{@link Bundle}&gt; of performing this
-     *         operation.
+     * @param request {@link GlobalSearchAidlRequest} that contains the input parameters for the
+     *     global search operation.
+     * @param callback {@link AppSearchResult}&lt;{@link SearchResultPage}&gt; of performing this
+     *     operation.
      */
-    void globalQuery(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String queryExpression,
-        in Bundle searchSpecBundle,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+    void globalSearch(
+        in GlobalSearchAidlRequest request,
+        in IAppSearchResultCallback callback) = 7;
 
     /**
-     * Fetches the next page of results of a previously executed query. Results can be empty if
+     * Fetches the next page of results of a previously executed search. Results can be empty if
      * next-page token is invalid or all pages have been returned.
      *
-     * @param callerAttributionSource The permission identity of the package to persist to disk
-     *     for.
-     * @param databaseName The nullable databaseName this query for. The databaseName will be null
-                           if the query is a global search.
-     * @param nextPageToken The token of pre-loaded results of previously executed query.
-     * @param joinType the type of join performed. 0 if no join is performed
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-     * @param callback {@link AppSearchResult}&lt;{@link Bundle}&gt; of performing this
+     * @param request {@link GetNextPageAidlRequest} that contains the input parameters for the
+     *     get next page operation.
+     * @param callback {@link AppSearchResult}&lt;{@link SearchResultPage}&gt; of performing this
      *                  operation.
      */
     void getNextPage(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in long nextPageToken,
-        in int joinType,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in GetNextPageAidlRequest request,
+        in IAppSearchResultCallback callback) = 8;
 
     /**
-     * Invalidates the next-page token so that no more results of the related query can be returned.
+     * Invalidates the next-page token so that no more results of the related search can be
+     * returned.
      *
-     * @param callerAttributionSource The permission identity of the package to persist to disk
-     *     for.
-     * @param nextPageToken The token of pre-loaded results of previously executed query to be
-     *                      Invalidated.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link InvalidateNextPageTokenAidlRequest} that contains the input parameters
+     *     for the invalidate next-page token operation.
      */
-    void invalidateNextPageToken(
-        in AppSearchAttributionSource callerAttributionSource,
-        in long nextPageToken,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis);
+    void invalidateNextPageToken(in InvalidateNextPageTokenAidlRequest request) = 9;
 
     /**
-    * Searches a document based on a given specifications.
-    *
-    * <p>Documents will be save to the given ParcelFileDescriptor
-    *
-    * @param callerAttributionSource The permission identity of the package to query over.
-    * @param databaseName The databaseName this query for.
-    * @param fileDescriptor The ParcelFileDescriptor where documents should be written to.
-    * @param queryExpression String to search for.
-    * @param searchSpecBundle SearchSpec bundle.
-    * @param userHandle Handle of the calling user.
-    * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-    * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
-    *        {@link AppSearchResult}&lt;{@code Void}&gt;.
-    */
-    void writeQueryResultsToFile(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in ParcelFileDescriptor fileDescriptor,
-        in String queryExpression,
-        in Bundle searchSpecBundle,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+     * Searches a document based on a given specifications.
+     *
+     * <p>Documents will be save to the given ParcelFileDescriptor
+     *
+     * @param request {@link WriteSearchResultsToFileAidlRequest} that contains the input parameters
+     *     to write search results to a file.
+     * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
+     *     {@link AppSearchResult}&lt;{@code Void}&gt;.
+     */
+    void writeSearchResultsToFile(
+        in WriteSearchResultsToFileAidlRequest request,
+        in IAppSearchResultCallback callback) = 10;
 
     /**
-    * Inserts documents from the given file into the index.
-    *
-    * <p>This method does not dispatch change notifications for the individual documents being
-    * inserted, so it is only appropriate to use for batch upload situations where a broader change
-    * notification will indicate what has changed, like schema migration.
-    *
-    * @param callerAttributionSource The permission identity of the package that owns this
-    *     document.
-    * @param databaseName  The name of the database where this document lives.
-    * @param fileDescriptor The ParcelFileDescriptor where documents should be read from.
-    * @param userHandle Handle of the calling user.
-    * @param schemaMigrationStats the Parcelable contains SchemaMigrationStats information.
-    * @param totalLatencyStartTimeMillis start timestamp to calculate total migration latency in
-    *     Millis
-    * @param binderCallStartTimeMillis start timestamp of binder call in Millis
-    * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
-    *     {@link AppSearchResult}&lt;{@link List}&lt;{@link Bundle}&gt;&gt;, where the value are
-    *     MigrationFailure bundles.
-    */
+     * Inserts documents from the given file into the index.
+     *
+     * <p>This method does not dispatch change notifications for the individual documents being
+     * inserted, so it is only appropriate to use for batch upload situations where a broader change
+     * notification will indicate what has changed, like schema migration.
+     *
+     * @param request {@link PutDocumentsFromFileAidlRequest} that contains the input parameters to
+     *     put documents from a file.
+     * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
+     *     {@link AppSearchResult}&lt;{@link List}&lt;{@link Bundle}&gt;&gt;, where the value are
+     *     MigrationFailure bundles.
+     */
     void putDocumentsFromFile(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in ParcelFileDescriptor fileDescriptor,
-        in UserHandle userHandle,
-        in SchemaMigrationStats schemaMigrationStats,
-        in long totalLatencyStartTimeMillis,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in PutDocumentsFromFileAidlRequest request,
+        in IAppSearchResultCallback callback) = 11;
 
     /**
      * Retrieves suggested Strings that could be used as {@code queryExpression} in search API.
      *
-     * @param callerAttributionSource The permission identity of the package to suggest over.
-     * @param databaseName The databaseName this suggest is for.
-     * @param suggestionQueryExpression the non empty query string to search suggestions
-     * @param searchSuggestionSpecBundle SearchSuggestionSpec bundle
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link SearchSuggestionAidlRequest} contains the input parameters to retrieve
+     *     suggested Strings for search.
      * @param callback {@link AppSearchResult}&lt;List&lt;{@link SearchSuggestionResult}&gt; of
      *   performing this operation.
      */
     void searchSuggestion(
-            in AppSearchAttributionSource callerAttributionSource,
-            in String databaseName,
-            in String suggestionQueryExpression,
-            in Bundle searchSuggestionSpecBundle,
-            in UserHandle userHandle,
-            in long binderCallStartTimeMillis,
-            in IAppSearchResultCallback callback);
+            in SearchSuggestionAidlRequest request,
+            in IAppSearchResultCallback callback) = 12;
 
     /**
      * Reports usage of a particular document by namespace and id.
@@ -359,17 +275,13 @@ interface IAppSearchManager {
         in boolean systemUsage,
         in UserHandle userHandle,
         in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in IAppSearchResultCallback callback) = 13;
 
     /**
      * Removes documents by ID.
      *
-     * @param callerAttributionSource The permission identity of the package the document is in.
-     * @param databaseName The databaseName the document is in.
-     * @param namespace    Namespace of the document to remove.
-     * @param ids The IDs of the documents to delete
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link RemoveByDocumentIdAidlRequest} contains the input parameters for remove
+     *     by id operation.
      * @param callback
      *     If the call fails to start, {@link IAppSearchBatchResultCallback#onSystemError}
      *     will be called with the cause throwable. Otherwise,
@@ -379,101 +291,66 @@ interface IAppSearchManager {
      *     failure where the {@code throwable} is {@code null}.
      */
     void removeByDocumentId(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in String namespace,
-        in List<String> ids,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchBatchResultCallback callback);
+        in RemoveByDocumentIdAidlRequest request,
+        in IAppSearchBatchResultCallback callback) = 14;
 
     /**
      * Removes documents by given query.
      *
-     * @param callerAttributionSource The permission identity of the package to query over.
-     * @param databaseName The databaseName this query for.
-     * @param queryExpression String to search for
-     * @param searchSpecBundle SearchSpec bundle
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link RemoveByQueryAidlRequest} contains the input parameters for remove by
+     *     query operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Void}&gt;.
      */
     void removeByQuery(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in String queryExpression,
-        in Bundle searchSpecBundle,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in RemoveByQueryAidlRequest request,
+        in IAppSearchResultCallback callback) = 15;
 
     /**
      * Gets the storage info.
      *
-     * @param callerAttributionSource The permission identity of the package to get the storage
-     *     info for.
-     * @param databaseName The databaseName to get the storage info for.
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link GetStorageInfoAidlRequest} contains the input parameters to get
+     *     storage info operation.
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
      *     {@link AppSearchResult}&lt;{@link Bundle}&gt;, where the value is a
      *     {@link StorageInfo}.
      */
     void getStorageInfo(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String databaseName,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchResultCallback callback);
+        in GetStorageInfoAidlRequest request,
+        in IAppSearchResultCallback callback) = 16;
 
     /**
      * Persists all update/delete requests to the disk.
      *
-     * @param callerAttributionSource The permission identity of the package to persist to disk for
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link PersistToDiskAidlRequest} contains the input parameters for set schema
+     *     operation.
      */
-    void persistToDisk(
-        in AppSearchAttributionSource callerAttributionSource,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis);
+    void persistToDisk(in PersistToDiskAidlRequest request) = 17;
 
     /**
      * Adds an observer to monitor changes within the databases owned by {@code observedPackage} if
      * they match the given ObserverSpec.
      *
-     * @param callerAttributionSource The permission identity of the package which is registering
-     *     an observer.
-     * @param targetPackageName Package whose changes to monitor
-     * @param observerSpecBundle Bundle of ObserverSpec showing what types of changes to listen for
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link RegisterObserverCallbackAidlRequest} contains the input parameters
+     *     for register observer operation.
      * @param observerProxy Callback to trigger when a schema or document changes
      * @return the success or failure of this operation
      */
     AppSearchResultParcel registerObserverCallback(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String targetPackageName,
-        in Bundle observerSpecBundle,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchObserverProxy observerProxy);
+        in RegisterObserverCallbackAidlRequest request,
+        in IAppSearchObserverProxy observerProxy) = 18;
 
     /**
      * Removes previously registered {@link ObserverCallback} instances from the system.
      *
-     * @param callerAttributionSource The permission identity of the package that owns the observer
-     * @param observedPackage Package whose changes are being monitored
-     * @param userHandle Handle of the calling user
-     * @param binderCallStartTimeMillis start timestamp of binder call in Millis
+     * @param request {@link UnregisterObserverCallbackAidlRequest} contains the input parameters
+     *     for unregister observer operation.
      * @param observerProxy Observer callback to remove
      * @return the success or failure of this operation
      */
     AppSearchResultParcel unregisterObserverCallback(
-        in AppSearchAttributionSource callerAttributionSource,
-        in String observedPackage,
-        in UserHandle userHandle,
-        in long binderCallStartTimeMillis,
-        in IAppSearchObserverProxy observerProxy);
+        in UnregisterObserverCallbackAidlRequest request,
+        in IAppSearchObserverProxy observerProxy) = 19;
+
+    // next function transaction ID = 20;
 }

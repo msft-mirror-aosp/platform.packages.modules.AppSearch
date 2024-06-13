@@ -22,15 +22,15 @@ import android.Manifest;
 import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.annotation.TargetApi;
 import android.app.appsearch.AppSearchBatchResult;
+import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
-import android.content.AttributionSource;
+import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Binder;
@@ -41,7 +41,7 @@ import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
-import com.android.server.appsearch.AppSearchEnvironmentFactory;
+import com.android.server.appsearch.AppSearchUserInstanceManager;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 
 import java.util.Objects;
@@ -58,6 +58,7 @@ public class ServiceImplHelper {
     private final Context mContext;
     private final UserManager mUserManager;
     private final ExecutorManager mExecutorManager;
+    private final AppSearchUserInstanceManager mAppSearchUserInstanceManager;
 
     // Cache of unlocked users so we don't have to query UserManager service each time. The "locked"
     // suffix refers to the fact that access to the field should be locked; unrelated to the
@@ -65,17 +66,39 @@ public class ServiceImplHelper {
     @GuardedBy("mUnlockedUsersLocked")
     private final Set<UserHandle> mUnlockedUsersLocked = new ArraySet<>();
 
+    // Currently, only the main user can have an associated enterprise user, so the enterprise
+    // parent will naturally always be the main user
+    @GuardedBy("mUnlockedUsersLocked")
+    @Nullable
+    private UserHandle mEnterpriseParentUserLocked;
+
+    @GuardedBy("mUnlockedUsersLocked")
+    @Nullable
+    private UserHandle mEnterpriseUserLocked;
+
     public ServiceImplHelper(@NonNull Context context, @NonNull ExecutorManager executorManager) {
         mContext = Objects.requireNonNull(context);
         mUserManager = context.getSystemService(UserManager.class);
         mExecutorManager = Objects.requireNonNull(executorManager);
+        mAppSearchUserInstanceManager = AppSearchUserInstanceManager.getInstance();
     }
 
     public void setUserIsLocked(@NonNull UserHandle userHandle, boolean isLocked) {
+        boolean isManagedProfile = mUserManager.isManagedProfile(userHandle.getIdentifier());
+        UserHandle parentUser = isManagedProfile ? mUserManager.getProfileParent(userHandle)
+                : null;
         synchronized (mUnlockedUsersLocked) {
             if (isLocked) {
+                if (isManagedProfile) {
+                    mEnterpriseParentUserLocked = null;
+                    mEnterpriseUserLocked = null;
+                }
                 mUnlockedUsersLocked.remove(userHandle);
             } else {
+                if (isManagedProfile) {
+                    mEnterpriseParentUserLocked = parentUser;
+                    mEnterpriseUserLocked = userHandle;
+                }
                 mUnlockedUsersLocked.add(userHandle);
             }
         }
@@ -96,6 +119,20 @@ public class ServiceImplHelper {
     public void verifyUserUnlocked(@NonNull UserHandle callingUser) {
         if (isUserLocked(callingUser)) {
             throw new IllegalStateException(callingUser + " is locked or not running.");
+        }
+    }
+
+    /**
+     * Returns the target user's associated enterprise user or null if it does not exist. Note, the
+     * enterprise user is not considered the associated enterprise user of itself.
+     */
+    @Nullable
+    private UserHandle getEnterpriseUser(@NonNull UserHandle targetUser) {
+        synchronized (mUnlockedUsersLocked) {
+            if (mEnterpriseUserLocked == null || !targetUser.equals(mEnterpriseParentUserLocked)) {
+                return null;
+            }
+            return mEnterpriseUserLocked;
         }
     }
 
@@ -307,6 +344,7 @@ public class ServiceImplHelper {
      * @return true if the call is accepted by the executor and false otherwise.
      */
     @BinderThread
+    @CanIgnoreReturnValue
     public boolean executeLambdaForUserAsync(
             @NonNull UserHandle targetUser,
             @NonNull IAppSearchResultCallback errorCallback,
@@ -415,6 +453,25 @@ public class ServiceImplHelper {
             executor.execute(lambda);
             return true;
         }
+    }
+
+    /**
+     * Returns the target user of the query depending on whether the query is for enterprise access
+     * or not. If the query is not enterprise, returns the original target user. If the query is
+     * enterprise, gets the target user's associated enterprise user.
+     */
+    @Nullable
+    public UserHandle getUserToQuery(boolean isForEnterprise, @NonNull UserHandle targetUser) {
+        if (!isForEnterprise) {
+            return targetUser;
+        }
+        UserHandle enterpriseUser = getEnterpriseUser(targetUser);
+        // Do not return the enterprise user if its AppSearch instance does not exist
+        if (enterpriseUser == null ||
+                mAppSearchUserInstanceManager.getUserInstanceOrNull(enterpriseUser) == null) {
+            return null;
+        }
+        return enterpriseUser;
     }
 
     /** Invokes the {@link IAppSearchResultCallback} with the result. */
