@@ -23,6 +23,7 @@ import android.app.appsearch.usagereporting.ActionConstants;
 
 import com.android.server.appsearch.external.localstorage.stats.ClickStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchIntentStats;
+import com.android.server.appsearch.external.localstorage.stats.SearchSessionStats;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,11 +32,11 @@ import java.util.Objects;
 
 /**
  * Extractor class for analyzing a list of taken action {@link GenericDocument} and creating a list
- * of {@link SearchIntentStats}.
+ * of {@link SearchSessionStats}.
  *
  * @hide
  */
-public final class SearchIntentStatsExtractor {
+public final class SearchSessionStatsExtractor {
     // TODO(b/319285816): make thresholds configurable.
     /**
      * Threshold for noise search intent detection, in millisecond. A search action will be
@@ -55,11 +56,18 @@ public final class SearchIntentStatsExtractor {
      * Threshold for independent search intent detection, in millisecond. If the action timestamp
      * (action document creation timestamp) difference between the previous and the current search
      * action exceeds this threshold, then the current search action will be considered as a
-     * completely independent search intent, and there will be no correlation analysis between the
-     * previous and the current search action.
+     * completely independent search intent (i.e. belonging to a new search session), and there will
+     * be no correlation analysis between the previous and the current search action.
      */
     private static final long INDEPENDENT_SEARCH_INTENT_TIMESTAMP_DIFF_THRESHOLD_MILLIS =
             10L * 60 * 1000;
+
+    /**
+     * Threshold for marking good click (compared with {@code timeStayOnResultMillis}), in
+     * millisecond. A good click means the user spent decent amount of time on the clicked result
+     * document.
+     */
+    private static final long GOOD_CLICK_TIME_STAY_ON_RESULT_THRESHOLD_MILLIS = 2000L;
 
     /**
      * Threshold for backspace count to become query abandonment. If the user hits backspace for at
@@ -67,21 +75,6 @@ public final class SearchIntentStatsExtractor {
      * determined as abandonment.
      */
     private static final int QUERY_ABANDONMENT_BACKSPACE_COUNT = 2;
-
-    @NonNull private final String mPackageName;
-    @Nullable private final String mDatabase;
-
-    /**
-     * Constructs {@link SearchIntentStatsExtractor} with the caller's package and database name.
-     *
-     * @param packageName The package name of the caller.
-     * @param database The database name of the caller.
-     */
-    public SearchIntentStatsExtractor(@NonNull String packageName, @Nullable String database) {
-        Objects.requireNonNull(packageName);
-        mPackageName = packageName;
-        mDatabase = database;
-    }
 
     /**
      * Returns the query correction type between the previous and current search actions.
@@ -123,17 +116,25 @@ public final class SearchIntentStatsExtractor {
     }
 
     /**
-     * Returns a list of {@link SearchIntentStats} extracted from the given list of taken action
-     * {@link GenericDocument} .
+     * Returns a list of {@link SearchSessionStats} extracted from the given list of taken action
+     * {@link GenericDocument}.
      *
-     * <p>Search intent is consist of a valid search action with 0 or more click actions. To extract
+     * <p>A search session consists of several related search intents.
+     *
+     * <p>A search intent consists of a valid search action with 0 or more click actions. To extract
      * search intent metrics, this function will try to group the given taken actions into several
-     * search intents, and yield a {@link SearchIntentStats} for each search intent.
+     * search intents, and yield a {@link SearchIntentStats} for each search intent. Finally related
+     * {@link SearchIntentStats} will be wrapped into {@link SearchSessionStats}.
      *
+     * @param packageName The package name of the caller.
+     * @param database The database name of the caller.
      * @param genericDocuments a list of taken actions in generic document form.
      */
     @NonNull
-    public List<SearchIntentStats> extract(@NonNull List<GenericDocument> genericDocuments) {
+    public List<SearchSessionStats> extract(
+            @NonNull String packageName,
+            @Nullable String database,
+            @NonNull List<GenericDocument> genericDocuments) {
         Objects.requireNonNull(genericDocuments);
 
         // Convert GenericDocument list to TakenActionGenericDocument list and sort them by document
@@ -155,7 +156,8 @@ public final class SearchIntentStatsExtractor {
                                 doc1.getCreationTimestampMillis(),
                                 doc2.getCreationTimestampMillis()));
 
-        List<SearchIntentStats> result = new ArrayList<>();
+        List<SearchSessionStats> result = new ArrayList<>();
+        SearchSessionStats.Builder searchSessionStatsBuilder = null;
         SearchActionGenericDocument prevSearchAction = null;
         // Clients are expected to report search action followed by its associated click actions.
         // For example, [searchAction1, clickAction1, searchAction2, searchAction3, clickAction2,
@@ -167,6 +169,9 @@ public final class SearchIntentStatsExtractor {
         // Here we're going to break down the list into segments. Each segment starts with a search
         // action followed by 0 or more associated click actions, and they form a single search
         // intent. We will analyze and extract metrics from the taken actions for the search intent.
+        //
+        // If a search intent is considered independent from the previous one, then we will start a
+        // new search session analysis.
         for (int i = 0; i < takenActionGenericDocuments.size(); ++i) {
             if (takenActionGenericDocuments.get(i).getActionType()
                     != ActionConstants.ACTION_TYPE_SEARCH) {
@@ -198,9 +203,16 @@ public final class SearchIntentStatsExtractor {
                         (SearchActionGenericDocument) takenActionGenericDocuments.get(i + 1);
             }
 
-            if (isIndependentSearchAction(currSearchAction, prevSearchAction)) {
-                // If the current search action is independent from the previous one, then ignore
-                // the previous search action when extracting stats.
+            if (prevSearchAction != null
+                    && isIndependentSearchAction(currSearchAction, prevSearchAction)) {
+                // If the current search action is independent from the previous one, then:
+                // - Build and append the previous search session stats.
+                // - Start a new search session analysis.
+                // - Ignore the previous search action when extracting stats.
+                if (searchSessionStatsBuilder != null) {
+                    result.add(searchSessionStatsBuilder.build());
+                    searchSessionStatsBuilder = null;
+                }
                 prevSearchAction = null;
             } else if (clickActions.isEmpty()
                     && isIntermediateSearchAction(
@@ -211,9 +223,23 @@ public final class SearchIntentStatsExtractor {
             }
 
             // Now we get a valid search intent (the current search action + a list of click actions
-            // associated with it). Extract metrics and add SearchIntentStats.
-            result.add(createSearchIntentStats(currSearchAction, clickActions, prevSearchAction));
+            // associated with it). Extract metrics and add SearchIntentStats into this search
+            // session.
+            if (searchSessionStatsBuilder == null) {
+                searchSessionStatsBuilder =
+                        new SearchSessionStats.Builder(packageName).setDatabase(database);
+            }
+            searchSessionStatsBuilder.addSearchIntentsStats(
+                    createSearchIntentStats(
+                            packageName,
+                            database,
+                            currSearchAction,
+                            clickActions,
+                            prevSearchAction));
             prevSearchAction = currSearchAction;
+        }
+        if (searchSessionStatsBuilder != null) {
+            result.add(searchSessionStatsBuilder.build());
         }
         return result;
     }
@@ -223,12 +249,14 @@ public final class SearchIntentStatsExtractor {
      * click actions, and the previous search action (in generic document form).
      */
     private SearchIntentStats createSearchIntentStats(
+            @NonNull String packageName,
+            @Nullable String database,
             @NonNull SearchActionGenericDocument currSearchAction,
             @NonNull List<ClickActionGenericDocument> clickActions,
             @Nullable SearchActionGenericDocument prevSearchAction) {
         SearchIntentStats.Builder builder =
-                new SearchIntentStats.Builder(mPackageName)
-                        .setDatabase(mDatabase)
+                new SearchIntentStats.Builder(packageName)
+                        .setDatabase(database)
                         .setTimestampMillis(currSearchAction.getCreationTimestampMillis())
                         .setCurrQuery(currSearchAction.getQuery())
                         .setNumResultsFetched(currSearchAction.getFetchedResultCount())
@@ -247,11 +275,19 @@ public final class SearchIntentStatsExtractor {
      * Creates a {@link ClickStats} object from the given click action (in generic document form).
      */
     private ClickStats createClickStats(ClickActionGenericDocument clickAction) {
+        // A click is considered good if:
+        // - The user spent decent amount of time on the clicked document.
+        // - OR the client didn't provide timeStayOnResultMillis. In this case, the value will be 0.
+        boolean isGoodClick =
+                clickAction.getTimeStayOnResultMillis() <= 0
+                        || clickAction.getTimeStayOnResultMillis()
+                                >= GOOD_CLICK_TIME_STAY_ON_RESULT_THRESHOLD_MILLIS;
         return new ClickStats.Builder()
                 .setTimestampMillis(clickAction.getCreationTimestampMillis())
                 .setResultRankInBlock(clickAction.getResultRankInBlock())
                 .setResultRankGlobal(clickAction.getResultRankGlobal())
                 .setTimeStayOnResultMillis(clickAction.getTimeStayOnResultMillis())
+                .setIsGoodClick(isGoodClick)
                 .build();
     }
 
@@ -282,7 +318,7 @@ public final class SearchIntentStatsExtractor {
 
         // Whether the next search action is independent from the current search action. If true,
         // then the current search action will not be considered as an intermediate search action
-        // since it is the last search action of the related search sequence.
+        // since it is the last search action of the search session.
         boolean isNextSearchActionIndependent =
                 isIndependentSearchAction(nextSearchAction, currSearchAction);
 
@@ -313,12 +349,9 @@ public final class SearchIntentStatsExtractor {
      */
     private static boolean isIndependentSearchAction(
             @NonNull SearchActionGenericDocument currSearchAction,
-            @Nullable SearchActionGenericDocument prevSearchAction) {
+            @NonNull SearchActionGenericDocument prevSearchAction) {
         Objects.requireNonNull(currSearchAction);
-
-        if (prevSearchAction == null) {
-            return true;
-        }
+        Objects.requireNonNull(prevSearchAction);
 
         long searchTimeDiffMillis =
                 currSearchAction.getCreationTimestampMillis()
