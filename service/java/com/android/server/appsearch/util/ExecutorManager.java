@@ -17,11 +17,11 @@
 package com.android.server.appsearch.util;
 
 import android.annotation.NonNull;
+import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.os.UserHandle;
 import android.util.ArrayMap;
 
 import com.android.internal.annotations.GuardedBy;
-import com.android.server.appsearch.AppSearchEnvironmentFactory;
 import com.android.server.appsearch.FrameworkAppSearchConfig;
 import com.android.server.appsearch.FrameworkAppSearchConfigImpl;
 import com.android.server.appsearch.AppSearchRateLimitConfig;

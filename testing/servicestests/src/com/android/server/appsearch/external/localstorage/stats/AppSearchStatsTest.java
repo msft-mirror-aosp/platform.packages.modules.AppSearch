@@ -221,6 +221,7 @@ public class AppSearchStatsTest {
         int nativeLockAcquisitionLatencyMillis = 20;
         int javaToNativeJniLatencyMillis = 21;
         int nativeToJavaJniLatencyMillis = 22;
+        String searchSourceLogTag = "tag";
         final SearchStats.Builder sStatsBuilder =
                 new SearchStats.Builder(visibilityScope, TEST_PACKAGE_NAME)
                         .setDatabase(TEST_DATA_BASE)
@@ -247,7 +248,8 @@ public class AppSearchStatsTest {
                         .setDocumentRetrievingLatencyMillis(nativeDocumentRetrievingLatencyMillis)
                         .setNativeLockAcquisitionLatencyMillis(nativeLockAcquisitionLatencyMillis)
                         .setJavaToNativeJniLatencyMillis(javaToNativeJniLatencyMillis)
-                        .setNativeToJavaJniLatencyMillis(nativeToJavaJniLatencyMillis);
+                        .setNativeToJavaJniLatencyMillis(nativeToJavaJniLatencyMillis)
+                        .setSearchSourceLogTag(searchSourceLogTag);
         final SearchStats sStats = sStatsBuilder.build();
 
         assertThat(sStats.getPackageName()).isEqualTo(TEST_PACKAGE_NAME);
@@ -285,6 +287,7 @@ public class AppSearchStatsTest {
                 .isEqualTo(javaToNativeJniLatencyMillis);
         assertThat(sStats.getNativeToJavaJniLatencyMillis())
                 .isEqualTo(nativeToJavaJniLatencyMillis);
+        assertThat(sStats.getSearchSourceLogTag()).isEqualTo(searchSourceLogTag);
     }
 
     @Test

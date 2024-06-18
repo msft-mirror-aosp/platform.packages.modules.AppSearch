@@ -17,20 +17,26 @@
 package com.android.server.appsearch.external.localstorage;
 
 import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
+import static android.app.appsearch.testutil.AppSearchTestUtils.createMockVisibilityChecker;
 
 import static com.android.server.appsearch.external.localstorage.util.PrefixUtil.addPrefixToDocument;
 import static com.android.server.appsearch.external.localstorage.util.PrefixUtil.createPrefix;
 import static com.android.server.appsearch.external.localstorage.util.PrefixUtil.removePrefixesFromDocument;
+import static com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore.ANDROID_V_OVERLAY_DATABASE_NAME;
+import static com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore.VISIBILITY_DATABASE_NAME;
+import static com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore.VISIBILITY_PACKAGE_NAME;
 
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertThrows;
 
+import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.JoinSpec;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SearchResult;
@@ -40,7 +46,6 @@ import android.app.appsearch.SearchSuggestionResult;
 import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.SetSchemaResponse;
 import android.app.appsearch.StorageInfo;
-import android.app.appsearch.VisibilityDocument;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.observer.DocumentChangeInfo;
 import android.app.appsearch.observer.ObserverSpec;
@@ -53,12 +58,16 @@ import android.util.ArraySet;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.FlakyTest;
 
+import com.android.server.appsearch.appsearch.proto.AndroidVOverlayProto;
+import com.android.server.appsearch.appsearch.proto.PackageIdentifierProto;
+import com.android.server.appsearch.appsearch.proto.VisibilityConfigProto;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
+import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityToDocumentConverter;
 import com.android.server.appsearch.icing.proto.DebugInfoProto;
 import com.android.server.appsearch.icing.proto.DebugInfoVerbosity;
 import com.android.server.appsearch.icing.proto.DocumentProto;
@@ -73,8 +82,10 @@ import com.android.server.appsearch.icing.proto.StatusProto;
 import com.android.server.appsearch.icing.proto.StorageInfoProto;
 import com.android.server.appsearch.icing.proto.StringIndexingConfig;
 import com.android.server.appsearch.icing.proto.TermMatchType;
+import com.android.server.appsearch.protobuf.ByteString;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.MoreExecutors;
 
@@ -116,10 +127,10 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
     }
 
     @After
@@ -474,7 +485,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -530,7 +541,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -585,10 +596,10 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         initStatsBuilder,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Check recovery state
         InitializeStats initStats = initStatsBuilder.build();
@@ -629,7 +640,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         Collections.singletonList(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -677,7 +688,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -691,7 +702,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database2",
                         schema2,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -745,7 +756,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -759,7 +770,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database2",
                         schema2,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -827,16 +838,15 @@ public class AppSearchImplTest {
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
         // We need to share across packages
-        VisibilityChecker mockVisibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
+        VisibilityChecker mockVisibilityChecker = createMockVisibilityChecker(true);
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        mockVisibilityChecker);
+                        mockVisibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Insert package1 schema
         List<AppSearchSchema> personSchema =
@@ -846,7 +856,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         personSchema,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -867,7 +877,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database2",
                         callSchema,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -881,7 +891,7 @@ public class AppSearchImplTest {
                         "package3",
                         "database3",
                         textSchema,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1009,16 +1019,15 @@ public class AppSearchImplTest {
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
         // We need to share across packages
-        VisibilityChecker mockVisibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
+        VisibilityChecker mockVisibilityChecker = createMockVisibilityChecker(true);
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        mockVisibilityChecker);
+                        mockVisibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         AppSearchSchema.StringPropertyConfig personField =
                 new AppSearchSchema.StringPropertyConfig.Builder("personId")
@@ -1037,7 +1046,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         personAndCallSchema,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1052,7 +1061,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database2",
                         callSchema,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1229,7 +1238,7 @@ public class AppSearchImplTest {
                 "package",
                 "database",
                 schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
+                /*visibilityConfigs=*/ Collections.emptyList(),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
@@ -1297,7 +1306,7 @@ public class AppSearchImplTest {
                 "package",
                 "database",
                 schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
+                /*visibilityConfigs=*/ Collections.emptyList(),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
@@ -1353,7 +1362,7 @@ public class AppSearchImplTest {
                 "package",
                 "database",
                 schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
+                /*visibilityConfigs=*/ Collections.emptyList(),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
@@ -1423,7 +1432,7 @@ public class AppSearchImplTest {
                 "package",
                 "database",
                 schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
+                /*visibilityConfigs=*/ Collections.emptyList(),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
@@ -1494,7 +1503,7 @@ public class AppSearchImplTest {
                 "package",
                 "database",
                 schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
+                /*visibilityConfigs=*/ Collections.emptyList(),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
@@ -1562,7 +1571,7 @@ public class AppSearchImplTest {
                 "package",
                 "database",
                 schemas,
-                /*visibilityDocuments=*/ Collections.emptyList(),
+                /*visibilityConfigs=*/ Collections.emptyList(),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
@@ -1598,7 +1607,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1653,7 +1662,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1722,7 +1731,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1781,7 +1790,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1854,7 +1863,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1920,7 +1929,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -1967,7 +1976,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2034,7 +2043,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2104,7 +2113,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schema1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2201,7 +2210,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2247,7 +2256,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         oldSchemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2263,7 +2272,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         newSchemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2289,7 +2298,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2322,7 +2331,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         finalSchemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2338,7 +2347,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         finalSchemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2377,7 +2386,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2387,7 +2396,7 @@ public class AppSearchImplTest {
                         "package",
                         "database2",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2428,7 +2437,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2474,7 +2483,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schema,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2534,9 +2543,9 @@ public class AppSearchImplTest {
             existingPackages.add(PrefixUtil.getPackageName(existingSchemas.get(i).getSchemaType()));
         }
 
-        // Create VisibilityDocument
-        VisibilityDocument visibilityDocument =
-                new VisibilityDocument.Builder("schema")
+        // Create VisibilityConfig
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -2549,7 +2558,7 @@ public class AppSearchImplTest {
                         "packageA",
                         "database",
                         schema,
-                        /*visibilityDocuments=*/ ImmutableList.of(visibilityDocument),
+                        /*visibilityConfigs=*/ ImmutableList.of(visibilityConfig),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2559,7 +2568,7 @@ public class AppSearchImplTest {
                         "packageB",
                         "database",
                         schema,
-                        /*visibilityDocuments=*/ ImmutableList.of(visibilityDocument),
+                        /*visibilityConfigs=*/ ImmutableList.of(visibilityConfig),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2584,20 +2593,20 @@ public class AppSearchImplTest {
                 .containsExactlyElementsIn(expectedTypes);
 
         // Verify these two visibility documents are stored in AppSearch.
-        VisibilityDocument expectedVisibilityDocumentA =
-                new VisibilityDocument.Builder("packageA$database/schema")
+        InternalVisibilityConfig expectedVisibilityConfigA =
+                new InternalVisibilityConfig.Builder("packageA$database/schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
-        VisibilityDocument expectedVisibilityDocumentB =
-                new VisibilityDocument.Builder("packageB$database/schema")
+        InternalVisibilityConfig expectedVisibilityConfigB =
+                new InternalVisibilityConfig.Builder("packageB$database/schema")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility("packageA$database/schema"))
-                .isEqualTo(expectedVisibilityDocumentA);
+                .isEqualTo(expectedVisibilityConfigA);
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility("packageB$database/schema"))
-                .isEqualTo(expectedVisibilityDocumentB);
+                .isEqualTo(expectedVisibilityConfigB);
 
         // Prune packages
         mAppSearchImpl.prunePackageData(existingPackages);
@@ -2628,7 +2637,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         Collections.singletonList(new AppSearchSchema.Builder("schema").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2643,7 +2652,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database2",
                         Collections.singletonList(new AppSearchSchema.Builder("schema").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2658,7 +2667,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database1",
                         Collections.singletonList(new AppSearchSchema.Builder("schema").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2681,7 +2690,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schemas1,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2691,7 +2700,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database2",
                         schemas2,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2701,7 +2710,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database1",
                         schemas3,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2712,7 +2721,8 @@ public class AppSearchImplTest {
                         "package1$database2/type2",
                         "package2$database1/type3",
                         "VS#Pkg$VS#Db/VisibilityType", // plus the stored Visibility schema
-                        "VS#Pkg$VS#Db/VisibilityPermissionType");
+                        "VS#Pkg$VS#Db/VisibilityPermissionType",
+                        "VS#Pkg$VS#AndroidVDb/AndroidVOverlayType");
     }
 
     @FlakyTest(bugId = 204186664)
@@ -2726,7 +2736,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2888,7 +2898,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2912,7 +2922,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2934,7 +2944,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -2994,7 +3004,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3018,7 +3028,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3041,7 +3051,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3051,7 +3061,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database2",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3110,7 +3120,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3126,7 +3136,7 @@ public class AppSearchImplTest {
                                 "package",
                                 "database",
                                 schemas,
-                                /*visibilityDocuments=*/ Collections.emptyList(),
+                                /*visibilityConfigs=*/ Collections.emptyList(),
                                 /*forceOverride=*/ false,
                                 /*version=*/ 0,
                                 /* setSchemaStatsBuilder= */ null));
@@ -3237,7 +3247,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3264,10 +3274,10 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         getResult =
                 appSearchImpl2.getDocument(
                         "package", "database", "namespace1", "id1", Collections.emptyMap());
@@ -3284,7 +3294,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3340,10 +3350,10 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         assertThrows(
                 AppSearchException.class,
                 () ->
@@ -3369,7 +3379,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3433,10 +3443,10 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
         assertThrows(
                 AppSearchException.class,
                 () ->
@@ -3462,7 +3472,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3493,7 +3503,7 @@ public class AppSearchImplTest {
         assertThat(storageInfo.getTotalStorageSize()).isGreaterThan(0);
         assertThat(storageInfo.getDocumentStorageInfo().getNumAliveDocuments()).isEqualTo(2);
         assertThat(storageInfo.getSchemaStoreStorageInfo().getNumSchemaTypes())
-                .isEqualTo(3); // +2 for VisibilitySchema
+                .isEqualTo(4); // +2 for VisibilitySchema, +1 for VisibilityOverlay
     }
 
     @Test
@@ -3505,7 +3515,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3538,7 +3548,7 @@ public class AppSearchImplTest {
         assertThat(debugInfo.getDocumentInfo().getDocumentStorageInfo().getNumAliveDocuments())
                 .isEqualTo(2);
         assertThat(debugInfo.getSchemaInfo().getSchema().getTypesList())
-                .hasSize(3); // +2 for VisibilitySchema
+                .hasSize(4); // +2 for VisibilitySchema, +1 for VisibilityOverlay
     }
 
     @Test
@@ -3565,10 +3575,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3578,7 +3588,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3661,10 +3671,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3674,7 +3684,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3728,10 +3738,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Make sure the limit is maintained
         e =
@@ -3774,10 +3784,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3787,7 +3797,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3913,10 +3923,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -3926,7 +3936,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3936,7 +3946,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database2",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3946,7 +3956,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -3956,7 +3966,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database2",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4023,10 +4033,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // package1 should still be out of space
         e =
@@ -4095,10 +4105,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -4119,7 +4129,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4276,10 +4286,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -4294,7 +4304,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4371,10 +4381,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Insert schema
         List<AppSearchSchema> schemas =
@@ -4389,7 +4399,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4436,10 +4446,10 @@ public class AppSearchImplTest {
                                         return Integer.MAX_VALUE;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         // Index id2. This should pass but only because we check for replacements.
         mAppSearchImpl.putDocument(
@@ -4492,10 +4502,10 @@ public class AppSearchImplTest {
                                         return 2;
                                     }
                                 },
-                                new DefaultIcingOptionsConfig()),
+                                new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         AppSearchException e =
                 assertThrows(
@@ -4526,7 +4536,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         /*schemas=*/ ImmutableList.of(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -4597,23 +4607,22 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> false;
+        VisibilityChecker mockVisibilityChecker = createMockVisibilityChecker(false);
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        mockVisibilityChecker);
+                        mockVisibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         InternalSetSchemaResponse internalSetSchemaResponse =
                 mAppSearchImpl.setSchema(
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4653,23 +4662,22 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
+        VisibilityChecker mockVisibilityChecker = createMockVisibilityChecker(true);
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        mockVisibilityChecker);
+                        mockVisibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         InternalSetSchemaResponse internalSetSchemaResponse =
                 mAppSearchImpl.setSchema(
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4705,23 +4713,22 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
+        VisibilityChecker mockVisibilityChecker = createMockVisibilityChecker(true);
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        mockVisibilityChecker);
+                        mockVisibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         InternalSetSchemaResponse internalSetSchemaResponse =
                 mAppSearchImpl.setSchema(
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4761,23 +4768,37 @@ public class AppSearchImplTest {
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
         VisibilityChecker mockVisibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
-                        callerAccess.getCallingPackageName().equals("visiblePackage");
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return callerAccess.getCallingPackageName().equals("visiblePackage");
+                    }
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
+
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        mockVisibilityChecker);
+                        mockVisibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         InternalSetSchemaResponse internalSetSchemaResponse =
                 mAppSearchImpl.setSchema(
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4829,8 +4850,8 @@ public class AppSearchImplTest {
 
     @Test
     public void testSetVisibility() throws Exception {
-        VisibilityDocument visibilityDocument =
-                new VisibilityDocument.Builder("Email")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -4843,7 +4864,7 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ ImmutableList.of(visibilityDocument),
+                        /*visibilityConfigs=*/ ImmutableList.of(visibilityConfig),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4851,31 +4872,31 @@ public class AppSearchImplTest {
         String prefix = PrefixUtil.createPrefix("package", "database1");
 
         // assert the visibility document is saved.
-        VisibilityDocument expectedDocument =
-                new VisibilityDocument.Builder(prefix + "Email")
+        InternalVisibilityConfig expectedDocument =
+                new InternalVisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
-        // Verify the VisibilityDocument is saved to AppSearchImpl.
-        VisibilityDocument actualDocument =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefix + "Email",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
+                        mAppSearchImpl.getDocument(
+                                VISIBILITY_PACKAGE_NAME,
+                                VISIBILITY_DATABASE_NAME,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
+                                /*id=*/ prefix + "Email",
+                                /*typePropertyPaths=*/ Collections.emptyMap()),
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument).isEqualTo(expectedDocument);
     }
 
     @Test
     public void testSetVisibility_existingVisibilitySettingRetains() throws Exception {
         // Create Visibility Document for Email1
-        VisibilityDocument visibilityDocument1 =
-                new VisibilityDocument.Builder("Email1")
+        InternalVisibilityConfig visibilityConfig1 =
+                new InternalVisibilityConfig.Builder("Email1")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -4888,7 +4909,7 @@ public class AppSearchImplTest {
                         "package1",
                         "database",
                         schemas1,
-                        /*visibilityDocuments=*/ ImmutableList.of(visibilityDocument1),
+                        /*visibilityConfigs=*/ ImmutableList.of(visibilityConfig1),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4896,28 +4917,29 @@ public class AppSearchImplTest {
         String prefix1 = PrefixUtil.createPrefix("package1", "database");
 
         // assert the visibility document is saved.
-        VisibilityDocument expectedDocument1 =
-                new VisibilityDocument.Builder(prefix1 + "Email1")
+        InternalVisibilityConfig expectedDocument1 =
+                new InternalVisibilityConfig.Builder(prefix1 + "Email1")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix1 + "Email1"))
                 .isEqualTo(expectedDocument1);
-        // Verify the VisibilityDocument is saved to AppSearchImpl.
-        VisibilityDocument actualDocument1 =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefix1 + "Email1",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument1 =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
+                        mAppSearchImpl.getDocument(
+                                VISIBILITY_PACKAGE_NAME,
+                                VISIBILITY_DATABASE_NAME,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
+                                /*id=*/ prefix1 + "Email1",
+                                /*typePropertyPaths=*/ Collections.emptyMap()),
+                        /*androidVOverlayDocument=*/ null);
+
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
 
         // Create Visibility Document for Email2
-        VisibilityDocument visibilityDocument2 =
-                new VisibilityDocument.Builder("Email2")
+        InternalVisibilityConfig visibilityConfig2 =
+                new InternalVisibilityConfig.Builder("Email2")
                         .setNotDisplayedBySystem(false)
                         .addVisibleToPackage(new PackageIdentifier("pkgFoo", new byte[32]))
                         .build();
@@ -4930,7 +4952,7 @@ public class AppSearchImplTest {
                         "package2",
                         "database",
                         schemas2,
-                        /*visibilityDocuments=*/ ImmutableList.of(visibilityDocument2),
+                        /*visibilityConfigs=*/ ImmutableList.of(visibilityConfig2),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
@@ -4938,23 +4960,23 @@ public class AppSearchImplTest {
         String prefix2 = PrefixUtil.createPrefix("package2", "database");
 
         // assert the visibility document is saved.
-        VisibilityDocument expectedDocument2 =
-                new VisibilityDocument.Builder(prefix2 + "Email2")
+        InternalVisibilityConfig expectedDocument2 =
+                new InternalVisibilityConfig.Builder(prefix2 + "Email2")
                         .setNotDisplayedBySystem(false)
                         .addVisibleToPackage(new PackageIdentifier("pkgFoo", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix2 + "Email2"))
                 .isEqualTo(expectedDocument2);
-        // Verify the VisibilityDocument is saved to AppSearchImpl.
-        VisibilityDocument actualDocument2 =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefix2 + "Email2",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument2 =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
+                        mAppSearchImpl.getDocument(
+                                VISIBILITY_PACKAGE_NAME,
+                                VISIBILITY_DATABASE_NAME,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
+                                /*id=*/ prefix2 + "Email2",
+                                /*typePropertyPaths=*/ Collections.emptyMap()),
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument2).isEqualTo(expectedDocument2);
 
         // Check the existing visibility document retains.
@@ -4962,22 +4984,22 @@ public class AppSearchImplTest {
                 .isEqualTo(expectedDocument1);
         // Verify the VisibilityDocument is saved to AppSearchImpl.
         actualDocument1 =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefix1 + "Email1",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
+                        mAppSearchImpl.getDocument(
+                                VISIBILITY_PACKAGE_NAME,
+                                VISIBILITY_DATABASE_NAME,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
+                                /*id=*/ prefix1 + "Email1",
+                                /*typePropertyPaths=*/ Collections.emptyMap()),
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument1).isEqualTo(expectedDocument1);
     }
 
     @Test
     public void testSetVisibility_removeVisibilitySettings() throws Exception {
         // Create a non-all-default visibility document
-        VisibilityDocument visibilityDocument =
-                new VisibilityDocument.Builder("Email")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -4991,29 +5013,28 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ ImmutableList.of(visibilityDocument),
+                        /*visibilityConfigs=*/ ImmutableList.of(visibilityConfig),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
         assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         String prefix = PrefixUtil.createPrefix("package", "database1");
-        VisibilityDocument expectedDocument =
-                new VisibilityDocument.Builder(prefix + "Email")
+        InternalVisibilityConfig expectedDocument =
+                new InternalVisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
-        // Verify the VisibilityDocument is saved to AppSearchImpl.
-        VisibilityDocument actualDocument =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefix + "Email",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
+        InternalVisibilityConfig actualDocument =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
+                        mAppSearchImpl.getDocument(
+                                VISIBILITY_PACKAGE_NAME,
+                                VISIBILITY_DATABASE_NAME,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
+                                /*id=*/ prefix + "Email",
+                                /*typePropertyPaths=*/ Collections.emptyMap()),
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // Set schema Email and its all-default visibility document to AppSearch database1
@@ -5022,22 +5043,22 @@ public class AppSearchImplTest {
                         "package",
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ ImmutableList.of(),
+                        /*visibilityConfigs=*/ ImmutableList.of(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /* setSchemaStatsBuilder= */ null);
         assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
         // All-default visibility document won't be saved in AppSearch.
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email")).isNull();
-        // Verify the VisibilityDocument is removed from AppSearchImpl.
+        // Verify the InternalVisibilityConfig is removed from AppSearchImpl.
         AppSearchException e =
                 assertThrows(
                         AppSearchException.class,
                         () ->
                                 mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
+                                        VISIBILITY_PACKAGE_NAME,
+                                        VISIBILITY_DATABASE_NAME,
+                                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                         /*id=*/ prefix + "Email",
                                         /*typePropertyPaths=*/ Collections.emptyMap()));
         assertThat(e)
@@ -5048,8 +5069,8 @@ public class AppSearchImplTest {
     @Test
     public void testRemoveVisibility_noRemainingSettings() throws Exception {
         // Create a non-all-default visibility document
-        VisibilityDocument visibilityDocument =
-                new VisibilityDocument.Builder("Email")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -5062,28 +5083,28 @@ public class AppSearchImplTest {
                 "package",
                 "database1",
                 schemas,
-                /*visibilityDocuments=*/ ImmutableList.of(visibilityDocument),
+                /*visibilityConfigs=*/ ImmutableList.of(visibilityConfig),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
         String prefix = PrefixUtil.createPrefix("package", "database1");
-        VisibilityDocument expectedDocument =
-                new VisibilityDocument.Builder(prefix + "Email")
+        InternalVisibilityConfig expectedDocument =
+                new InternalVisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
-        // Verify the VisibilityDocument is saved to AppSearchImpl.
-        VisibilityDocument actualDocument =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefix + "Email",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
+                        mAppSearchImpl.getDocument(
+                                VISIBILITY_PACKAGE_NAME,
+                                VISIBILITY_DATABASE_NAME,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
+                                /*id=*/ prefix + "Email",
+                                /*typePropertyPaths=*/ Collections.emptyMap()),
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // remove the schema and visibility setting from AppSearch
@@ -5091,7 +5112,7 @@ public class AppSearchImplTest {
                 "package",
                 "database1",
                 /*schemas=*/ new ArrayList<>(),
-                /*visibilityDocuments=*/ ImmutableList.of(),
+                /*visibilityConfigs=*/ ImmutableList.of(),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
@@ -5101,7 +5122,7 @@ public class AppSearchImplTest {
                 "package",
                 "database1",
                 schemas,
-                /*visibilityDocuments=*/ ImmutableList.of(),
+                /*visibilityConfigs=*/ ImmutableList.of(),
                 /*forceOverride=*/ false,
                 /*version=*/ 0,
                 /* setSchemaStatsBuilder= */ null);
@@ -5113,9 +5134,9 @@ public class AppSearchImplTest {
                         AppSearchException.class,
                         () ->
                                 mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
+                                        VISIBILITY_PACKAGE_NAME,
+                                        VISIBILITY_DATABASE_NAME,
+                                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                         /*id=*/ prefix + "Email",
                                         /*typePropertyPaths=*/ Collections.emptyMap()));
         assertThat(e)
@@ -5126,8 +5147,8 @@ public class AppSearchImplTest {
     @Test
     public void testCloseAndReopen_visibilityInfoRetains() throws Exception {
         // set Schema and visibility to AppSearch
-        VisibilityDocument visibilityDocument =
-                new VisibilityDocument.Builder("Email")
+        InternalVisibilityConfig visibilityConfig =
+                new InternalVisibilityConfig.Builder("Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
@@ -5138,7 +5159,7 @@ public class AppSearchImplTest {
                         "packageName",
                         "databaseName",
                         schemas,
-                        ImmutableList.of(visibilityDocument),
+                        ImmutableList.of(visibilityConfig),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5150,30 +5171,30 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         String prefix = PrefixUtil.createPrefix("packageName", "databaseName");
-        VisibilityDocument expectedDocument =
-                new VisibilityDocument.Builder(prefix + "Email")
+        InternalVisibilityConfig expectedDocument =
+                new InternalVisibilityConfig.Builder(prefix + "Email")
                         .setNotDisplayedBySystem(true)
                         .addVisibleToPackage(new PackageIdentifier("pkgBar", new byte[32]))
                         .build();
 
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email"))
                 .isEqualTo(expectedDocument);
-        // Verify the VisibilityDocument is saved to AppSearchImpl.
-        VisibilityDocument actualDocument =
-                new VisibilityDocument.Builder(
-                                mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
-                                        /*id=*/ prefix + "Email",
-                                        /*typePropertyPaths=*/ Collections.emptyMap()))
-                        .build();
+        // Verify the InternalVisibilityConfig is saved to AppSearchImpl.
+        InternalVisibilityConfig actualDocument =
+                VisibilityToDocumentConverter.createInternalVisibilityConfig(
+                        mAppSearchImpl.getDocument(
+                                VISIBILITY_PACKAGE_NAME,
+                                VISIBILITY_DATABASE_NAME,
+                                VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
+                                /*id=*/ prefix + "Email",
+                                /*typePropertyPaths=*/ Collections.emptyMap()),
+                        /*androidVOverlayDocument=*/ null);
         assertThat(actualDocument).isEqualTo(expectedDocument);
 
         // remove schema and visibility document
@@ -5194,21 +5215,21 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        /*visibilityChecker=*/ null);
+                        /*visibilityChecker=*/ null,
+                        ALWAYS_OPTIMIZE);
 
         assertThat(mAppSearchImpl.mVisibilityStoreLocked.getVisibility(prefix + "Email")).isNull();
-        // Verify the VisibilityDocument is removed from AppSearchImpl.
+        // Verify the InternalVisibilityConfig is removed from AppSearchImpl.
         AppSearchException e =
                 assertThrows(
                         AppSearchException.class,
                         () ->
                                 mAppSearchImpl.getDocument(
-                                        VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
-                                        VisibilityDocument.NAMESPACE,
+                                        VISIBILITY_PACKAGE_NAME,
+                                        VISIBILITY_DATABASE_NAME,
+                                        VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                         /*id=*/ prefix + "Email",
                                         /*typePropertyPaths=*/ Collections.emptyMap()));
         assertThat(e)
@@ -5224,16 +5245,15 @@ public class AppSearchImplTest {
         // Create a new mAppSearchImpl with a mock Visibility Checker
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
-        VisibilityChecker mockVisibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> true;
+        VisibilityChecker mockVisibilityChecker = createMockVisibilityChecker(true);
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        mockVisibilityChecker);
+                        mockVisibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Add a schema type that is not displayed by the system
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5241,8 +5261,8 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ ImmutableList.of(
-                                new VisibilityDocument.Builder("Type")
+                        /*visibilityConfigs=*/ ImmutableList.of(
+                                new InternalVisibilityConfig.Builder("Type")
                                         .setNotDisplayedBySystem(true)
                                         .build()),
                         /*forceOverride=*/ false,
@@ -5269,7 +5289,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         Collections.singletonList(new AppSearchSchema.Builder("Type").build()),
-                        /*visibilityDocuments=*/ ImmutableList.of(),
+                        /*visibilityConfigs=*/ ImmutableList.of(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5295,7 +5315,7 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ ImmutableList.of(),
+                        /*visibilityConfigs=*/ ImmutableList.of(),
                         /*forceOverride=*/ false,
                         /*version=*/ 1,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5329,16 +5349,30 @@ public class AppSearchImplTest {
         mAppSearchImpl.close();
         File tempFolder = mTemporaryFolder.newFolder();
         VisibilityChecker mockVisibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
-                        prefixedSchema.endsWith("VisibleType");
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return prefixedSchema.endsWith("VisibleType");
+                    }
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
+
         mAppSearchImpl =
                 AppSearchImpl.create(
                         tempFolder,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        mockVisibilityChecker);
+                        mockVisibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Add two schema types that are not displayed by the system.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5346,11 +5380,11 @@ public class AppSearchImplTest {
                         "package",
                         "database",
                         schemas,
-                        /*visibilityDocuments=*/ ImmutableList.of(
-                                new VisibilityDocument.Builder("VisibleType")
+                        /*visibilityConfigs=*/ ImmutableList.of(
+                                new InternalVisibilityConfig.Builder("VisibleType")
                                         .setNotDisplayedBySystem(true)
                                         .build(),
-                                new VisibilityDocument.Builder("PrivateType")
+                                new InternalVisibilityConfig.Builder("PrivateType")
                                         .setNotDisplayedBySystem(true)
                                         .build()),
                         /*forceOverride=*/ false,
@@ -5370,6 +5404,312 @@ public class AppSearchImplTest {
     }
 
     @Test
+    public void testGetSchema_global_publicAcl() throws Exception {
+        List<AppSearchSchema> schemas =
+                ImmutableList.of(
+                        new AppSearchSchema.Builder("PublicTypeA").build(),
+                        new AppSearchSchema.Builder("PublicTypeB").build(),
+                        new AppSearchSchema.Builder("PublicTypeC").build());
+
+        PackageIdentifier pkgA = new PackageIdentifier("A", new byte[32]);
+        PackageIdentifier pkgB = new PackageIdentifier("B", new byte[32]);
+        PackageIdentifier pkgC = new PackageIdentifier("C", new byte[32]);
+
+        // Create a new mAppSearchImpl with a mock Visibility Checker
+        mAppSearchImpl.close();
+        File tempFolder = mTemporaryFolder.newFolder();
+
+        // Package A is visible to package B & C, package B is visible to package C (based on
+        // canPackageQuery, which we are mocking).
+        Map<String, Set<String>> packageCanSee =
+                ImmutableMap.of(
+                        "A", ImmutableSet.of("A"),
+                        "B", ImmutableSet.of("A", "B"),
+                        "C", ImmutableSet.of("A", "B", "C"));
+        final VisibilityChecker publicAclMockChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        InternalVisibilityConfig param =
+                                visibilityStore.getVisibility(prefixedSchema);
+                        return packageCanSee
+                                .get(callerAccess.getCallingPackageName())
+                                .contains(
+                                        param.getVisibilityConfig()
+                                                .getPubliclyVisibleTargetPackage()
+                                                .getPackageName());
+                    }
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
+
+        mAppSearchImpl =
+                AppSearchImpl.create(
+                        tempFolder,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
+                        /*initStatsBuilder=*/ null,
+                        publicAclMockChecker,
+                        ALWAYS_OPTIMIZE);
+
+        List<InternalVisibilityConfig> visibilityConfigs =
+                ImmutableList.of(
+                        new InternalVisibilityConfig.Builder("PublicTypeA")
+                                .setPubliclyVisibleTargetPackage(pkgA)
+                                .build(),
+                        new InternalVisibilityConfig.Builder("PublicTypeB")
+                                .setPubliclyVisibleTargetPackage(pkgB)
+                                .build(),
+                        new InternalVisibilityConfig.Builder("PublicTypeC")
+                                .setPubliclyVisibleTargetPackage(pkgC)
+                                .build());
+
+        // Add the three schema types, each with their own publicly visible target package.
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        "package",
+                        "database",
+                        schemas,
+                        visibilityConfigs,
+                        /*forceOverride=*/ true,
+                        /*version=*/ 1,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+
+        // Verify access to schemas based on calling package
+        GetSchemaResponse getResponse =
+                mAppSearchImpl.getSchema(
+                        "package", "database", new CallerAccess(pkgA.getPackageName()));
+        assertThat(getResponse.getSchemas()).containsExactly(schemas.get(0));
+        assertThat(getResponse.getPubliclyVisibleSchemas()).containsKey("PublicTypeA");
+
+        getResponse =
+                mAppSearchImpl.getSchema(
+                        "package", "database", new CallerAccess(pkgB.getPackageName()));
+        assertThat(getResponse.getSchemas()).containsExactly(schemas.get(0), schemas.get(1));
+        assertThat(getResponse.getPubliclyVisibleSchemas()).containsKey("PublicTypeA");
+        assertThat(getResponse.getPubliclyVisibleSchemas()).containsKey("PublicTypeB");
+
+        getResponse =
+                mAppSearchImpl.getSchema(
+                        "package", "database", new CallerAccess(pkgC.getPackageName()));
+        assertThat(getResponse.getSchemas()).containsExactlyElementsIn(schemas);
+        assertThat(getResponse.getPubliclyVisibleSchemas()).containsKey("PublicTypeA");
+        assertThat(getResponse.getPubliclyVisibleSchemas()).containsKey("PublicTypeB");
+        assertThat(getResponse.getPubliclyVisibleSchemas()).containsKey("PublicTypeC");
+    }
+
+    @Test
+    public void testGetSchema_global_publicAcl_removal() throws Exception {
+        // This test to ensure the proper documents are created through setSchema, then removed
+        // when setSchema is called again
+        List<AppSearchSchema> schemas =
+                ImmutableList.of(
+                        new AppSearchSchema.Builder("PublicTypeA").build(),
+                        new AppSearchSchema.Builder("PublicTypeB").build(),
+                        new AppSearchSchema.Builder("PublicTypeC").build());
+
+        PackageIdentifier pkgA = new PackageIdentifier("A", new byte[32]);
+        PackageIdentifier pkgB = new PackageIdentifier("B", new byte[32]);
+        PackageIdentifier pkgC = new PackageIdentifier("C", new byte[32]);
+
+        // Create a new mAppSearchImpl with a mock Visibility Checker
+        mAppSearchImpl.close();
+        File tempFolder = mTemporaryFolder.newFolder();
+
+        // Package A is visible to package B & C, package B is visible to package C (based on
+        // canPackageQuery, which we are mocking).
+        Map<String, Set<String>> packageCanSee =
+                ImmutableMap.of(
+                        "A", ImmutableSet.of("A"),
+                        "B", ImmutableSet.of("A", "B"),
+                        "C", ImmutableSet.of("A", "B", "C"));
+        final VisibilityChecker publicAclMockChecker =
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        InternalVisibilityConfig param =
+                                visibilityStore.getVisibility(prefixedSchema);
+                        return packageCanSee
+                                .get(callerAccess.getCallingPackageName())
+                                .contains(
+                                        param.getVisibilityConfig()
+                                                .getPubliclyVisibleTargetPackage()
+                                                .getPackageName());
+                    }
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
+
+        mAppSearchImpl =
+                AppSearchImpl.create(
+                        tempFolder,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
+                        /*initStatsBuilder=*/ null,
+                        publicAclMockChecker,
+                        ALWAYS_OPTIMIZE);
+
+        List<InternalVisibilityConfig> visibilityConfigs =
+                ImmutableList.of(
+                        new InternalVisibilityConfig.Builder("PublicTypeA")
+                                .setPubliclyVisibleTargetPackage(pkgA)
+                                .build(),
+                        new InternalVisibilityConfig.Builder("PublicTypeB")
+                                .setPubliclyVisibleTargetPackage(pkgB)
+                                .build(),
+                        new InternalVisibilityConfig.Builder("PublicTypeC")
+                                .setPubliclyVisibleTargetPackage(pkgC)
+                                .build());
+
+        // Add two schema types that are not displayed by the system.
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        "package",
+                        "database",
+                        schemas,
+                        visibilityConfigs,
+                        /*forceOverride=*/ true,
+                        /*version=*/ 1,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+
+        // Now check for documents
+        GenericDocument visibilityOverlayA =
+                mAppSearchImpl.getDocument(
+                        VISIBILITY_PACKAGE_NAME,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
+                        "package$database/PublicTypeA",
+                        Collections.emptyMap());
+        GenericDocument visibilityOverlayB =
+                mAppSearchImpl.getDocument(
+                        VISIBILITY_PACKAGE_NAME,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
+                        "package$database/PublicTypeB",
+                        Collections.emptyMap());
+        GenericDocument visibilityOverlayC =
+                mAppSearchImpl.getDocument(
+                        VISIBILITY_PACKAGE_NAME,
+                        ANDROID_V_OVERLAY_DATABASE_NAME,
+                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
+                        "package$database/PublicTypeC",
+                        Collections.emptyMap());
+
+        AndroidVOverlayProto overlayProtoA =
+                AndroidVOverlayProto.newBuilder()
+                        .setVisibilityConfig(
+                                VisibilityConfigProto.newBuilder()
+                                        .setPubliclyVisibleTargetPackage(
+                                                PackageIdentifierProto.newBuilder()
+                                                        .setPackageName("A")
+                                                        .setPackageSha256Cert(
+                                                                ByteString.copyFrom(new byte[32]))
+                                                        .build())
+                                        .build())
+                        .build();
+        AndroidVOverlayProto overlayProtoB =
+                AndroidVOverlayProto.newBuilder()
+                        .setVisibilityConfig(
+                                VisibilityConfigProto.newBuilder()
+                                        .setPubliclyVisibleTargetPackage(
+                                                PackageIdentifierProto.newBuilder()
+                                                        .setPackageName("B")
+                                                        .setPackageSha256Cert(
+                                                                ByteString.copyFrom(new byte[32]))
+                                                        .build())
+                                        .build())
+                        .build();
+        AndroidVOverlayProto overlayProtoC =
+                AndroidVOverlayProto.newBuilder()
+                        .setVisibilityConfig(
+                                VisibilityConfigProto.newBuilder()
+                                        .setPubliclyVisibleTargetPackage(
+                                                PackageIdentifierProto.newBuilder()
+                                                        .setPackageName("C")
+                                                        .setPackageSha256Cert(
+                                                                ByteString.copyFrom(new byte[32]))
+                                                        .build())
+                                        .build())
+                        .build();
+
+        assertThat(visibilityOverlayA.getPropertyBytes("visibilityProtoSerializeProperty"))
+                .isEqualTo(overlayProtoA.toByteArray());
+        assertThat(visibilityOverlayB.getPropertyBytes("visibilityProtoSerializeProperty"))
+                .isEqualTo(overlayProtoB.toByteArray());
+        assertThat(visibilityOverlayC.getPropertyBytes("visibilityProtoSerializeProperty"))
+                .isEqualTo(overlayProtoC.toByteArray());
+
+        // now undo the "public" setting
+        visibilityConfigs =
+                ImmutableList.of(
+                        new InternalVisibilityConfig.Builder("PublicTypeA").build(),
+                        new InternalVisibilityConfig.Builder("PublicTypeB").build(),
+                        new InternalVisibilityConfig.Builder("PublicTypeC").build());
+
+        InternalSetSchemaResponse internalSetSchemaResponseRemoved =
+                mAppSearchImpl.setSchema(
+                        "package",
+                        "database",
+                        schemas,
+                        visibilityConfigs,
+                        /*forceOverride=*/ true,
+                        /*version=*/ 1,
+                        /*setSchemaStatsBuilder=*/ null);
+        assertThat(internalSetSchemaResponseRemoved.isSuccess()).isTrue();
+
+        // Now check for documents again
+        Exception e =
+                assertThrows(
+                        AppSearchException.class,
+                        () ->
+                                mAppSearchImpl.getDocument(
+                                        VISIBILITY_PACKAGE_NAME,
+                                        VISIBILITY_DATABASE_NAME,
+                                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
+                                        "package$database/PublicTypeA",
+                                        Collections.emptyMap()));
+        assertThat(e.getMessage()).endsWith("not found.");
+        e =
+                assertThrows(
+                        AppSearchException.class,
+                        () ->
+                                mAppSearchImpl.getDocument(
+                                        VISIBILITY_PACKAGE_NAME,
+                                        VISIBILITY_DATABASE_NAME,
+                                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
+                                        "package$database/PublicTypeB",
+                                        Collections.emptyMap()));
+        assertThat(e.getMessage()).endsWith("not found.");
+        e =
+                assertThrows(
+                        AppSearchException.class,
+                        () ->
+                                mAppSearchImpl.getDocument(
+                                        VISIBILITY_PACKAGE_NAME,
+                                        VISIBILITY_DATABASE_NAME,
+                                        VisibilityToDocumentConverter.ANDROID_V_OVERLAY_NAMESPACE,
+                                        "package$database/PublicTypeC",
+                                        Collections.emptyMap()));
+        assertThat(e.getMessage()).endsWith("not found.");
+    }
+
+    @Test
     public void testDispatchObserver_samePackage_noVisStore_accept() throws Exception {
         // Add a schema type
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5377,7 +5717,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5420,17 +5760,16 @@ public class AppSearchImplTest {
     @Test
     public void testDispatchObserver_samePackage_withVisStore_accept() throws Exception {
         // Make a visibility checker that rejects everything
-        final VisibilityChecker rejectChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> false;
+        final VisibilityChecker rejectChecker = createMockVisibilityChecker(false);
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        rejectChecker);
+                        rejectChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Add a schema type
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5438,7 +5777,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5486,7 +5825,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5525,17 +5864,30 @@ public class AppSearchImplTest {
 
         // Make a visibility checker that allows only fakeListeningPackage.
         final VisibilityChecker visibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
-                        callerAccess.getCallingPackageName().equals(fakeListeningPackage);
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return callerAccess.getCallingPackageName().equals(fakeListeningPackage);
+                    }
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        visibilityChecker);
+                        visibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Add a schema type
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5543,7 +5895,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5588,17 +5940,16 @@ public class AppSearchImplTest {
         final String fakeListeningPackage = "com.fake.Listening.package";
 
         // Make a visibility checker that rejects everything.
-        final VisibilityChecker rejectChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> false;
+        final VisibilityChecker rejectChecker = createMockVisibilityChecker(false);
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        rejectChecker);
+                        rejectChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Add a schema type
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -5606,7 +5957,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5658,7 +6009,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5684,7 +6035,7 @@ public class AppSearchImplTest {
                                 new AppSearchSchema.Builder("Type1").build(),
                                 new AppSearchSchema.Builder("Type2").build(),
                                 new AppSearchSchema.Builder("Type3").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5713,7 +6064,7 @@ public class AppSearchImplTest {
                         ImmutableList.of(
                                 new AppSearchSchema.Builder("Type1").build(),
                                 new AppSearchSchema.Builder("Type2").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5734,7 +6085,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(new AppSearchSchema.Builder("Type1").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5769,7 +6120,7 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_REQUIRED)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5800,7 +6151,7 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_REQUIRED)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 1,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5830,7 +6181,7 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_OPTIONAL)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 2,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5873,7 +6224,7 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_REQUIRED)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5912,7 +6263,7 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_OPTIONAL)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -5935,26 +6286,43 @@ public class AppSearchImplTest {
 
         // Make a fake visibility checker that actually looks at visibility store
         final VisibilityChecker visibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> {
-                    if (!callerAccess.getCallingPackageName().equals(fakeListeningPackage)) {
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        if (!callerAccess.getCallingPackageName().equals(fakeListeningPackage)) {
+                            return false;
+                        }
+
+                        for (PackageIdentifier packageIdentifier :
+                                visibilityStore
+                                        .getVisibility(prefixedSchema)
+                                        .getVisibilityConfig()
+                                        .getAllowedPackages()) {
+                            if (packageIdentifier.getPackageName().equals(fakeListeningPackage)) {
+                                return true;
+                            }
+                        }
                         return false;
                     }
-                    Set<String> allowedPackages =
-                            new ArraySet<>(
-                                    visibilityStore
-                                            .getVisibility(prefixedSchema)
-                                            .getPackageNames());
-                    return allowedPackages.contains(fakeListeningPackage);
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
                 };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        visibilityChecker);
+                        visibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Register an observer
         TestObserverCallback observer = new TestObserverCallback();
@@ -5975,13 +6343,13 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ ImmutableList.of(
-                                new VisibilityDocument.Builder("Type1")
+                        /*visibilityConfigs=*/ ImmutableList.of(
+                                new InternalVisibilityConfig.Builder("Type1")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
                                         .build(),
-                                new VisibilityDocument.Builder("Type2")
+                                new InternalVisibilityConfig.Builder("Type2")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
@@ -6010,13 +6378,13 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         schemas,
-                        /*visibilityDocuments=*/ ImmutableList.of(
-                                new VisibilityDocument.Builder("Type1")
+                        /*visibilityConfigs=*/ ImmutableList.of(
+                                new InternalVisibilityConfig.Builder("Type1")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
                                         .build(),
-                                new VisibilityDocument.Builder("Type2").build()),
+                                new InternalVisibilityConfig.Builder("Type2").build()),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6049,13 +6417,13 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_OPTIONAL)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ ImmutableList.of(
-                                new VisibilityDocument.Builder("Type1")
+                        /*visibilityConfigs=*/ ImmutableList.of(
+                                new InternalVisibilityConfig.Builder("Type1")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
                                         .build(),
-                                new VisibilityDocument.Builder("Type2").build()),
+                                new InternalVisibilityConfig.Builder("Type2").build()),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6083,13 +6451,13 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_OPTIONAL)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ ImmutableList.of(
-                                new VisibilityDocument.Builder("Type1")
+                        /*visibilityConfigs=*/ ImmutableList.of(
+                                new InternalVisibilityConfig.Builder("Type1")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
                                         .build(),
-                                new VisibilityDocument.Builder("Type2")
+                                new InternalVisibilityConfig.Builder("Type2")
                                         .addVisibleToPackage(
                                                 new PackageIdentifier(
                                                         fakeListeningPackage, new byte[0]))
@@ -6116,18 +6484,31 @@ public class AppSearchImplTest {
 
         // Make a visibility checker that allows fakeListeningPackage access only to Type2.
         final VisibilityChecker visibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
-                        callerAccess.getCallingPackageName().equals(fakeListeningPackage)
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return callerAccess.getCallingPackageName().equals(fakeListeningPackage)
                                 && prefixedSchema.endsWith("Type2");
+                    }
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        visibilityChecker);
+                        visibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Add a schema.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -6153,7 +6534,7 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_REQUIRED)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6192,7 +6573,7 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_OPTIONAL)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6215,18 +6596,31 @@ public class AppSearchImplTest {
 
         // Make a visibility checker that allows fakeListeningPackage access only to Type2.
         final VisibilityChecker visibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) ->
-                        callerAccess.getCallingPackageName().equals(fakeListeningPackage)
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        return callerAccess.getCallingPackageName().equals(fakeListeningPackage)
                                 && prefixedSchema.endsWith("Type2");
+                    }
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
+                        return false;
+                    }
+                };
         mAppSearchImpl.close();
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        visibilityChecker);
+                        visibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Add a schema.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -6236,7 +6630,7 @@ public class AppSearchImplTest {
                         ImmutableList.of(
                                 new AppSearchSchema.Builder("Type1").build(),
                                 new AppSearchSchema.Builder("Type2").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6257,7 +6651,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(new AppSearchSchema.Builder("Type2").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6276,7 +6670,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6300,17 +6694,29 @@ public class AppSearchImplTest {
         final String fakePackage2 = "com.fake.listening.package2";
 
         final VisibilityChecker visibilityChecker =
-                (callerAccess, packageName, prefixedSchema, visibilityStore) -> {
-                    if (prefixedSchema.endsWith("Type1")) {
-                        return callerAccess.getCallingPackageName().equals(fakePackage1);
-                    } else if (prefixedSchema.endsWith("Type2")) {
-                        return callerAccess.getCallingPackageName().equals(fakePackage2);
-                    } else if (prefixedSchema.endsWith("Type3")) {
+                new VisibilityChecker() {
+                    @Override
+                    public boolean isSchemaSearchableByCaller(
+                            @NonNull CallerAccess callerAccess,
+                            @NonNull String packageName,
+                            @NonNull String prefixedSchema,
+                            @NonNull VisibilityStore visibilityStore) {
+                        if (prefixedSchema.endsWith("Type1")) {
+                            return callerAccess.getCallingPackageName().equals(fakePackage1);
+                        } else if (prefixedSchema.endsWith("Type2")) {
+                            return callerAccess.getCallingPackageName().equals(fakePackage2);
+                        } else if (prefixedSchema.endsWith("Type3")) {
+                            return false;
+                        } else if (prefixedSchema.endsWith("Type4")) {
+                            return true;
+                        } else {
+                            throw new IllegalArgumentException(prefixedSchema);
+                        }
+                    }
+
+                    @Override
+                    public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
                         return false;
-                    } else if (prefixedSchema.endsWith("Type4")) {
-                        return true;
-                    } else {
-                        throw new IllegalArgumentException(prefixedSchema);
                     }
                 };
         mAppSearchImpl.close();
@@ -6318,10 +6724,10 @@ public class AppSearchImplTest {
                 AppSearchImpl.create(
                         mAppSearchDir,
                         new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new DefaultIcingOptionsConfig()),
+                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
                         /*initStatsBuilder=*/ null,
-                        ALWAYS_OPTIMIZE,
-                        visibilityChecker);
+                        visibilityChecker,
+                        ALWAYS_OPTIMIZE);
 
         // Add a schema.
         InternalSetSchemaResponse internalSetSchemaResponse =
@@ -6333,7 +6739,7 @@ public class AppSearchImplTest {
                                 new AppSearchSchema.Builder("Type2").build(),
                                 new AppSearchSchema.Builder("Type3").build(),
                                 new AppSearchSchema.Builder("Type4").build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6370,7 +6776,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         ImmutableList.of(),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 0,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6431,7 +6837,7 @@ public class AppSearchImplTest {
                                                                         .CARDINALITY_OPTIONAL)
                                                         .build())
                                         .build()),
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 1,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6471,7 +6877,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         updatedSchemaTypes,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ false,
                         /*version=*/ 2,
                         /*setSchemaStatsBuilder=*/ null);
@@ -6494,7 +6900,7 @@ public class AppSearchImplTest {
                         mContext.getPackageName(),
                         "database1",
                         updatedSchemaTypes,
-                        /*visibilityDocuments=*/ Collections.emptyList(),
+                        /*visibilityConfigs=*/ Collections.emptyList(),
                         /*forceOverride=*/ true,
                         /*version=*/ 3,
                         /*setSchemaStatsBuilder=*/ null);

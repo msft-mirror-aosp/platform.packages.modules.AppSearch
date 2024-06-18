@@ -18,6 +18,7 @@ package com.android.server.appsearch;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.content.Context;
 import android.os.SystemClock;
@@ -28,8 +29,7 @@ import android.util.Log;
 import com.android.internal.annotations.GuardedBy;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.stats.InitializeStats;
-import com.android.server.appsearch.stats.PlatformLogger;
-import com.android.server.appsearch.visibilitystore.VisibilityCheckerImpl;
+import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -212,20 +212,22 @@ public final class AppSearchUserInstanceManager {
         InitializeStats.Builder initStatsBuilder = new InitializeStats.Builder();
 
         // Initialize the classes that make up AppSearchUserInstance
-        PlatformLogger logger = new PlatformLogger(userContext, config);
+        InternalAppSearchLogger logger = AppSearchComponentFactory
+                .createLoggerInstance(userContext, config);
 
         File appSearchDir = AppSearchEnvironmentFactory
             .getEnvironmentInstance()
             .getAppSearchDir(userContext, userHandle);
         File icingDir = new File(appSearchDir, "icing");
         Log.i(TAG, "Creating new AppSearch instance at: " + icingDir);
-        VisibilityCheckerImpl visibilityCheckerImpl = new VisibilityCheckerImpl(userContext);
+        VisibilityChecker visibilityCheckerImpl = AppSearchComponentFactory
+                .createVisibilityCheckerInstance(userContext);
         AppSearchImpl appSearchImpl = AppSearchImpl.create(
                 icingDir,
                 config,
                 initStatsBuilder,
-                new FrameworkOptimizeStrategy(config),
-                visibilityCheckerImpl);
+                visibilityCheckerImpl,
+                new FrameworkOptimizeStrategy(config));
 
         // Update storage info file
         UserStorageInfo userStorageInfo = getOrCreateUserStorageInfoInstance(
