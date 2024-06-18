@@ -18,49 +18,52 @@ package android.app.appsearch.aidl;
 
 import android.annotation.ElapsedRealtimeLong;
 import android.annotation.NonNull;
+import android.app.appsearch.RemoveByDocumentIdRequest;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
-import java.util.List;
 import java.util.Objects;
 
 /**
  * Encapsulates a request to make a binder call to remove documents by id.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "RemoveByDocumentIdAidlRequestCreator")
 public class RemoveByDocumentIdAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final RemoveByDocumentIdAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<RemoveByDocumentIdAidlRequest> CREATOR =
             new RemoveByDocumentIdAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @NonNull
     @Field(id = 2, getter = "getDatabaseName")
     private final String mDatabaseName;
+
     @NonNull
-    @Field(id = 3, getter = "getNamespace")
-    private final String mNamespace;
+    @Field(id = 3, getter = "getRemoveByDocumentIdRequest")
+    final RemoveByDocumentIdRequest mRemoveByDocumentIdRequest;
+
     @NonNull
-    @Field(id = 4, getter = "getIds")
-    private final List<String> mIds;
-    @NonNull
-    @Field(id = 5, getter = "getUserHandle")
+    @Field(id = 4, getter = "getUserHandle")
     private final UserHandle mUserHandle;
-    @Field(id = 6, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+
+    @Field(id = 5, getter = "getBinderCallStartTimeMillis")
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
 
     /**
      * Removes documents by ID.
      *
      * @param callerAttributionSource The permission identity of the package the document is in.
      * @param databaseName The databaseName the document is in.
-     * @param namespace    Namespace of the document to remove.
-     * @param ids The IDs of the documents to delete
+     * @param removeByDocumentIdRequest The {@link RemoveByDocumentIdRequest} to remove document.
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      */
@@ -68,14 +71,12 @@ public class RemoveByDocumentIdAidlRequest extends AbstractSafeParcelable {
     public RemoveByDocumentIdAidlRequest(
             @Param(id = 1) @NonNull AppSearchAttributionSource callerAttributionSource,
             @Param(id = 2) @NonNull String databaseName,
-            @Param(id = 3) @NonNull String namespace,
-            @Param(id = 4) @NonNull List<String> ids,
-            @Param(id = 5) @NonNull UserHandle userHandle,
-            @Param(id = 6) @ElapsedRealtimeLong long binderCallStartTimeMillis) {
+            @Param(id = 3) @NonNull RemoveByDocumentIdRequest removeByDocumentIdRequest,
+            @Param(id = 4) @NonNull UserHandle userHandle,
+            @Param(id = 5) @ElapsedRealtimeLong long binderCallStartTimeMillis) {
         mCallerAttributionSource = Objects.requireNonNull(callerAttributionSource);
         mDatabaseName = Objects.requireNonNull(databaseName);
-        mNamespace = Objects.requireNonNull(namespace);
-        mIds = Objects.requireNonNull(ids);
+        mRemoveByDocumentIdRequest = Objects.requireNonNull(removeByDocumentIdRequest);
         mUserHandle = Objects.requireNonNull(userHandle);
         mBinderCallStartTimeMillis = binderCallStartTimeMillis;
     }
@@ -91,13 +92,8 @@ public class RemoveByDocumentIdAidlRequest extends AbstractSafeParcelable {
     }
 
     @NonNull
-    public String getNamespace() {
-        return mNamespace;
-    }
-
-    @NonNull
-    public List<String> getIds() {
-        return mIds;
+    public RemoveByDocumentIdRequest getRemoveByDocumentIdRequest() {
+        return mRemoveByDocumentIdRequest;
     }
 
     @NonNull

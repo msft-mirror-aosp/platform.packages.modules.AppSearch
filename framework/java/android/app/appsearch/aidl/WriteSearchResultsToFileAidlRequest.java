@@ -23,6 +23,7 @@ import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
 import android.os.ParcelFileDescriptor;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
@@ -30,34 +31,42 @@ import java.util.Objects;
 /**
  * Encapsulates a request to make a binder call to search for documents based on the given
  * specifications and save the results to the given {@link ParcelFileDescriptor}.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "WriteSearchResultsToFileAidlRequestCreator")
 public class WriteSearchResultsToFileAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final WriteSearchResultsToFileAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<WriteSearchResultsToFileAidlRequest> CREATOR =
             new WriteSearchResultsToFileAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @NonNull
     @Field(id = 2, getter = "getDatabaseName")
     private final String mDatabaseName;
+
     @NonNull
     @Field(id = 3, getter = "getParcelFileDescriptor")
     private final ParcelFileDescriptor mParcelFileDescriptor;
+
     @NonNull
     @Field(id = 4, getter = "getSearchExpression")
     private final String mSearchExpression;
+
     @NonNull
     @Field(id = 5, getter = "getSearchSpec")
     private final SearchSpec mSearchSpec;
+
     @NonNull
     @Field(id = 6, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 7, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
 
     /**
      * Searches a document based on a given specifications.

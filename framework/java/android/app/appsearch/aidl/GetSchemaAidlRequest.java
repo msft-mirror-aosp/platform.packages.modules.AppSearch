@@ -21,34 +21,42 @@ import android.annotation.NonNull;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
 
 /**
  * Encapsulates a request to make a binder call to get the schema for a given database.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "GetSchemaAidlRequestCreator")
 public class GetSchemaAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final GetSchemaAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<GetSchemaAidlRequest> CREATOR =
             new GetSchemaAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @NonNull
     @Field(id = 2, getter = "getTargetPackageName")
     private final String mTargetPackageName;
+
     @NonNull
     @Field(id = 3, getter = "getDatabaseName")
     private final String mDatabaseName;
+
     @NonNull
     @Field(id = 4, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 5, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
+
     @Field(id = 6, getter = "isForEnterprise")
     private final boolean mIsForEnterprise;
 
@@ -57,7 +65,7 @@ public class GetSchemaAidlRequest extends AbstractSafeParcelable {
      *
      * @param callerAttributionSource The permission identity of the package making this call.
      * @param targetPackageName The name of the package that owns the schema.
-     * @param databaseName  The name of the database to retrieve.
+     * @param databaseName The name of the database to retrieve.
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      */

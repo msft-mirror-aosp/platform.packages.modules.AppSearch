@@ -16,37 +16,41 @@
 
 package android.app.appsearch;
 
+import android.annotation.NonNull;
+
 import com.android.internal.annotations.VisibleForTesting;
 
 /**
  * This is a factory class for implementations needed based on environment for framework code.
+ *
  * @hide
  */
 public class AppSearchEnvironmentFactory {
     private static volatile AppSearchEnvironment mEnvironmentInstance;
 
+    /** Returns the singleton instance of {@link AppSearchEnvironment}. */
+    @NonNull
     public static AppSearchEnvironment getEnvironmentInstance() {
         AppSearchEnvironment localRef = mEnvironmentInstance;
         if (localRef == null) {
             synchronized (AppSearchEnvironmentFactory.class) {
                 localRef = mEnvironmentInstance;
                 if (localRef == null) {
-                    mEnvironmentInstance = localRef =
-                            new FrameworkAppSearchEnvironment();
+                    mEnvironmentInstance = localRef = new FrameworkAppSearchEnvironment();
                 }
             }
         }
         return localRef;
     }
 
+    /** Sets an instance of {@link AppSearchEnvironment}. for testing. */
     @VisibleForTesting
     public static void setEnvironmentInstanceForTest(
-            AppSearchEnvironment appSearchEnvironment) {
+            @NonNull AppSearchEnvironment appSearchEnvironment) {
         synchronized (AppSearchEnvironmentFactory.class) {
             mEnvironmentInstance = appSearchEnvironment;
         }
     }
 
-    private AppSearchEnvironmentFactory() {
-    }
+    private AppSearchEnvironmentFactory() {}
 }

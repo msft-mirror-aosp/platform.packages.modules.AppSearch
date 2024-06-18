@@ -21,6 +21,7 @@ import android.annotation.NonNull;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
@@ -28,24 +29,30 @@ import java.util.Objects;
 /**
  * Encapsulates a request to make a binder call to invalidate the next-page token so that no more
  * results of the related search can be returned.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "InvalidateNextPageTokenAidlRequestCreator")
 public class InvalidateNextPageTokenAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final InvalidateNextPageTokenAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<InvalidateNextPageTokenAidlRequest> CREATOR =
             new InvalidateNextPageTokenAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @Field(id = 2, getter = "getNextPageToken")
     private final long mNextPageToken;
+
     @NonNull
     @Field(id = 3, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 4, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
+
     @Field(id = 5, getter = "isForEnterprise")
     private final boolean mIsForEnterprise;
 
@@ -53,10 +60,9 @@ public class InvalidateNextPageTokenAidlRequest extends AbstractSafeParcelable {
      * Invalidates the next-page token so that no more results of the related search can be
      * returned.
      *
-     * @param callerAttributionSource The permission identity of the package to persist to disk
-     *     for.
+     * @param callerAttributionSource The permission identity of the package to persist to disk for.
      * @param nextPageToken The token of pre-loaded results of previously executed search to be
-     *                      invalidated.
+     *     invalidated.
      * @param userHandle Handle of the calling user
      * @param binderCallStartTimeMillis start timestamp of binder call in Millis
      * @param isForEnterprise Whether to user the user's enterprise profile AppSearch instance

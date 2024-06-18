@@ -49,8 +49,9 @@ public class FrameworkCallerAccess extends CallerAccess {
      */
     public FrameworkCallerAccess(
             @NonNull AppSearchAttributionSource callerAttributionSource,
-            boolean callerHasSystemAccess, boolean isForEnterprise) {
-        super(Objects.requireNonNull(callerAttributionSource.getPackageName()));
+            boolean callerHasSystemAccess,
+            boolean isForEnterprise) {
+        super(callerAttributionSource.getPackageName());
         mAttributionSource = callerAttributionSource;
         mCallerHasSystemAccess = callerHasSystemAccess;
         mIsForEnterprise = isForEnterprise;
@@ -85,8 +86,12 @@ public class FrameworkCallerAccess extends CallerAccess {
 
     @Override
     public boolean equals(@Nullable Object o) {
-        if (this == o) return true;
-        if (!(o instanceof FrameworkCallerAccess)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof FrameworkCallerAccess)) {
+            return false;
+        }
         FrameworkCallerAccess that = (FrameworkCallerAccess) o;
         return super.equals(o)
                 && mCallerHasSystemAccess == that.mCallerHasSystemAccess
@@ -96,7 +101,7 @@ public class FrameworkCallerAccess extends CallerAccess {
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), mAttributionSource, mCallerHasSystemAccess,
-                mIsForEnterprise);
+        return Objects.hash(
+                super.hashCode(), mAttributionSource, mCallerHasSystemAccess, mIsForEnterprise);
     }
 }
