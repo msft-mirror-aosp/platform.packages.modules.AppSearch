@@ -21,6 +21,7 @@ import android.annotation.Nullable;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.util.ArraySet;
 
 import java.util.Arrays;
@@ -36,7 +37,7 @@ import java.util.Set;
 @SafeParcelable.Class(creator = "VisibilityPermissionConfigCreator")
 public final class VisibilityPermissionConfig extends AbstractSafeParcelable {
     @NonNull
-    public static final VisibilityPermissionConfigCreator CREATOR =
+    public static final Parcelable.Creator<VisibilityPermissionConfig> CREATOR =
             new VisibilityPermissionConfigCreator();
 
     /**
@@ -131,7 +132,7 @@ public final class VisibilityPermissionConfig extends AbstractSafeParcelable {
         if (mGenericDocument == null) {
             // This is used as a nested document, we do not need a namespace or id.
             GenericDocument.Builder<?> builder =
-                    new GenericDocument.Builder<>(/*namespace=*/ "", /*id=*/ "", SCHEMA_TYPE);
+                    new GenericDocument.Builder<>(/* namespace= */ "", /* id= */ "", SCHEMA_TYPE);
 
             if (mAllRequiredPermissions != null) {
                 // GenericDocument only supports long, so int[] needs to be converted to

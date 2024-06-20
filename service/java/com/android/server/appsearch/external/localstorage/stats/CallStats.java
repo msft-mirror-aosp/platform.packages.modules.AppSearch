@@ -44,6 +44,7 @@ import java.util.Set;
  * @hide
  */
 public class CallStats {
+    /** Call types. */
     @IntDef(
             value = {
                 CALL_TYPE_UNKNOWN,
@@ -77,6 +78,7 @@ public class CallStats {
                 CALL_TYPE_REGISTER_OBSERVER_CALLBACK,
                 CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK,
                 CALL_TYPE_GLOBAL_GET_NEXT_PAGE,
+                CALL_TYPE_EXECUTE_APP_FUNCTION
             })
     @Retention(RetentionPolicy.SOURCE)
     public @interface CallType {}
@@ -112,6 +114,7 @@ public class CallStats {
     public static final int CALL_TYPE_REGISTER_OBSERVER_CALLBACK = 28;
     public static final int CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK = 29;
     public static final int CALL_TYPE_GLOBAL_GET_NEXT_PAGE = 30;
+    public static final int CALL_TYPE_EXECUTE_APP_FUNCTION = 31;
 
     // These strings are for the subset of call types that correspond to an AppSearchManager API
     private static final String CALL_TYPE_STRING_INITIALIZE = "initialize";
@@ -143,9 +146,11 @@ public class CallStats {
     private static final String CALL_TYPE_STRING_UNREGISTER_OBSERVER_CALLBACK =
             "globalUnregisterObserverCallback";
     private static final String CALL_TYPE_STRING_GLOBAL_GET_NEXT_PAGE = "globalGetNextPage";
+    private static final String CALL_TYPE_STRING_EXECUTE_APP_FUNCTION = "executeAppFunction";
 
     @Nullable private final String mPackageName;
     @Nullable private final String mDatabase;
+
     /**
      * The status code returned by {@link AppSearchResult#getResultCode()} for the call or internal
      * state.
@@ -392,6 +397,8 @@ public class CallStats {
                 return CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK;
             case CALL_TYPE_STRING_GLOBAL_GET_NEXT_PAGE:
                 return CALL_TYPE_GLOBAL_GET_NEXT_PAGE;
+            case CALL_TYPE_STRING_EXECUTE_APP_FUNCTION:
+                return CALL_TYPE_EXECUTE_APP_FUNCTION;
             default:
                 return CALL_TYPE_UNKNOWN;
         }
@@ -426,6 +433,7 @@ public class CallStats {
                         CALL_TYPE_GET_STORAGE_INFO,
                         CALL_TYPE_REGISTER_OBSERVER_CALLBACK,
                         CALL_TYPE_UNREGISTER_OBSERVER_CALLBACK,
-                        CALL_TYPE_GLOBAL_GET_NEXT_PAGE));
+                        CALL_TYPE_GLOBAL_GET_NEXT_PAGE,
+                        CALL_TYPE_EXECUTE_APP_FUNCTION));
     }
 }

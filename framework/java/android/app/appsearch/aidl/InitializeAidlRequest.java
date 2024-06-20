@@ -21,6 +21,7 @@ import android.annotation.NonNull;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
@@ -28,22 +29,26 @@ import java.util.Objects;
 /**
  * Encapsulates a request to make a binder call to create and initialize AppSearchImpl for the
  * calling application.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "InitializeAidlRequestCreator")
 public class InitializeAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final InitializeAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<InitializeAidlRequest> CREATOR =
             new InitializeAidlRequestCreator();
 
     @NonNull
     @SafeParcelable.Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @NonNull
     @Field(id = 2, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 3, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
 
     /**
      * Creates and initializes AppSearchImpl for the calling app.
