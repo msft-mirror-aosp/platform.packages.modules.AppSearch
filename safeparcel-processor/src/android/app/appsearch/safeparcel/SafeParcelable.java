@@ -29,6 +29,8 @@ public interface SafeParcelable {
     @interface Class {
         String creator();
 
+        boolean creatorIsFinal() default true;
+
         boolean validate() default false;
 
         boolean doNotParcelTypeDefaultValues() default false;

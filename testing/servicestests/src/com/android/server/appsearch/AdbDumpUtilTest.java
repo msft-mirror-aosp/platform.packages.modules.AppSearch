@@ -21,13 +21,9 @@ import static com.google.common.truth.Truth.assertThat;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.testutil.FakeAppSearchConfig;
-
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
-import com.android.server.appsearch.external.localstorage.DefaultIcingOptionsConfig;
-import com.android.server.appsearch.external.localstorage.UnlimitedLimitConfig;
-import com.android.server.appsearch.util.AdbDumpUtil;
-
 import com.android.server.appsearch.icing.proto.DebugInfoProto;
+import com.android.server.appsearch.icing.proto.DebugInfoVerbosity;
 import com.android.server.appsearch.icing.proto.DocumentDebugInfoProto;
 import com.android.server.appsearch.icing.proto.DocumentStorageInfoProto;
 import com.android.server.appsearch.icing.proto.NamespaceStorageInfoProto;
@@ -35,11 +31,9 @@ import com.android.server.appsearch.icing.proto.PropertyConfigProto;
 import com.android.server.appsearch.icing.proto.SchemaDebugInfoProto;
 import com.android.server.appsearch.icing.proto.SchemaProto;
 import com.android.server.appsearch.icing.proto.SchemaTypeConfigProto;
-import com.android.server.appsearch.icing.proto.DebugInfoVerbosity;
-
+import com.android.server.appsearch.util.AdbDumpUtil;
 import java.util.Collections;
 import java.util.List;
-
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -133,8 +127,8 @@ public class AdbDumpUtilTest {
     public void testDesensitizeRealDebugInfo() throws Exception {
         AppSearchImpl appSearchImpl = AppSearchImpl.create(mTemporaryFolder.newFolder(),
                 new FakeAppSearchConfig(),
-                /*initStatsBuilder=*/ null, optimizeInfo -> true,
-                /*visibilityChecker=*/ null);
+                /*initStatsBuilder=*/ null, /*visibilityChecker=*/ null,
+                optimizeInfo -> true);
         List<AppSearchSchema> schemas = Collections.singletonList(new AppSearchSchema.Builder(
                 PERSON_TYPE).addProperty(new AppSearchSchema.StringPropertyConfig.Builder(
                 "name").setIndexingType(

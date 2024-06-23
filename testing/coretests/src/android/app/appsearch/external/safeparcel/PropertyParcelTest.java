@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 The Android Open Source Project
+ * Copyright 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,12 @@
 
 package android.app.appsearch.safeparcel;
 
-import android.app.appsearch.util.BundleUtil;
-import android.os.Bundle;
+import static com.google.common.truth.Truth.assertThat;
+
+import android.os.Parcel;
 
 import org.junit.Test;
-import org.junit.Assert;
 
-// This test suite is not available in Jetpack because PropertyParcel is not a real Parcelable
-// there.
 public class PropertyParcelTest {
     @Test
     public void testTwoDimensionByteArray_serializationSupported() {
@@ -35,17 +33,20 @@ public class PropertyParcelTest {
                 bytesArray[i][j] = (byte) (i + j);
             }
         }
-        // This simulates how we save properties in the GenericDocument.mProperties.
-        Bundle bundle = new Bundle();
+
         String propertyName = "propertyName";
-        bundle.putParcelable(propertyName,
-                new PropertyParcel.Builder(propertyName).setBytesValues(
-                        bytesArray).build());
-
-        Bundle bundleCopy = BundleUtil.deepCopy(bundle);
-        byte[][] bytesArrayCopy = bundleCopy.getParcelable(propertyName,
-                PropertyParcel.class).getBytesValues();
-
-        Assert.assertArrayEquals(bytesArrayCopy, bytesArray);
+        PropertyParcel expectedPropertyParcel =
+                new PropertyParcel.Builder(propertyName).setBytesValues(bytesArray).build();
+        Parcel data = Parcel.obtain();
+        try {
+            data.writeParcelable(expectedPropertyParcel, /* flags= */ 0);
+            data.setDataPosition(0);
+            @SuppressWarnings("deprecation")
+            PropertyParcel actualPropertyParcel =
+                    data.readParcelable(PropertyParcelTest.class.getClassLoader());
+            assertThat(expectedPropertyParcel).isEqualTo(actualPropertyParcel);
+        } finally {
+            data.recycle();
+        }
     }
 }
