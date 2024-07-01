@@ -16,6 +16,7 @@
 
 package com.android.server.appsearch;
 
+import static com.android.server.appsearch.indexer.IndexerMaintenanceConfig.APPS_INDEXER;
 import static com.android.server.appsearch.indexer.IndexerMaintenanceConfig.CONTACTS_INDEXER;
 
 import android.annotation.BinderThread;
@@ -27,31 +28,69 @@ import android.content.Context;
 import android.os.UserHandle;
 import android.util.Log;
 
+import com.android.appsearch.flags.Flags;
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.SystemService;
+import com.android.server.appsearch.appsindexer.AppsIndexerConfig;
+import com.android.server.appsearch.appsindexer.AppsIndexerManagerService;
+import com.android.server.appsearch.appsindexer.FrameworkAppsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerConfig;
 import com.android.server.appsearch.contactsindexer.ContactsIndexerManagerService;
 import com.android.server.appsearch.contactsindexer.FrameworkContactsIndexerConfig;
 import com.android.server.appsearch.indexer.IndexerMaintenanceService;
 
 import java.io.PrintWriter;
+import java.util.Objects;
 
 /** This class encapsulate the lifecycle methods of AppSearch module. */
 public class AppSearchModule {
     private static final String TAG = "AppSearchModule";
 
     /** Lifecycle definition for AppSearch module. */
-    public static final class Lifecycle extends SystemService {
+    public static class Lifecycle extends SystemService {
         private AppSearchManagerService mAppSearchManagerService;
-        @Nullable private ContactsIndexerManagerService mContactsIndexerManagerService;
+        @VisibleForTesting @Nullable ContactsIndexerManagerService mContactsIndexerManagerService;
+
+        @VisibleForTesting @Nullable AppsIndexerManagerService mAppsIndexerManagerService;
 
         public Lifecycle(Context context) {
             super(context);
         }
 
+        /** Added primarily for testing purposes. */
+        @VisibleForTesting
+        @NonNull
+        AppSearchManagerService createAppSearchManagerService(
+                @NonNull Context context, @NonNull AppSearchModule.Lifecycle lifecycle) {
+            Objects.requireNonNull(context);
+            Objects.requireNonNull(lifecycle);
+            return new AppSearchManagerService(context, lifecycle);
+        }
+
+        /** Added primarily for testing purposes. */
+        @VisibleForTesting
+        @NonNull
+        AppsIndexerManagerService createAppsIndexerManagerService(
+                @NonNull Context context, @NonNull AppsIndexerConfig config) {
+            Objects.requireNonNull(context);
+            Objects.requireNonNull(config);
+            return new AppsIndexerManagerService(context, config);
+        }
+
+        /** Added primarily for testing purposes. */
+        @VisibleForTesting
+        @NonNull
+        ContactsIndexerManagerService createContactsIndexerManagerService(
+                @NonNull Context context, @NonNull ContactsIndexerConfig config) {
+            Objects.requireNonNull(context);
+            Objects.requireNonNull(config);
+            return new ContactsIndexerManagerService(context, config);
+        }
+
         @Override
         public void onStart() {
             mAppSearchManagerService =
-                    new AppSearchManagerService(getContext(), /* lifecycle= */ this);
+                    createAppSearchManagerService(getContext(), /* lifecycle= */ this);
 
             try {
                 mAppSearchManagerService.onStart();
@@ -67,8 +106,9 @@ public class AppSearchModule {
             // uses, starts before AppSearch.
             ContactsIndexerConfig contactsIndexerConfig = new FrameworkContactsIndexerConfig();
             if (contactsIndexerConfig.isContactsIndexerEnabled()) {
+
                 mContactsIndexerManagerService =
-                        new ContactsIndexerManagerService(getContext(), contactsIndexerConfig);
+                        createContactsIndexerManagerService(getContext(), contactsIndexerConfig);
                 try {
                     mContactsIndexerManagerService.onStart();
                 } catch (Throwable t) {
@@ -80,6 +120,24 @@ public class AppSearchModule {
             } else if (LogUtil.INFO) {
                 Log.i(TAG, "ContactsIndexer service is disabled.");
             }
+
+            AppsIndexerConfig appsIndexerConfig = new FrameworkAppsIndexerConfig();
+            // Flags.appsIndexerEnabled will be rolled out through gantry, and this check will be
+            // removed once it is fully rolled out. appsIndexerConfig.isAppsIndexerEnabled checks
+            // DeviceConfig, so we can keep this check here in case we need to turn off apps
+            // indexer.
+            if (Flags.appsIndexerEnabled() && appsIndexerConfig.isAppsIndexerEnabled()) {
+                mAppsIndexerManagerService =
+                        createAppsIndexerManagerService(getContext(), appsIndexerConfig);
+                try {
+                    mAppsIndexerManagerService.onStart();
+                } catch (Throwable t) {
+                    Log.e(TAG, "Failed to start AppsIndexer service", t);
+                    mAppsIndexerManagerService = null;
+                }
+            } else if (LogUtil.INFO) {
+                Log.i(TAG, "AppsIndexer service is disabled.");
+            }
         }
 
         /** Dumps ContactsIndexer internal state for the user. */
@@ -90,6 +148,15 @@ public class AppSearchModule {
                 mContactsIndexerManagerService.dumpContactsIndexerForUser(userHandle, pw, verbose);
             } else {
                 pw.println("No dumpsys for ContactsIndexer as it is disabled.");
+            }
+        }
+
+        @BinderThread
+        void dumpAppsIndexerForUser(@NonNull UserHandle userHandle, @NonNull PrintWriter pw) {
+            if (mAppsIndexerManagerService != null) {
+                mAppsIndexerManagerService.dumpAppsIndexerForUser(userHandle, pw);
+            } else {
+                pw.println("No dumpsys for AppsIndexer as it is disabled");
             }
         }
 
@@ -107,6 +174,13 @@ public class AppSearchModule {
             } else {
                 mContactsIndexerManagerService.onUserUnlocking(user);
             }
+
+            if (mAppsIndexerManagerService == null) {
+                IndexerMaintenanceService.cancelUpdateJobIfScheduled(
+                        getContext(), user.getUserHandle(), APPS_INDEXER);
+            } else {
+                mAppsIndexerManagerService.onUserUnlocking(user);
+            }
         }
 
         @Override
@@ -114,6 +188,9 @@ public class AppSearchModule {
             mAppSearchManagerService.onUserStopping(user);
             if (mContactsIndexerManagerService != null) {
                 mContactsIndexerManagerService.onUserStopping(user);
+            }
+            if (mAppsIndexerManagerService != null) {
+                mAppsIndexerManagerService.onUserStopping(user);
             }
         }
     }
