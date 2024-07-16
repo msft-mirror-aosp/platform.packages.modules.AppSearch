@@ -17,6 +17,7 @@ package com.android.server.appsearch.appsindexer;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.WorkerThread;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.BatchResultCallback;
@@ -28,21 +29,29 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
-/** Contains common methods for converting async methods to sync */
+/** Contains common methods for converting async methods to sync. */
 public class SyncAppSearchBase {
+    protected final Object mSessionLock = new Object();
     protected final Executor mExecutor;
 
     public SyncAppSearchBase(@NonNull Executor executor) {
         mExecutor = Objects.requireNonNull(executor);
     }
 
+    @WorkerThread
     protected <T> T executeAppSearchResultOperation(
             Consumer<Consumer<AppSearchResult<T>>> operation) throws AppSearchException {
         final CompletableFuture<AppSearchResult<T>> futureResult = new CompletableFuture<>();
 
+        // Without this catch + completeExceptionally, this crashes the device if the operation
+        // throws an error.
         mExecutor.execute(
                 () -> {
-                    operation.accept(futureResult::complete);
+                    try {
+                        operation.accept(futureResult::complete);
+                    } catch (Exception e) {
+                        futureResult.completeExceptionally(e);
+                    }
                 });
 
         try {
@@ -66,13 +75,15 @@ public class SyncAppSearchBase {
         }
     }
 
+    @WorkerThread
     protected <T, V> AppSearchBatchResult<T, V> executeAppSearchBatchResultOperation(
             Consumer<BatchResultCallback<T, V>> operation) throws AppSearchException {
         final CompletableFuture<AppSearchBatchResult<T, V>> futureResult =
                 new CompletableFuture<>();
 
         mExecutor.execute(
-                () ->
+                () -> {
+                    try {
                         operation.accept(
                                 new BatchResultCallback<>() {
                                     @Override
@@ -85,7 +96,11 @@ public class SyncAppSearchBase {
                                     public void onSystemError(@Nullable Throwable throwable) {
                                         futureResult.completeExceptionally(throwable);
                                     }
-                                }));
+                                });
+                    } catch (Exception e) {
+                        futureResult.completeExceptionally(e);
+                    }
+                });
 
         try {
             // TODO(b/275592563): Change to get timeout value from config
