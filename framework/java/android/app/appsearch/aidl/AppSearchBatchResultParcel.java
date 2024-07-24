@@ -17,11 +17,14 @@
 package android.app.appsearch.aidl;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.app.appsearch.AppSearchBatchResult;
-import android.app.appsearch.ParcelableUtil;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.ParcelableUtil;
+import android.app.appsearch.safeparcel.AbstractSafeParcelable;
+import android.app.appsearch.safeparcel.SafeParcelable;
+import android.os.Bundle;
 import android.os.Parcel;
-import android.os.Parcelable;
 
 import java.util.Map;
 import java.util.Objects;
@@ -37,37 +40,71 @@ import java.util.Objects;
  * @param <ValueType> The type of result object for successful calls. Must be a parcelable type.
  * @hide
  */
-public final class AppSearchBatchResultParcel<ValueType> implements Parcelable {
-    private final AppSearchBatchResult<String, ValueType> mResult;
+@SafeParcelable.Class(creator = "AppSearchBatchResultParcelCreator", creatorIsFinal = false)
+public final class AppSearchBatchResultParcel<ValueType> extends AbstractSafeParcelable {
+    @NonNull
+    public static final AppSearchBatchResultParcelCreator CREATOR =
+            new AppSearchBatchResultParcelCreator() {
+                @Override
+                public AppSearchBatchResultParcel createFromParcel(Parcel in) {
+                    byte[] dataBlob = Objects.requireNonNull(ParcelableUtil.readBlob(in));
+                    Parcel unmarshallParcel = Parcel.obtain();
+                    try {
+                        unmarshallParcel.unmarshall(dataBlob, 0, dataBlob.length);
+                        unmarshallParcel.setDataPosition(0);
+                        int size = unmarshallParcel.dataSize();
+                        Bundle inputBundle = new Bundle();
+                        while (unmarshallParcel.dataPosition() < size) {
+                            String key = unmarshallParcel.readString();
+                            AppSearchResultParcel appSearchResultParcel =
+                                    AppSearchResultParcel.directlyReadFromParcel(unmarshallParcel);
+                            inputBundle.putParcelable(key, appSearchResultParcel);
+                        }
+                        return new AppSearchBatchResultParcel(inputBundle);
+                    } finally {
+                        unmarshallParcel.recycle();
+                    }
+                }
+            };
+
+    // Map between String Key and AppSearchResultParcel Value.
+    @Field(id = 1)
+    @NonNull
+    final Bundle mAppSearchResultBundle;
+
+    @Nullable
+    private AppSearchBatchResult<String, ValueType> mResultCached;
+
+    @Constructor
+    AppSearchBatchResultParcel(
+            @Param(id = 1) Bundle appSearchResultBundle) {
+        mAppSearchResultBundle = appSearchResultBundle;
+    }
 
     /** Creates a new {@link AppSearchBatchResultParcel} from the given result. */
     public AppSearchBatchResultParcel(@NonNull AppSearchBatchResult<String, ValueType> result) {
-        mResult = Objects.requireNonNull(result);
-    }
-
-    private AppSearchBatchResultParcel(@NonNull Parcel in) {
-        Parcel unmarshallParcel = Parcel.obtain();
-        try {
-            byte[] dataBlob = Objects.requireNonNull(ParcelableUtil.readBlob(in));
-            unmarshallParcel.unmarshall(dataBlob, 0, dataBlob.length);
-            unmarshallParcel.setDataPosition(0);
-            AppSearchBatchResult.Builder<String, ValueType> builder =
-                    new AppSearchBatchResult.Builder<>();
-            int size = unmarshallParcel.dataSize();
-            while (unmarshallParcel.dataPosition() < size) {
-                String key = Objects.requireNonNull(unmarshallParcel.readString());
-                builder.setResult(key, (AppSearchResult<ValueType>) AppSearchResultParcel
-                        .directlyReadFromParcel(unmarshallParcel));
-            }
-            mResult = builder.build();
-        } finally {
-            unmarshallParcel.recycle();
+        mResultCached = result;
+        mAppSearchResultBundle = new Bundle();
+        for (Map.Entry<String, AppSearchResult<ValueType>> entry
+                : result.getAll().entrySet()) {
+            mAppSearchResultBundle.putParcelable(entry.getKey(),
+                    new AppSearchResultParcel<>(entry.getValue()));
         }
     }
 
     @NonNull
     public AppSearchBatchResult<String, ValueType> getResult() {
-        return mResult;
+        if (mResultCached == null) {
+            AppSearchBatchResult.Builder<String, ValueType> builder =
+                    new AppSearchBatchResult.Builder<>();
+            for (String key : mAppSearchResultBundle.keySet()) {
+                builder.setResult(key, mAppSearchResultBundle
+                        .getParcelable(key, AppSearchResultParcel.class)
+                                .getResult());
+            }
+            mResultCached = builder.build();
+        }
+        return mResultCached;
     }
 
     /** @hide */
@@ -79,10 +116,11 @@ public final class AppSearchBatchResultParcel<ValueType> implements Parcelable {
         // Android shared memory if the data is large.
         Parcel data = Parcel.obtain();
         try {
-            for (Map.Entry<String, AppSearchResult<ValueType>> entry
-                    : mResult.getAll().entrySet()) {
-                data.writeString(entry.getKey());
-                AppSearchResultParcel.directlyWriteToParcel(data, entry.getValue());
+            for (String key : mAppSearchResultBundle.keySet()) {
+                data.writeString(key);
+                AppSearchResultParcel<ValueType> appSearchResultParcel =
+                        mAppSearchResultBundle.getParcelable(key, AppSearchResultParcel.class);
+                AppSearchResultParcel.directlyWriteToParcel(appSearchResultParcel, data, flags);
             }
             bytes = data.marshall();
         } finally {
@@ -90,27 +128,4 @@ public final class AppSearchBatchResultParcel<ValueType> implements Parcelable {
         }
         ParcelableUtil.writeBlob(dest, bytes);
     }
-
-    /** @hide */
-    @Override
-    public int describeContents() {
-        return 0;
-    }
-
-    /** @hide */
-    @NonNull
-    public static final Creator<AppSearchBatchResultParcel<?>> CREATOR =
-            new Creator<AppSearchBatchResultParcel<?>>() {
-                @NonNull
-                @Override
-                public AppSearchBatchResultParcel<?> createFromParcel(@NonNull Parcel in) {
-                    return new AppSearchBatchResultParcel<>(in);
-                }
-
-                @NonNull
-                @Override
-                public AppSearchBatchResultParcel<?>[] newArray(int size) {
-                    return new AppSearchBatchResultParcel<?>[size];
-                }
-            };
 }

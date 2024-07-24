@@ -13,3 +13,30 @@
 #  limitations under the License.
 
 -keep class * extends android.app.Service
+# Keep the Icing proto methods that are necessary for string formatting since MessageLiteToString
+# uses reflection (setters, getters, and hassers)
+# https://cs.android.com/android/platform/superproject/main/+/main:external/protobuf/java/core/src/main/java/com/google/protobuf/MessageLiteToString.java;l=82;drc=0ccbdeff847ae5390ba6632a67f6b5d2ab8632c1
+# The keepclassmembers rule below ignores the Icing proto classes that end in Builder (OrBuilder and
+# nested Builder classes) and matches all other Icing proto classes. The rule does not keep members
+# of classes that are not used.
+-keepclassmembers class !com.android.server.appsearch.icing.proto.*Builder,
+                        com.android.server.appsearch.icing.proto.* {
+# We specify rules for primitive (%), String, and Icing proto types individually in order to exclude
+# ByteString methods for strings e.g. setNamespaceBytes or getNamespaceBytes. Proguard does not have
+# rules for excluding members, so this is the best we can do.
+  void set*(%);
+  void set*(java.lang.String);
+  void set*(com.android.server.appsearch.icing.proto.*);
+  % get*();
+  java.lang.String get*();
+  java.util.List get*();
+  com.android.server.appsearch.icing.proto.* get*();
+  boolean has*();
+}
+
+# This prevents the obfuscation or removal of fields referenced in native.
+-keep class com.google.android.icing.IcingSearchEngineImpl
+-keepclassmembers public class com.google.android.icing.IcingSearchEngineImpl {
+  private long nativePointer;
+  native <methods>;
+}

@@ -20,9 +20,9 @@ import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.content.Context;
 import android.util.ArrayMap;
-import android.util.Pair;
 
 import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
 
@@ -35,8 +35,9 @@ import java.util.concurrent.CompletableFuture;
 public final class FakeAppSearchHelper extends AppSearchHelper {
     final int mDocLimit;
     final int mDeleteLimit;
+    // Contacts that have been deleted during the test
     List<String> mRemovedIds = new ArrayList<>();
-    // Contacts have been updated/inserted during the test.
+    // Contacts that have been updated/inserted during the test
     List<Person> mIndexedContacts = new ArrayList<>();
     Map<String, Person> mExistingContacts = new ArrayMap<>();
 
@@ -50,12 +51,6 @@ public final class FakeAppSearchHelper extends AppSearchHelper {
         mDeleteLimit = deleteLimit;
     }
 
-    void clear() {
-        mRemovedIds.clear();
-        mIndexedContacts.clear();
-        mExistingContacts.clear();
-    }
-
     public void setExistingContacts(@NonNull Collection<Person> contacts) {
         for (Person contact : contacts) {
             mExistingContacts.put(contact.getId(), contact);
@@ -64,34 +59,33 @@ public final class FakeAppSearchHelper extends AppSearchHelper {
 
     @Override
     public CompletableFuture<Void> indexContactsAsync(@NonNull Collection<Person> contacts,
-            @NonNull ContactsUpdateStats updateStats) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
+            @NonNull ContactsUpdateStats updateStats,
+            boolean shouldKeepUpdatingOnErrorFlagEnabled) {
         for (Person person : contacts) {
             if (mIndexedContacts.size() >= mDocLimit) {
-                future.completeExceptionally(new AppSearchException(
-                        AppSearchResult.RESULT_OUT_OF_SPACE, "Reached document limit."));
-                return future;
+                return CompletableFuture.failedFuture(
+                        new AppSearchException(AppSearchResult.RESULT_OUT_OF_SPACE,
+                                "Reached document limit."));
             } else {
                 mExistingContacts.put(person.getId(), person);
                 mIndexedContacts.add(person);
             }
         }
-        future.complete(null);
-        return future;
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<Void> removeContactsByIdAsync(@NonNull Collection<String> ids,
-            @NonNull ContactsUpdateStats updateStats) {
+            @NonNull ContactsUpdateStats updateStats,
+            boolean shouldKeepUpdatingOnError) {
         mRemovedIds.addAll(ids);
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        future.complete(null);
-        return future;
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
     public CompletableFuture<List<GenericDocument>> getContactsWithFingerprintsAsync(
-            @NonNull List<String> ids) {
+            @NonNull List<String> ids, boolean shouldKeepUpdatingOnError,
+            @NonNull ContactsUpdateStats updateStats) {
         return CompletableFuture.supplyAsync(() -> {
             List<GenericDocument> result = new ArrayList<>();
             for (String id : ids) {

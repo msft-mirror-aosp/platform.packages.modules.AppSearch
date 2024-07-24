@@ -83,6 +83,10 @@ public class AppSearchStatsTest {
         final int nativeDocumentSize = 7;
         final int nativeNumTokensIndexed = 8;
         final boolean nativeExceededMaxNumTokens = true;
+        final int nativeTermIndexLatencyMillis = 9;
+        final int nativeIntegerIndexLatencyMillis = 10;
+        final int nativeQualifiedIdJoinIndexLatencyMillis = 11;
+        final int nativeLiteIndexSortLatencyMillis = 12;
         final PutDocumentStats.Builder pStatsBuilder =
                 new PutDocumentStats.Builder(TEST_PACKAGE_NAME, TEST_DATA_BASE)
                         .setStatusCode(TEST_STATUS_CODE)
@@ -94,7 +98,12 @@ public class AppSearchStatsTest {
                         .setNativeIndexLatencyMillis(nativeIndexLatencyMillis)
                         .setNativeIndexMergeLatencyMillis(nativeIndexMergeLatencyMillis)
                         .setNativeDocumentSizeBytes(nativeDocumentSize)
-                        .setNativeNumTokensIndexed(nativeNumTokensIndexed);
+                        .setNativeNumTokensIndexed(nativeNumTokensIndexed)
+                        .setNativeTermIndexLatencyMillis(nativeTermIndexLatencyMillis)
+                        .setNativeIntegerIndexLatencyMillis(nativeIntegerIndexLatencyMillis)
+                        .setNativeQualifiedIdJoinIndexLatencyMillis(
+                                nativeQualifiedIdJoinIndexLatencyMillis)
+                        .setNativeLiteIndexSortLatencyMillis(nativeLiteIndexSortLatencyMillis);
 
         final PutDocumentStats pStats = pStatsBuilder.build();
 
@@ -114,6 +123,14 @@ public class AppSearchStatsTest {
                 .isEqualTo(nativeIndexMergeLatencyMillis);
         assertThat(pStats.getNativeDocumentSizeBytes()).isEqualTo(nativeDocumentSize);
         assertThat(pStats.getNativeNumTokensIndexed()).isEqualTo(nativeNumTokensIndexed);
+        assertThat(pStats.getNativeTermIndexLatencyMillis())
+                .isEqualTo(nativeTermIndexLatencyMillis);
+        assertThat(pStats.getNativeIntegerIndexLatencyMillis())
+                .isEqualTo(nativeIntegerIndexLatencyMillis);
+        assertThat(pStats.getNativeQualifiedIdJoinIndexLatencyMillis())
+                .isEqualTo(nativeQualifiedIdJoinIndexLatencyMillis);
+        assertThat(pStats.getNativeLiteIndexSortLatencyMillis())
+                .isEqualTo(nativeLiteIndexSortLatencyMillis);
     }
 
     @Test
@@ -204,6 +221,7 @@ public class AppSearchStatsTest {
         int nativeLockAcquisitionLatencyMillis = 20;
         int javaToNativeJniLatencyMillis = 21;
         int nativeToJavaJniLatencyMillis = 22;
+        String searchSourceLogTag = "tag";
         final SearchStats.Builder sStatsBuilder =
                 new SearchStats.Builder(visibilityScope, TEST_PACKAGE_NAME)
                         .setDatabase(TEST_DATA_BASE)
@@ -230,7 +248,8 @@ public class AppSearchStatsTest {
                         .setDocumentRetrievingLatencyMillis(nativeDocumentRetrievingLatencyMillis)
                         .setNativeLockAcquisitionLatencyMillis(nativeLockAcquisitionLatencyMillis)
                         .setJavaToNativeJniLatencyMillis(javaToNativeJniLatencyMillis)
-                        .setNativeToJavaJniLatencyMillis(nativeToJavaJniLatencyMillis);
+                        .setNativeToJavaJniLatencyMillis(nativeToJavaJniLatencyMillis)
+                        .setSearchSourceLogTag(searchSourceLogTag);
         final SearchStats sStats = sStatsBuilder.build();
 
         assertThat(sStats.getPackageName()).isEqualTo(TEST_PACKAGE_NAME);
@@ -268,6 +287,7 @@ public class AppSearchStatsTest {
                 .isEqualTo(javaToNativeJniLatencyMillis);
         assertThat(sStats.getNativeToJavaJniLatencyMillis())
                 .isEqualTo(nativeToJavaJniLatencyMillis);
+        assertThat(sStats.getSearchSourceLogTag()).isEqualTo(searchSourceLogTag);
     }
 
     @Test

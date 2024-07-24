@@ -21,13 +21,16 @@ android_test {
     srcs: ["src/**/*.java"],
     defaults: ["modules-utils-testable-device-config-defaults"],
     static_libs: [
-        "AppSearchTestUtils",
+        "CtsAppSearchTestUtils",
         "androidx.test.ext.junit",
         "androidx.test.rules",
         "compatibility-device-util-axt",
         "service-appsearch-for-tests",
         "services.core",
         "truth",
+        "Nene",
+        "Harrier",
+        "TestApp",
     ],
     libs: [
         "android.test.runner",

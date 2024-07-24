@@ -20,16 +20,30 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
+import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.DocumentsParcel;
+import android.app.appsearch.aidl.GetSchemaAidlRequest;
+import android.app.appsearch.aidl.GetNamespacesAidlRequest;
+import android.app.appsearch.aidl.GetStorageInfoAidlRequest;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
+import android.app.appsearch.aidl.InitializeAidlRequest;
+import android.app.appsearch.aidl.PersistToDiskAidlRequest;
+import android.app.appsearch.aidl.PutDocumentsAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
+import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequestCreator;
+import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
+import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
+import android.app.appsearch.aidl.SetSchemaAidlRequest;
+import android.app.appsearch.exceptions.AppSearchException;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.stats.SchemaMigrationStats;
 import android.app.appsearch.util.SchemaMigrationUtil;
-import android.content.AttributionSource;
-import android.os.Bundle;
+import android.os.Build;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.os.UserHandle;
@@ -39,12 +53,15 @@ import android.util.Log;
 import com.android.internal.util.Preconditions;
 
 import java.io.Closeable;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -62,10 +79,12 @@ import java.util.function.Consumer;
 public final class AppSearchSession implements Closeable {
     private static final String TAG = "AppSearchSession";
 
-    private final AttributionSource mCallerAttributionSource;
+    private final AppSearchAttributionSource mCallerAttributionSource;
     private final String mDatabaseName;
     private final UserHandle mUserHandle;
     private final IAppSearchManager mService;
+    @Nullable
+    private final File mCacheDirectory;
 
     private boolean mIsMutated = false;
     private boolean mIsClosed = false;
@@ -73,17 +92,32 @@ public final class AppSearchSession implements Closeable {
     /**
      * Creates a search session for the client, defined by the {@code userHandle} and
      * {@code packageName}.
+     *
+     * @param searchContext The {@link AppSearchManager.SearchContext} contains all information to
+     *                      create a new {@link AppSearchSession}.
+     * @param service The {@link IAppSearchManager} service from which to make api calls.
+     * @param userHandle The user for which the session should be created.
+     * @param callerAttributionSource The attribution source containing the caller's package name
+     *                                and uid.
+     * @param cacheDirectory The directory to create temporary files needed for migration. If this
+     *                       is null, the default temporary-file directory (/data/local/tmp) will be
+     *                       used.
+     * @param executor Executor on which to invoke the callback.
+     * @param callback The {@link AppSearchResult}&lt;{@link AppSearchSession}&gt; of performing
+     *                 this operation. Or a {@link AppSearchResult} with failure reason code and
+     *                 error information.
      */
     static void createSearchSession(
             @NonNull AppSearchManager.SearchContext searchContext,
             @NonNull IAppSearchManager service,
             @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource,
+            @NonNull AppSearchAttributionSource callerAttributionSource,
+            @Nullable File cacheDirectory,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<AppSearchSession>> callback) {
         AppSearchSession searchSession =
                 new AppSearchSession(service, userHandle, callerAttributionSource,
-                        searchContext.mDatabaseName);
+                        searchContext.mDatabaseName, cacheDirectory);
         searchSession.initialize(executor, callback);
     }
 
@@ -94,9 +128,10 @@ public final class AppSearchSession implements Closeable {
             @NonNull Consumer<AppSearchResult<AppSearchSession>> callback) {
         try {
             mService.initialize(
-                    mCallerAttributionSource,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new InitializeAidlRequest(
+                            mCallerAttributionSource,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -118,11 +153,13 @@ public final class AppSearchSession implements Closeable {
     }
 
     private AppSearchSession(@NonNull IAppSearchManager service, @NonNull UserHandle userHandle,
-            @NonNull AttributionSource callerAttributionSource, @NonNull String databaseName) {
+            @NonNull AppSearchAttributionSource callerAttributionSource,
+            @NonNull String databaseName, @Nullable File cacheDirectory) {
         mService = service;
         mUserHandle = userHandle;
         mCallerAttributionSource = callerAttributionSource;
         mDatabaseName = databaseName;
+        mCacheDirectory = cacheDirectory;
     }
 
     /**
@@ -151,33 +188,32 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(callbackExecutor);
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
-        List<Bundle> schemaBundles = new ArrayList<>(request.getSchemas().size());
-        for (AppSearchSchema schema : request.getSchemas()) {
-            schemaBundles.add(schema.getBundle());
+        List<AppSearchSchema> schemaList = new ArrayList<>(request.getSchemas());
+        for (int i = 0; i < schemaList.size(); i++) {
+            if (!schemaList.get(i).getParentTypes().isEmpty()
+                    && Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                throw new UnsupportedOperationException(
+                        "SCHEMA_ADD_PARENT_TYPE is not available on this AppSearch "
+                                + "implementation.");
+            }
         }
 
-        // Extract a List<VisibilityDocument> from the request and convert to a
-        // List<VisibilityDocument.Bundle> to send via binder.
-        List<VisibilityDocument> visibilityDocuments = VisibilityDocument
-                .toVisibilityDocuments(request);
-        List<Bundle> visibilityBundles = new ArrayList<>(visibilityDocuments.size());
-        for (int i = 0; i < visibilityDocuments.size(); i++) {
-            visibilityBundles.add(visibilityDocuments.get(i).getBundle());
-        }
-
+        // Extract a List<VisibilityConfig> from the request
+        List<InternalVisibilityConfig> visibilityConfigs =
+                InternalVisibilityConfig.toInternalVisibilityConfigs(request);
         // No need to trigger migration if user never set migrator
         if (request.getMigrators().isEmpty()) {
             setSchemaNoMigrations(
                     request,
-                    schemaBundles,
-                    visibilityBundles,
+                    schemaList,
+                    visibilityConfigs,
                     callbackExecutor,
                     callback);
         } else {
             setSchemaWithMigrations(
                     request,
-                    schemaBundles,
-                    visibilityBundles,
+                    schemaList,
+                    visibilityConfigs,
                     workExecutor,
                     callbackExecutor,
                     callback);
@@ -201,19 +237,22 @@ public final class AppSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.getSchema(
-                    mCallerAttributionSource,
-                    targetPackageName,
-                    mDatabaseName,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new GetSchemaAidlRequest(
+                            mCallerAttributionSource,
+                            targetPackageName,
+                            mDatabaseName,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                            /*isForEnterprise=*/ false),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
                             safeExecute(executor, callback, () -> {
-                                AppSearchResult<Bundle> result = resultParcel.getResult();
+                                AppSearchResult<GetSchemaResponse> result =
+                                        resultParcel.getResult();
                                 if (result.isSuccess()) {
-                                    GetSchemaResponse response = new GetSchemaResponse(
-                                        Objects.requireNonNull(result.getResultValue()));
+                                    GetSchemaResponse response =
+                                            Objects.requireNonNull(result.getResultValue());
                                     callback.accept(AppSearchResult.newSuccessfulResult(response));
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
@@ -240,10 +279,11 @@ public final class AppSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.getNamespaces(
-                    mCallerAttributionSource,
-                    mDatabaseName,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new GetNamespacesAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -290,12 +330,15 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(executor);
         Objects.requireNonNull(callback);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
-        DocumentsParcel documentsParcel =
-                new DocumentsParcel(request.getGenericDocuments());
+        DocumentsParcel documentsParcel = new DocumentsParcel(
+                toGenericDocumentParcels(request.getGenericDocuments()),
+                toGenericDocumentParcels(request.getTakenActionGenericDocuments()));
         try {
-            mService.putDocuments(mCallerAttributionSource, mDatabaseName, documentsParcel,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+            mService.putDocuments(
+                    new PutDocumentsAidlRequest(
+                            mCallerAttributionSource, mDatabaseName, documentsParcel,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchBatchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchBatchResultParcel resultParcel) {
@@ -355,6 +398,7 @@ public final class AppSearchSession implements Closeable {
                     request.getProjectionsInternal(),
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    /*isForEnterprise=*/ false,
                     SearchSessionUtil.createGetDocumentCallback(executor, callback));
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
@@ -409,12 +453,11 @@ public final class AppSearchSession implements Closeable {
      *       the "subject" property.
      * </ul>
      *
-     * <p>The above description covers the query operators that are supported on all versions of
-     * AppSearch. Additional operators and their required features are described below.
+     * <p>The above description covers the basic query operators. Additional advanced query
+     * operator features should be explicitly enabled in the SearchSpec and are described below.
      *
-     * <p>{@link Features#LIST_FILTER_QUERY_LANGUAGE}: This feature covers the expansion of the
-     * query language to conform to the definition of the list filters language (https://aip
-     * .dev/160). This includes:
+     * <p>LIST_FILTER_QUERY_LANGUAGE: This feature covers the expansion of the query language to
+     * conform to the definition of the list filters language (https://aip.dev/160). This includes:
      * <ul>
      *     <li>addition of explicit 'AND' and 'NOT' operators</li>
      *     <li>property restricts are allowed with groupings (ex. "prop:(a OR b)")</li>
@@ -443,8 +486,8 @@ public final class AppSearchSession implements Closeable {
      * the document's type defines the specified property. It does NOT require that the document
      * actually hold any values for this property.
      *
-     * <p>{@link Features#NUMERIC_SEARCH}: This feature covers numeric search expressions. In the
-     * query language, the values of properties that have
+     * <p>NUMERIC_SEARCH: This feature covers numeric search expressions. In the query language,
+     * the values of properties that have
      * {@link AppSearchSchema.LongPropertyConfig#INDEXING_TYPE_RANGE} set can be matched with a
      * numeric search expression (the property, a supported comparator and an integer value).
      * Supported comparators are <, <=, ==, >= and >.
@@ -452,13 +495,9 @@ public final class AppSearchSession implements Closeable {
      * <p>Ex. `price < 10` will match all documents that has a numeric value in its price
      * property that is less than 10.
      *
-     * <p>{@link Features#VERBATIM_SEARCH}: This feature covers the verbatim string operator
-     * (quotation marks).
+     * <p>VERBATIM_SEARCH: This feature covers the verbatim string operator (quotation marks).
      *
      * <p>Ex. `"foo/bar" OR baz` will ensure that 'foo/bar' is treated as a single 'verbatim' token.
-     *
-     * <p>The availability of each of these features can be checked by calling
-     * {@link Features#isFeatureSupported} with the desired feature.
      *
      * <p>Additional search specifications, such as filtering by {@link AppSearchSchema} type or
      * adding projection, can be set by calling the corresponding {@link SearchSpec.Builder} setter.
@@ -477,7 +516,7 @@ public final class AppSearchSession implements Closeable {
         Objects.requireNonNull(searchSpec);
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         return new SearchResults(mService, mCallerAttributionSource, mDatabaseName, queryExpression,
-                searchSpec, mUserHandle);
+                searchSpec, mUserHandle, /*isForEnterprise=*/ false);
     }
 
     /**
@@ -552,32 +591,22 @@ public final class AppSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.searchSuggestion(
-                    mCallerAttributionSource,
-                    mDatabaseName,
-                    suggestionQueryExpression,
-                    searchSuggestionSpec.getBundle(),
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new SearchSuggestionAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            suggestionQueryExpression,
+                            searchSuggestionSpec,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
                             safeExecute(executor, callback, () -> {
                                 try {
-                                    AppSearchResult<List<Bundle>> result = resultParcel.getResult();
+                                    AppSearchResult<List<SearchSuggestionResult>> result =
+                                            resultParcel.getResult();
                                     if (result.isSuccess()) {
-                                        List<Bundle> suggestionResultBundles =
-                                                result.getResultValue();
-                                        List<SearchSuggestionResult> searchSuggestionResults =
-                                                new ArrayList<>(suggestionResultBundles.size());
-                                        for (int i = 0; i < suggestionResultBundles.size(); i++) {
-                                            SearchSuggestionResult searchSuggestionResult =
-                                                    new SearchSuggestionResult(
-                                                            suggestionResultBundles.get(i));
-                                            searchSuggestionResults.add(searchSuggestionResult);
-                                        }
-                                        callback.accept(
-                                                AppSearchResult.newSuccessfulResult(
-                                                        searchSuggestionResults));
+                                        callback.accept(result);
                                     } else {
                                         // TODO(b/261897334) save SDK errors/crashes and send to
                                         //  server for logging.
@@ -680,12 +709,13 @@ public final class AppSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.removeByDocumentId(
-                    mCallerAttributionSource,
-                    mDatabaseName,
-                    request.getNamespace(),
-                    new ArrayList<>(request.getIds()),
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new RemoveByDocumentIdAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            request.getNamespace(),
+                            new ArrayList<>(request.getIds()),
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchBatchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchBatchResultParcel resultParcel) {
@@ -745,12 +775,13 @@ public final class AppSearchSession implements Closeable {
         }
         try {
             mService.removeByQuery(
-                    mCallerAttributionSource,
-                    mDatabaseName,
-                    queryExpression,
-                    searchSpec.getBundle(),
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new RemoveByQueryAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            queryExpression,
+                            searchSpec,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
@@ -783,19 +814,19 @@ public final class AppSearchSession implements Closeable {
         Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
         try {
             mService.getStorageInfo(
-                    mCallerAttributionSource,
-                    mDatabaseName,
-                    mUserHandle,
-                    /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
+                    new GetStorageInfoAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            mUserHandle,
+                            /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()),
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
                             safeExecute(executor, callback, () -> {
-                                AppSearchResult<Bundle> result = resultParcel.getResult();
+                                AppSearchResult<StorageInfo> result = resultParcel.getResult();
                                 if (result.isSuccess()) {
-                                    StorageInfo response = new StorageInfo(
-                                        Objects.requireNonNull(result.getResultValue()));
-                                    callback.accept(AppSearchResult.newSuccessfulResult(response));
+                                    callback.accept(AppSearchResult.newSuccessfulResult(
+                                            result.getResultValue()));
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
                                 }
@@ -816,9 +847,10 @@ public final class AppSearchSession implements Closeable {
         if (mIsMutated && !mIsClosed) {
             try {
                 mService.persistToDisk(
-                        mCallerAttributionSource,
-                        mUserHandle,
-                        /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime());
+                        new PersistToDiskAidlRequest(
+                                mCallerAttributionSource,
+                                mUserHandle,
+                                /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime()));
                 mIsClosed = true;
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to close the AppSearchSession", e);
@@ -834,31 +866,33 @@ public final class AppSearchSession implements Closeable {
      */
     private void setSchemaNoMigrations(
             @NonNull SetSchemaRequest request,
-            @NonNull List<Bundle> schemaBundles,
-            @NonNull List<Bundle> visibilityBundles,
+            @NonNull List<AppSearchSchema> schemas,
+            @NonNull List<InternalVisibilityConfig> visibilityConfigs,
             @NonNull @CallbackExecutor Executor executor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
         try {
-            mService.setSchema(
+            SetSchemaAidlRequest setSchemaAidlRequest = new SetSchemaAidlRequest(
                     mCallerAttributionSource,
                     mDatabaseName,
-                    schemaBundles,
-                    visibilityBundles,
+                    schemas,
+                    visibilityConfigs,
                     request.isForceOverride(),
                     request.getVersion(),
                     mUserHandle,
                     /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                    SchemaMigrationStats.NO_MIGRATION,
+                    SchemaMigrationStats.NO_MIGRATION);
+            mService.setSchema(
+                    setSchemaAidlRequest,
                     new IAppSearchResultCallback.Stub() {
                         @Override
                         public void onResult(AppSearchResultParcel resultParcel) {
                             safeExecute(executor, callback, () -> {
-                                AppSearchResult<Bundle> result = resultParcel.getResult();
+                                AppSearchResult<InternalSetSchemaResponse> result =
+                                        resultParcel.getResult();
                                 if (result.isSuccess()) {
                                     try {
                                         InternalSetSchemaResponse internalSetSchemaResponse =
-                                                new InternalSetSchemaResponse(
-                                                        result.getResultValue());
+                                                result.getResultValue();
                                         if (!internalSetSchemaResponse.isSuccess()) {
                                             // check is the set schema call failed because
                                             // incompatible changes. That's the only case we
@@ -870,10 +904,10 @@ public final class AppSearchSession implements Closeable {
                                         }
                                         callback.accept(AppSearchResult.newSuccessfulResult(
                                                 internalSetSchemaResponse.getSetSchemaResponse()));
-                                    } catch (Throwable t) {
+                                    } catch (RuntimeException e) {
                                         // TODO(b/261897334) save SDK errors/crashes and send to
                                         //  server for logging.
-                                        callback.accept(AppSearchResult.throwableToFailedResult(t));
+                                        callback.accept(AppSearchResult.throwableToFailedResult(e));
                                     }
                                 } else {
                                     callback.accept(AppSearchResult.newFailedResult(result));
@@ -895,8 +929,8 @@ public final class AppSearchSession implements Closeable {
      */
     private void setSchemaWithMigrations(
             @NonNull SetSchemaRequest request,
-            @NonNull List<Bundle> schemaBundles,
-            @NonNull List<Bundle> visibilityBundles,
+            @NonNull List<AppSearchSchema> schemas,
+            @NonNull List<InternalVisibilityConfig> visibilityConfigs,
             @NonNull Executor workExecutor,
             @NonNull @CallbackExecutor Executor callbackExecutor,
             @NonNull Consumer<AppSearchResult<SetSchemaResponse>> callback) {
@@ -940,7 +974,7 @@ public final class AppSearchSession implements Closeable {
 
                 // No need to trigger migration if no migrator is active.
                 if (activeMigrators.isEmpty()) {
-                    setSchemaNoMigrations(request, schemaBundles, visibilityBundles,
+                    setSchemaNoMigrations(request, schemas, visibilityConfigs,
                             callbackExecutor, callback);
                     return;
                 }
@@ -949,19 +983,21 @@ public final class AppSearchSession implements Closeable {
                 // incompatible/deleted types.
                 long firstSetSchemaLatencyStartMillis = SystemClock.elapsedRealtime();
                 CountDownLatch setSchemaLatch = new CountDownLatch(1);
-                AtomicReference<AppSearchResult<Bundle>> setSchemaResultRef =
+                AtomicReference<AppSearchResult<InternalSetSchemaResponse>> setSchemaResultRef =
                         new AtomicReference<>();
 
-                mService.setSchema(
+                SetSchemaAidlRequest setSchemaAidlRequest = new SetSchemaAidlRequest(
                         mCallerAttributionSource,
                         mDatabaseName,
-                        schemaBundles,
-                        visibilityBundles,
+                        schemas,
+                        visibilityConfigs,
                         /*forceOverride=*/ false,
                         request.getVersion(),
                         mUserHandle,
                         /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                        SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE,
+                        SchemaMigrationStats.FIRST_CALL_GET_INCOMPATIBLE);
+                mService.setSchema(
+                        setSchemaAidlRequest,
                         new IAppSearchResultCallback.Stub() {
                             @Override
                             public void onResult(AppSearchResultParcel resultParcel) {
@@ -970,7 +1006,8 @@ public final class AppSearchSession implements Closeable {
                             }
                         });
                 setSchemaLatch.await();
-                AppSearchResult<Bundle> setSchemaResult = setSchemaResultRef.get();
+                AppSearchResult<InternalSetSchemaResponse> setSchemaResult =
+                        setSchemaResultRef.get();
                 if (!setSchemaResult.isSuccess()) {
                     // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                     safeExecute(
@@ -981,7 +1018,7 @@ public final class AppSearchSession implements Closeable {
                     return;
                 }
                 InternalSetSchemaResponse internalSetSchemaResponse1 =
-                        new InternalSetSchemaResponse(setSchemaResult.getResultValue());
+                        setSchemaResult.getResultValue();
                 long firstSetSchemaLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
                 // 3. If forceOverride is false, check that all incompatible types will be migrated.
@@ -992,7 +1029,7 @@ public final class AppSearchSession implements Closeable {
 
                 try (AppSearchMigrationHelper migrationHelper = new AppSearchMigrationHelper(
                         mService, mUserHandle, mCallerAttributionSource, mDatabaseName,
-                        request.getSchemas())) {
+                        request.getSchemas(), mCacheDirectory)) {
 
                     // 4. Trigger migration for all migrators.
                     long queryAndTransformLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1011,19 +1048,21 @@ public final class AppSearchSession implements Closeable {
                         internalSetSchemaResponse = internalSetSchemaResponse1;
                     } else {
                         CountDownLatch setSchema2Latch = new CountDownLatch(1);
-                        AtomicReference<AppSearchResult<Bundle>> setSchema2ResultRef =
-                                new AtomicReference<>();
+                        AtomicReference<AppSearchResult<InternalSetSchemaResponse>>
+                                setSchema2ResultRef = new AtomicReference<>();
                         // only trigger second setSchema() call if the first one is fail.
-                        mService.setSchema(
+                        SetSchemaAidlRequest setSchemaAidlRequest1 = new SetSchemaAidlRequest(
                                 mCallerAttributionSource,
                                 mDatabaseName,
-                                schemaBundles,
-                                visibilityBundles,
+                                schemas,
+                                visibilityConfigs,
                                 /*forceOverride=*/ true,
                                 request.getVersion(),
                                 mUserHandle,
                                 /*binderCallStartTimeMillis=*/ SystemClock.elapsedRealtime(),
-                                SchemaMigrationStats.SECOND_CALL_APPLY_NEW_SCHEMA,
+                                SchemaMigrationStats.SECOND_CALL_APPLY_NEW_SCHEMA);
+                        mService.setSchema(
+                                setSchemaAidlRequest1,
                                 new IAppSearchResultCallback.Stub() {
                                     @Override
                                     public void onResult(AppSearchResultParcel resultParcel) {
@@ -1032,7 +1071,8 @@ public final class AppSearchSession implements Closeable {
                                     }
                                 });
                         setSchema2Latch.await();
-                        AppSearchResult<Bundle> setSchema2Result = setSchema2ResultRef.get();
+                        AppSearchResult<InternalSetSchemaResponse> setSchema2Result =
+                                setSchema2ResultRef.get();
                         if (!setSchema2Result.isSuccess()) {
                             // we failed to set the schema in second time with forceOverride = true,
                             // which is an impossible case. Since we only swallow the incompatible
@@ -1048,7 +1088,7 @@ public final class AppSearchSession implements Closeable {
                             return;
                         }
                         InternalSetSchemaResponse internalSetSchemaResponse2 =
-                                new InternalSetSchemaResponse(setSchema2Result.getResultValue());
+                                setSchema2Result.getResultValue();
                         if (!internalSetSchemaResponse2.isSuccess()) {
                             // Impossible case, we just set forceOverride to be true, we should
                             // never fail in incompatible changes. And all other cases should failed
@@ -1085,9 +1125,8 @@ public final class AppSearchSession implements Closeable {
                             .setSecondSetSchemaLatencyMillis(
                                     (int)(secondSetSchemaLatencyEndTimeMillis
                                             - secondSetSchemaLatencyStartMillis));
-                    SetSchemaResponse.Builder responseBuilder = internalSetSchemaResponse
-                            .getSetSchemaResponse()
-                            .toBuilder()
+                    SetSchemaResponse.Builder responseBuilder = new SetSchemaResponse.Builder(
+                            internalSetSchemaResponse.getSetSchemaResponse())
                             .addMigratedTypes(activeMigrators.keySet());
 
                     // 6. Put all the migrated documents into the index, now that the new schema is
@@ -1097,13 +1136,28 @@ public final class AppSearchSession implements Closeable {
                                     responseBuilder, statsBuilder, totalLatencyStartTimeMillis);
                     safeExecute(callbackExecutor, callback, () -> callback.accept(putResult));
                 }
-            } catch (Throwable t) {
+            } catch (RemoteException
+                     | AppSearchException
+                     | InterruptedException
+                     | IOException
+                     | ExecutionException
+                     | RuntimeException e) {
                 // TODO(b/261897334) save SDK errors/crashes and send to server for logging.
                 safeExecute(
                         callbackExecutor,
                         callback,
-                        () -> callback.accept(AppSearchResult.throwableToFailedResult(t)));
+                        () -> callback.accept(AppSearchResult.throwableToFailedResult(e)));
             }
         });
+    }
+
+    @NonNull
+    private static List<GenericDocumentParcel> toGenericDocumentParcels(
+            List<GenericDocument> docs) {
+        List<GenericDocumentParcel> docParcels = new ArrayList<>(docs.size());
+        for (int i = 0; i < docs.size(); ++i) {
+            docParcels.add(docs.get(i).getDocumentParcel());
+        }
+        return docParcels;
     }
 }

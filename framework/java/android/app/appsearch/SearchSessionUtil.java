@@ -22,12 +22,13 @@ import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.exceptions.AppSearchException;
-import android.os.Bundle;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.util.Log;
 
 import com.android.internal.util.Preconditions;
 
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
@@ -84,9 +85,9 @@ public class SearchSessionUtil {
             @NonNull Runnable runnable) {
         try {
             executor.execute(runnable);
-        } catch (Throwable t) {
-            Log.e(TAG, "Failed to schedule runnable", t);
-            errorCallback.accept(AppSearchResult.throwableToFailedResult(t));
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Failed to schedule runnable", e);
+            errorCallback.accept(AppSearchResult.throwableToFailedResult(e));
         }
     }
 
@@ -111,9 +112,9 @@ public class SearchSessionUtil {
             @NonNull Runnable runnable) {
         try {
             executor.execute(runnable);
-        } catch (Throwable t) {
-            Log.e(TAG, "Failed to schedule runnable", t);
-            errorCallback.onSystemError(t);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Failed to schedule runnable", e);
+            errorCallback.onSystemError(e);
         }
     }
 
@@ -131,35 +132,34 @@ public class SearchSessionUtil {
             @Override
             public void onResult(AppSearchBatchResultParcel resultParcel) {
                 safeExecute(executor, callback, () -> {
-                    AppSearchBatchResult<String, Bundle> result =
+                    AppSearchBatchResult<String, GenericDocumentParcel> result =
                             resultParcel.getResult();
                     AppSearchBatchResult.Builder<String, GenericDocument>
                             documentResultBuilder =
                             new AppSearchBatchResult.Builder<>();
 
-                    for (Map.Entry<String, Bundle> bundleEntry :
+                    for (Map.Entry<String, GenericDocumentParcel> entry :
                             result.getSuccesses().entrySet()) {
                         GenericDocument document;
                         try {
-                            document = new GenericDocument(bundleEntry.getValue());
-                        } catch (Throwable t) {
+                            document = new GenericDocument(entry.getValue());
+                        } catch (RuntimeException e) {
                             documentResultBuilder.setFailure(
-                                    bundleEntry.getKey(),
+                                    entry.getKey(),
                                     AppSearchResult.RESULT_INTERNAL_ERROR,
-                                    t.getMessage());
+                                    e.getMessage());
                             continue;
                         }
                         documentResultBuilder.setSuccess(
-                                bundleEntry.getKey(), document);
+                                entry.getKey(), document);
                     }
 
-                    for (Map.Entry<String, AppSearchResult<Bundle>> bundleEntry :
-                            ((Map<String, AppSearchResult<Bundle>>)
-                                    result.getFailures()).entrySet()) {
+                    for (Entry<String, AppSearchResult<GenericDocumentParcel>> entry :
+                            result.getFailures().entrySet()) {
                         documentResultBuilder.setFailure(
-                                bundleEntry.getKey(),
-                                bundleEntry.getValue().getResultCode(),
-                                bundleEntry.getValue().getErrorMessage());
+                                entry.getKey(),
+                                entry.getValue().getResultCode(),
+                                entry.getValue().getErrorMessage());
                     }
                     callback.onResult(documentResultBuilder.build());
 
