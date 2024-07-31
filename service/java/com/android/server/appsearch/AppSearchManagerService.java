@@ -211,7 +211,7 @@ public class AppSearchManagerService extends SystemService {
         publishBinderService(Context.APP_SEARCH_SERVICE, new Stub());
         mPackageManager = getContext().getPackageManager();
         mRoleManager = getContext().getSystemService(RoleManager.class);
-        mServiceImplHelper = new ServiceImplHelper(mContext, mExecutorManager);
+        mServiceImplHelper = new ServiceImplHelper(mContext);
         mAppSearchUserInstanceManager = AppSearchUserInstanceManager.getInstance();
         registerReceivers();
         LocalManagerRegistry.getManager(StorageStatsManagerLocal.class)
@@ -323,23 +323,25 @@ public class AppSearchManagerService extends SystemService {
         }
         // Only clear the package's data if AppSearch exists for this user.
         if (mAppSearchEnvironment.getAppSearchDir(mContext, userHandle).exists()) {
-            mExecutorManager.getOrCreateUserExecutor(userHandle).execute(() -> {
-                try {
-                    Context userContext = mAppSearchEnvironment
-                            .createContextAsUser(mContext, userHandle);
-                    AppSearchUserInstance instance =
-                            mAppSearchUserInstanceManager.getOrCreateUserInstance(
-                                    userContext,
-                                    userHandle,
-                                    mAppSearchConfig);
-                    instance.getAppSearchImpl().clearPackageData(packageName);
-                    dispatchChangeNotifications(instance);
-                    instance.getLogger().removeCacheForPackage(packageName);
-                } catch (AppSearchException | RuntimeException e) {
-                    Log.e(TAG, "Unable to remove data for package: " + packageName, e);
-                    ExceptionUtil.handleException(e);
-                }
-            });
+            mExecutorManager.executeLambdaForUserNoCallbackAsync(
+                    userHandle,
+                    () -> {
+                        try {
+                            Context userContext = mAppSearchEnvironment
+                                    .createContextAsUser(mContext, userHandle);
+                            AppSearchUserInstance instance =
+                                    mAppSearchUserInstanceManager.getOrCreateUserInstance(
+                                            userContext,
+                                            userHandle,
+                                            mAppSearchConfig);
+                            instance.getAppSearchImpl().clearPackageData(packageName);
+                            dispatchChangeNotifications(instance);
+                            instance.getLogger().removeCacheForPackage(packageName);
+                        } catch (AppSearchException | RuntimeException e) {
+                            Log.e(TAG, "Unable to remove data for package: " + packageName, e);
+                            ExceptionUtil.handleException(e);
+                        }
+                    });
         }
     }
 
@@ -351,41 +353,44 @@ public class AppSearchManagerService extends SystemService {
 
         // Only schedule task if AppSearch exists for this user.
         if (mAppSearchEnvironment.getAppSearchDir(mContext, userHandle).exists()) {
-            mExecutorManager.getOrCreateUserExecutor(userHandle).execute(() -> {
-                // Try to prune garbage package data, this is to recover if user remove a package
-                // and reboot the device before we prune the package data.
-                try {
-                    Context userContext = mAppSearchEnvironment
-                            .createContextAsUser(mContext, userHandle);
-                    AppSearchUserInstance instance =
-                            mAppSearchUserInstanceManager.getOrCreateUserInstance(
-                                    userContext,
-                                    userHandle,
-                                    mAppSearchConfig);
-                    List<PackageInfo> installedPackageInfos = userContext
-                            .getPackageManager()
-                            .getInstalledPackages(/* flags= */ 0);
-                    Set<String> packagesToKeep = new ArraySet<>(installedPackageInfos.size());
-                    for (int i = 0; i < installedPackageInfos.size(); i++) {
-                        packagesToKeep.add(installedPackageInfos.get(i).packageName);
-                    }
-                    packagesToKeep.add(VisibilityStore.VISIBILITY_PACKAGE_NAME);
-                    instance.getAppSearchImpl().prunePackageData(packagesToKeep);
-                } catch (AppSearchException | RuntimeException e) {
-                    Log.e(TAG, "Unable to prune packages for " + user, e);
-                    ExceptionUtil.handleException(e);
-                }
+            mExecutorManager.executeLambdaForUserNoCallbackAsync(
+                    userHandle,
+                    () -> {
+                        // Try to prune garbage package data, this is to recover if user remove a
+                        // package and reboot the device before we prune the package data.
+                        try {
+                            Context userContext = mAppSearchEnvironment
+                                    .createContextAsUser(mContext, userHandle);
+                            AppSearchUserInstance instance =
+                                    mAppSearchUserInstanceManager.getOrCreateUserInstance(
+                                            userContext,
+                                            userHandle,
+                                            mAppSearchConfig);
+                            List<PackageInfo> installedPackageInfos = userContext
+                                    .getPackageManager()
+                                    .getInstalledPackages(/* flags= */ 0);
+                            Set<String> packagesToKeep =
+                                    new ArraySet<>(installedPackageInfos.size());
+                            for (int i = 0; i < installedPackageInfos.size(); i++) {
+                                packagesToKeep.add(installedPackageInfos.get(i).packageName);
+                            }
+                            packagesToKeep.add(VisibilityStore.VISIBILITY_PACKAGE_NAME);
+                            instance.getAppSearchImpl().prunePackageData(packagesToKeep);
+                        } catch (AppSearchException | RuntimeException e) {
+                            Log.e(TAG, "Unable to prune packages for " + user, e);
+                            ExceptionUtil.handleException(e);
+                        }
 
-                // Try to schedule fully persist job.
-                try {
-                    AppSearchMaintenanceService.scheduleFullyPersistJob(mContext,
-                            userHandle.getIdentifier(),
-                            mAppSearchConfig.getCachedFullyPersistJobIntervalMillis());
-                } catch (RuntimeException e) {
-                    Log.e(TAG, "Unable to schedule fully persist job for " + user, e);
-                    ExceptionUtil.handleException(e);
-                }
-            });
+                        // Try to schedule fully persist job.
+                        try {
+                            AppSearchMaintenanceService.scheduleFullyPersistJob(mContext,
+                                    userHandle.getIdentifier(),
+                                    mAppSearchConfig.getCachedFullyPersistJobIntervalMillis());
+                        } catch (RuntimeException e) {
+                            Log.e(TAG, "Unable to schedule fully persist job for " + user, e);
+                            ExceptionUtil.handleException(e);
+                        }
+                    });
         }
     }
 
@@ -450,7 +455,7 @@ public class AppSearchManagerService extends SystemService {
             long verifyIncomingCallLatencyEndTimeMillis = SystemClock.elapsedRealtime();
 
             long waitExecutorStartTimeMillis = SystemClock.elapsedRealtime();
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(
                     targetUser, callback, callingPackageName, CallStats.CALL_TYPE_SET_SCHEMA,
                     () -> {
                 long waitExecutorEndTimeMillis = SystemClock.elapsedRealtime();
@@ -583,7 +588,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, callType, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -660,7 +665,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_GET_NAMESPACES, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -732,7 +737,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ request.getDocumentsParcel().getTotalDocumentCount())) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_PUT_DOCUMENTS, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -908,7 +913,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ request.getGetByDocumentIdRequest().getIds().size())) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, callType, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -1032,7 +1037,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_SEARCH, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -1115,7 +1120,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_GLOBAL_SEARCH, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -1210,7 +1215,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, callType, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -1299,7 +1304,7 @@ public class AppSearchManagerService extends SystemService {
                         /* numOperations= */ 1)) {
                     return;
                 }
-                boolean callAccepted = mServiceImplHelper.executeLambdaForUserNoCallbackAsync(
+                boolean callAccepted = mExecutorManager.executeLambdaForUserNoCallbackAsync(
                         targetUser, callingPackageName,
                         CallStats.CALL_TYPE_INVALIDATE_NEXT_PAGE_TOKEN, () -> {
                     @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -1373,7 +1378,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_WRITE_SEARCH_RESULTS_TO_FILE,
                     () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -1464,7 +1469,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_PUT_DOCUMENTS_FROM_FILE,
                     () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -1593,7 +1598,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_SEARCH_SUGGESTION,
                     () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -1676,7 +1681,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_REPORT_USAGE,
                     () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
@@ -1766,7 +1771,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ request.getRemoveByDocumentIdRequest().getIds().size())) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_ID,
                     () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
@@ -1867,7 +1872,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_REMOVE_DOCUMENTS_BY_SEARCH,
                     () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
@@ -1950,7 +1955,7 @@ public class AppSearchManagerService extends SystemService {
                     /* numOperations= */ 1)) {
                 return;
             }
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(targetUser,
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser,
                     callback, callingPackageName, CallStats.CALL_TYPE_GET_STORAGE_INFO, () -> {
                 @AppSearchResult.ResultCode int statusCode = AppSearchResult.RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -2015,7 +2020,7 @@ public class AppSearchManagerService extends SystemService {
                         /* numOperations= */ 1)) {
                     return;
                 }
-                boolean callAccepted = mServiceImplHelper.executeLambdaForUserNoCallbackAsync(
+                boolean callAccepted = mExecutorManager.executeLambdaForUserNoCallbackAsync(
                         targetUser, callingPackageName, CallStats.CALL_TYPE_FLUSH, () -> {
                     @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                     AppSearchUserInstance instance = null;
@@ -2242,7 +2247,7 @@ public class AppSearchManagerService extends SystemService {
                         AppSearchResult.newFailedResult(RESULT_DENIED, null)));
                 return;
             }
-            mServiceImplHelper.executeLambdaForUserAsync(targetUser, callback, callingPackageName,
+            mExecutorManager.executeLambdaForUserAsync(targetUser, callback, callingPackageName,
                     CallStats.CALL_TYPE_INITIALIZE, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
@@ -2354,7 +2359,7 @@ public class AppSearchManagerService extends SystemService {
                 return;
             }
 
-            boolean callAccepted = mServiceImplHelper.executeLambdaForUserAsync(
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(
                     targetUser, callback, callingPackageName,
                     CallStats.CALL_TYPE_EXECUTE_APP_FUNCTION,
                     () -> executeAppFunctionUnchecked(
@@ -2724,24 +2729,25 @@ public class AppSearchManagerService extends SystemService {
             // We shouldn't schedule any task to locked user.
             return;
         }
-        mExecutorManager.getOrCreateUserExecutor(targetUser).execute(() -> {
-            long totalLatencyStartMillis = SystemClock.elapsedRealtime();
-            OptimizeStats.Builder builder = new OptimizeStats.Builder();
-            try {
-                instance.getAppSearchImpl().checkForOptimize(mutateBatchSize, builder);
-            } catch (Exception e) {
-                Log.w(TAG, "Error occurred when check for optimize", e);
-            } finally {
-                OptimizeStats oStats = builder
-                        .setTotalLatencyMillis(
+        mExecutorManager.executeLambdaForUserNoCallbackAsync(
+                targetUser,
+                () -> {
+                    long totalLatencyStartMillis = SystemClock.elapsedRealtime();
+                    OptimizeStats.Builder builder = new OptimizeStats.Builder();
+                    try {
+                        instance.getAppSearchImpl().checkForOptimize(mutateBatchSize, builder);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Error occurred when check for optimize", e);
+                    } finally {
+                        OptimizeStats oStats = builder.setTotalLatencyMillis(
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartMillis))
-                        .build();
-                if (oStats.getOriginalDocumentCount() > 0) {
-                    // see if optimize has been run by checking originalDocumentCount
-                    instance.getLogger().logStats(oStats);
-                }
-            }
-        });
+                                .build();
+                        if (oStats.getOriginalDocumentCount() > 0) {
+                            // see if optimize has been run by checking originalDocumentCount
+                            instance.getLogger().logStats(oStats);
+                        }
+                    }
+                });
     }
 
     @WorkerThread
@@ -2752,24 +2758,25 @@ public class AppSearchManagerService extends SystemService {
             // We shouldn't schedule any task to locked user.
             return;
         }
-        mExecutorManager.getOrCreateUserExecutor(targetUser).execute(() -> {
-            long totalLatencyStartMillis = SystemClock.elapsedRealtime();
-            OptimizeStats.Builder builder = new OptimizeStats.Builder();
-            try {
-                instance.getAppSearchImpl().checkForOptimize(builder);
-            } catch (Exception e) {
-                Log.w(TAG, "Error occurred when check for optimize", e);
-            } finally {
-                OptimizeStats oStats = builder
-                        .setTotalLatencyMillis(
+        mExecutorManager.executeLambdaForUserNoCallbackAsync(
+                targetUser,
+                () -> {
+                    long totalLatencyStartMillis = SystemClock.elapsedRealtime();
+                    OptimizeStats.Builder builder = new OptimizeStats.Builder();
+                    try {
+                        instance.getAppSearchImpl().checkForOptimize(builder);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Error occurred when check for optimize", e);
+                    } finally {
+                        OptimizeStats oStats = builder.setTotalLatencyMillis(
                                 (int) (SystemClock.elapsedRealtime() - totalLatencyStartMillis))
-                        .build();
-                if (oStats.getOriginalDocumentCount() > 0) {
-                    // see if optimize has been run by checking originalDocumentCount
-                    instance.getLogger().logStats(oStats);
-                }
-            }
-        });
+                                .build();
+                        if (oStats.getOriginalDocumentCount() > 0) {
+                            // see if optimize has been run by checking originalDocumentCount
+                            instance.getLogger().logStats(oStats);
+                        }
+                    }
+                });
     }
 
     /**
