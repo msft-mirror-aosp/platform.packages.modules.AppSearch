@@ -50,7 +50,6 @@ java_defaults {
     sdk_version: "system_server_current",
     min_sdk_version: "Tiramisu",
     static_libs: [
-        "appsearch_flags_java_lib",
         "icing-java-proto-lite",
         "libicing-java",
         "statslog-appsearch-lib",
@@ -64,6 +63,9 @@ java_defaults {
         "framework-configinfrastructure",
         "framework-permission-s",
         "framework-statsd.stubs.module_lib",
+        // Keeping aconfig lib deps in "libs" instead of "static_libs" because we already have them
+        // in the framework jar which is included in this service jar.
+        "appsearch_flags_java_lib",
     ],
     optimize: {
         proguard_flags_files: ["proguard.flags"],
