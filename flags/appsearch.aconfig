@@ -167,3 +167,12 @@ flag {
     is_fixed_read_only: true
     is_exported: true
 }
+
+flag {
+    name: "enable_contacts_index_first_middle_and_last_names"
+    namespace: "appsearch"
+    description: "Enables the indexing of first, middle, and last names in contacts indexer"
+    bug: "358082031"
+    is_fixed_read_only: true
+    is_exported: true
+}
