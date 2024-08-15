@@ -20,6 +20,9 @@ import static android.app.appsearch.SearchSpec.TERM_MATCH_PREFIX;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchManager;
@@ -32,6 +35,7 @@ import android.app.appsearch.SearchResult;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.SetSchemaResponse;
+import android.app.appsearch.exceptions.AppSearchException;
 import android.content.Context;
 
 import androidx.test.core.app.ApplicationProvider;
@@ -47,7 +51,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /** Tests for {@link SyncAppSearchSessionImpl}. */
 public class SyncAppSearchImplTest {
@@ -161,7 +168,83 @@ public class SyncAppSearchImplTest {
         callbackExecutor.shutdown();
         AppSearchManager.SearchContext searchContext =
                 new AppSearchManager.SearchContext.Builder("testDb").build();
-        assertThrows(RejectedExecutionException.class, () ->
-                new SyncAppSearchSessionImpl(mAppSearch, searchContext, callbackExecutor));
+        SyncAppSearchSession session =
+                new SyncAppSearchSessionImpl(mAppSearch, searchContext, callbackExecutor);
+
+        assertThrows(
+                RejectedExecutionException.class,
+                () -> session.search("", new SearchSpec.Builder().build()));
+    }
+
+    @Test
+    public void testSyncAppSearchImpl_lateInitialization() throws AppSearchException {
+        AppSearchManager.SearchContext searchContext =
+                new AppSearchManager.SearchContext.Builder("testDb").build();
+        ThreadPoolExecutor executor =
+                new ThreadPoolExecutor(
+                        /* corePoolSize= */ 1,
+                        /* maximumPoolSize= */ 1,
+                        /* KeepAliveTime= */ 0L,
+                        TimeUnit.MILLISECONDS,
+                        new LinkedBlockingQueue<>());
+        SyncAppSearchSession session =
+                new SyncAppSearchSessionImpl(mAppSearch, searchContext, executor);
+        assertThat(executor.getCompletedTaskCount()).isEqualTo(0);
+
+        // Searching will late initialize the underlying session
+        session.search("", new SearchSpec.Builder().build());
+        long completedTasks = executor.getCompletedTaskCount();
+        assertThat(completedTasks).isGreaterThan(0);
+
+        session.setSchema(new SetSchemaRequest.Builder().build());
+        assertThat(executor.getCompletedTaskCount()).isGreaterThan(completedTasks);
+    }
+
+    @Test
+    public void testSyncGlobalSearchImpl_lateInitialization() throws AppSearchException {
+        ThreadPoolExecutor executor =
+                new ThreadPoolExecutor(
+                        /* corePoolSize= */ 1,
+                        /* maximumPoolSize= */ 1,
+                        /* KeepAliveTime= */ 0L,
+                        TimeUnit.MILLISECONDS,
+                        new LinkedBlockingQueue<>());
+        SyncGlobalSearchSession session = new SyncGlobalSearchSessionImpl(mAppSearch, executor);
+        assertThat(executor.getCompletedTaskCount()).isEqualTo(0);
+
+        // Searching will late initialize the underlying session
+        session.search("", new SearchSpec.Builder().build());
+        assertThat(executor.getCompletedTaskCount()).isGreaterThan(0);
+    }
+
+    @Test
+    public void testAsyncOperationThrowsError() throws AppSearchException {
+        // This should throw an error, but not crash the device
+        AppSearchManager.SearchContext searchContext =
+                new AppSearchManager.SearchContext.Builder("testDb").build();
+        AppSearchManager appSearchManager = mock(AppSearchManager.class);
+        doThrow(new IllegalStateException("Innocuous exception"))
+                .when(appSearchManager)
+                .createSearchSession(any(), any(), any());
+
+        AppSearchException e;
+        try (SyncAppSearchSession syncWrapper =
+                new SyncAppSearchSessionImpl(appSearchManager, searchContext, mExecutor)) {
+            e =
+                    assertThrows(
+                            AppSearchException.class,
+                            () -> syncWrapper.setSchema(new SetSchemaRequest.Builder().build()));
+            assertThat(e.getCause().getMessage()).isEqualTo("Innocuous exception");
+        }
+
+        // The put command uses a separate method in SyncAppSearchBase
+        try (SyncAppSearchSession syncWrapper =
+                new SyncAppSearchSessionImpl(appSearchManager, searchContext, mExecutor)) {
+            e =
+                    assertThrows(
+                            AppSearchException.class,
+                            () -> syncWrapper.put(new PutDocumentsRequest.Builder().build()));
+            assertThat(e.getCause().getMessage()).isEqualTo("Innocuous exception");
+        }
     }
 }

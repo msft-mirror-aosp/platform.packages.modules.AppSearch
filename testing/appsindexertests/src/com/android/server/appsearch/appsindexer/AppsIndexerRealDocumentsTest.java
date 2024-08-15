@@ -46,6 +46,7 @@ import android.net.Uri;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.appsearch.flags.Flags;
 import com.android.server.SystemService;
 import com.android.server.appsearch.appsindexer.appsearchtypes.MobileApplication;
 
@@ -76,6 +77,7 @@ public class AppsIndexerRealDocumentsTest extends AppsIndexerTestBase {
         UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG);
         assumeTrue(new FrameworkAppsIndexerConfig().isAppsIndexerEnabled());
+        assumeTrue(Flags.appsIndexerEnabled());
         // Ensure that all documents in the android package and with the "apps" namespace are
         // MobileApplication documents. Read-only test as we are dealing with real apps
         SearchSpec searchSpec =

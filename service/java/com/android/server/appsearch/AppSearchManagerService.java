@@ -24,7 +24,6 @@ import static android.app.appsearch.AppSearchResult.RESULT_RATE_LIMITED;
 import static android.app.appsearch.AppSearchResult.RESULT_SECURITY_ERROR;
 import static android.app.appsearch.AppSearchResult.RESULT_TIMED_OUT;
 import static android.app.appsearch.AppSearchResult.throwableToFailedResult;
-import static android.app.appsearch.functions.AppFunctionManager.PERMISSION_BIND_APP_FUNCTION_SERVICE;
 import static android.os.Process.INVALID_UID;
 
 import static com.android.server.appsearch.external.localstorage.stats.SearchStats.VISIBILITY_SCOPE_GLOBAL;
@@ -117,7 +116,7 @@ import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
-import com.android.server.appsearch.external.localstorage.usagereporting.SearchIntentStatsExtractor;
+import com.android.server.appsearch.external.localstorage.usagereporting.SearchSessionStatsExtractor;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
@@ -184,7 +183,7 @@ public class AppSearchManagerService extends SystemService {
     // ContactsIndexer for dumpsys purpose.
     private final AppSearchModule.Lifecycle mLifecycle;
     private final ServiceCallHelper<IAppFunctionService> mAppFunctionServiceCallHelper;
-    private final SearchIntentStatsExtractor mSearchIntentStatsExtractor;
+    private final SearchSessionStatsExtractor mSearchSessionStatsExtractor;
 
     public AppSearchManagerService(Context context, AppSearchModule.Lifecycle lifecycle) {
         this(context, lifecycle, new ServiceCallHelperImpl<>(
@@ -203,7 +202,7 @@ public class AppSearchManagerService extends SystemService {
         mAppSearchConfig = AppSearchComponentFactory.getConfigInstance(SHARED_EXECUTOR);
         mExecutorManager = new ExecutorManager(mAppSearchConfig);
         mAppFunctionServiceCallHelper = Objects.requireNonNull(appFunctionServiceCallHelper);
-        mSearchIntentStatsExtractor = new SearchIntentStatsExtractor();
+        mSearchSessionStatsExtractor = new SearchSessionStatsExtractor();
     }
 
     @Override
@@ -850,7 +849,7 @@ public class AppSearchManagerService extends SystemService {
                         if (takenActionGenericDocuments != null
                                 && !takenActionGenericDocuments.isEmpty()) {
                             instance.getLogger()
-                                    .logStats(mSearchIntentStatsExtractor.extract(
+                                    .logStats(mSearchSessionStatsExtractor.extract(
                                             callingPackageName,
                                             request.getDatabaseName(),
                                             takenActionGenericDocuments));
@@ -2390,13 +2389,17 @@ public class AppSearchManagerService extends SystemService {
                 return;
             }
             ServiceInfo serviceInfo = resolveInfo.serviceInfo;
-            if (!PERMISSION_BIND_APP_FUNCTION_SERVICE.equals(serviceInfo.permission)) {
-                safeCallback.onFailedResult(AppSearchResult.newFailedResult(
-                        RESULT_NOT_FOUND,
-                        "Failed to find a valid target service. The resolved service is missing "
-                                + "the BIND_APP_FUNCTION_SERVICE permission."));
-                return;
-            }
+            // TODO(b/359911502): Commenting out this permission check since the
+            //   BIND_APP_FUNCTION_SERVICE permission is deleted from app search.
+            //   This whole app function functionality should be removed once the new app function
+            //   manager is submitted.
+            // if (!PERMISSION_BIND_APP_FUNCTION_SERVICE.equals(serviceInfo.permission)) {
+            //     safeCallback.onFailedResult(AppSearchResult.newFailedResult(
+            //             RESULT_NOT_FOUND,
+            //             "Failed to find a valid target service. The resolved service is missing "
+            //                     + "the BIND_APP_FUNCTION_SERVICE permission."));
+            //     return;
+            // }
             serviceIntent.setComponent(
                     new ComponentName(serviceInfo.packageName, serviceInfo.name));
 
