@@ -46,6 +46,7 @@ import android.net.Uri;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.appsearch.flags.Flags;
 import com.android.server.SystemService;
 import com.android.server.appsearch.appsindexer.appsearchtypes.MobileApplication;
 
@@ -76,6 +77,7 @@ public class AppsIndexerRealDocumentsTest extends AppsIndexerTestBase {
         UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         uiAutomation.adoptShellPermissionIdentity(READ_DEVICE_CONFIG);
         assumeTrue(new FrameworkAppsIndexerConfig().isAppsIndexerEnabled());
+        assumeTrue(Flags.appsIndexerEnabled());
         // Ensure that all documents in the android package and with the "apps" namespace are
         // MobileApplication documents. Read-only test as we are dealing with real apps
         SearchSpec searchSpec =
@@ -112,8 +114,8 @@ public class AppsIndexerRealDocumentsTest extends AppsIndexerTestBase {
     // Created for system health trace, as close to real as we can get in a test
     @Test
     public void testRealIndexing() throws Exception {
-        // Create a real manager service for the test package, no mocking. Only capture the
-        // receiver
+        // Create a real manager service for the test package, no mocking. Use the captured
+        // receiver to simulate package events
         UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         String testPackage = mContext.getPackageName();
         UserInfo userInfo =

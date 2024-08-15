@@ -116,14 +116,21 @@ public class FlagsTest {
     }
 
     @Test
-    public void testFlagValue_enableListFilterTokenizeFunction() {
-        assertThat(Flags.FLAG_ENABLE_LIST_FILTER_TOKENIZE_FUNCTION)
-                .isEqualTo("com.android.appsearch.flags.enable_list_filter_tokenize_function");
+    public void testFlagValue_enableSearchSpecSearchStringParameters() {
+        assertThat(Flags.FLAG_ENABLE_SEARCH_SPEC_SEARCH_STRING_PARAMETERS)
+                .isEqualTo(
+                        "com.android.appsearch.flags.enable_search_spec_search_string_parameters");
     }
 
     @Test
     public void testFlagValue_enableInformationalRankingExpressions() {
         assertThat(Flags.FLAG_ENABLE_INFORMATIONAL_RANKING_EXPRESSIONS)
                 .isEqualTo("com.android.appsearch.flags.enable_informational_ranking_expressions");
+    }
+
+    @Test
+    public void testFlagValue_enableResultAlreadyExists() {
+        assertThat(Flags.FLAG_ENABLE_RESULT_ALREADY_EXISTS)
+                .isEqualTo("com.android.appsearch.flags.enable_result_already_exists");
     }
 }

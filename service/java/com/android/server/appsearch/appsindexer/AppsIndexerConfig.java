@@ -26,16 +26,13 @@ import java.util.concurrent.TimeUnit;
  * @hide
  */
 public interface AppsIndexerConfig {
-    boolean DEFAULT_APPS_INDEXER_ENABLED = false;
+    boolean DEFAULT_APPS_INDEXER_ENABLED = true;
     long DEFAULT_APPS_UPDATE_INTERVAL_MILLIS = TimeUnit.DAYS.toMillis(30); // 30 days.
 
     /** Returns whether Apps Indexer is enabled. */
     boolean isAppsIndexerEnabled();
 
-    /**
-     * Returns the minimum internal in millis for two consecutive full update. This is only checked
-     * once after each boot.
-     */
+    /* Returns the minimum internal in millis for two consecutive scheduled updates. */
     long getAppsMaintenanceUpdateIntervalMillis();
 }
 
