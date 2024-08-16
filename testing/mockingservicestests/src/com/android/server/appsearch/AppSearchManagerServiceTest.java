@@ -95,7 +95,6 @@ import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
-import android.app.appsearch.functions.AppFunctionManager;
 import android.app.appsearch.functions.ExecuteAppFunctionRequest;
 import android.app.appsearch.functions.ExecuteAppFunctionResponse;
 import android.app.appsearch.functions.ServiceCallHelper;
@@ -132,6 +131,7 @@ import com.android.modules.utils.testing.TestableDeviceConfig;
 import com.android.server.LocalManagerRegistry;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchIntentStats;
+import com.android.server.appsearch.external.localstorage.stats.SearchSessionStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.external.localstorage.usagereporting.ClickActionGenericDocument;
@@ -509,11 +509,20 @@ public class AppSearchManagerServiceTest {
         verifyCallStats(
                 mContext.getPackageName(), DATABASE_NAME, CallStats.CALL_TYPE_PUT_DOCUMENTS);
 
-        // Verify
-        ArgumentCaptor<List<SearchIntentStats>> searchIntentsStatsCaptor =
+        // Verify search sessions.
+        ArgumentCaptor<List<SearchSessionStats>> searchSessionsStatsCaptor =
                 ArgumentCaptor.forClass(List.class);
-        verify(mLogger, timeout(1000).times(1)).logStats(searchIntentsStatsCaptor.capture());
-        List<SearchIntentStats> searchIntentsStats = searchIntentsStatsCaptor.getValue();
+        verify(mLogger, timeout(1000).times(1)).logStats(searchSessionsStatsCaptor.capture());
+        List<SearchSessionStats> searchSessionsStats = searchSessionsStatsCaptor.getValue();
+
+        assertThat(searchSessionsStats).hasSize(1);
+        assertThat(searchSessionsStats.get(0).getPackageName())
+                .isEqualTo(mContext.getPackageName());
+        assertThat(searchSessionsStats.get(0).getDatabase()).isEqualTo(DATABASE_NAME);
+
+        // Verify search intents.
+        List<SearchIntentStats> searchIntentsStats =
+                searchSessionsStats.get(0).getSearchIntentsStats();
         assertThat(searchIntentsStats).hasSize(2);
 
         assertThat(searchIntentsStats.get(0).getPackageName()).isEqualTo(mContext.getPackageName());
@@ -1499,19 +1508,6 @@ public class AppSearchManagerServiceTest {
     }
 
     @Test
-    public void executeAppFunction_serviceNotPermissionProtected() throws Exception {
-        ServiceInfo serviceInfo = new ServiceInfo();
-        serviceInfo.packageName = FOO_PACKAGE_NAME;
-        serviceInfo.name = ".MyAppFunctionService";
-        ResolveInfo resolveInfo = new ResolveInfo();
-        resolveInfo.serviceInfo = serviceInfo;
-        PackageManager spyPackageManager = mContext.getPackageManager();
-        doReturn(resolveInfo).when(spyPackageManager).resolveService(any(Intent.class), eq(0));
-
-        verifyExecuteAppFunctionCallbackResult(AppSearchResult.RESULT_NOT_FOUND);
-    }
-
-    @Test
     public void executeAppFunction_bindServiceReturnsFalse() throws Exception {
         mServiceCallHelper.setBindServiceResult(false);
         mServiceCallHelper.setOnRunServiceCallListener((callback) -> {});
@@ -2010,7 +2006,10 @@ public class AppSearchManagerServiceTest {
         ServiceInfo serviceInfo = new ServiceInfo();
         serviceInfo.packageName = FOO_PACKAGE_NAME;
         serviceInfo.name = ".MyAppFunctionService";
-        serviceInfo.permission = AppFunctionManager.PERMISSION_BIND_APP_FUNCTION_SERVICE;
+        // TODO(b/359911502): Commenting out this permission since the BIND_APP_FUNCTION_SERVICE
+        //   permission is deleted from app search. Th whole app function functionality should be
+        //   removed along with the tests here once the new app function manager is submitted.
+        //   serviceInfo.permission = AppFunctionManager.PERMISSION_BIND_APP_FUNCTION_SERVICE;
         ResolveInfo resolveInfo = new ResolveInfo();
         resolveInfo.serviceInfo = serviceInfo;
         PackageManager spyPackageManager = mContext.getPackageManager();
