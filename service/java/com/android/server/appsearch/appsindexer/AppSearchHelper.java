@@ -17,11 +17,13 @@
 package com.android.server.appsearch.appsindexer;
 
 import android.annotation.NonNull;
+import android.annotation.WorkerThread;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
+import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.BatchResultCallback;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.PutDocumentsRequest;
@@ -71,55 +73,40 @@ public class AppSearchHelper implements Closeable {
     public static final String APP_DATABASE = "apps-db";
     private static final int GET_APP_IDS_PAGE_SIZE = 1000;
     private final Context mContext;
-    private final ExecutorService mExecutor;
-    private final AppSearchManager mAppSearchManager;
-    private SyncAppSearchSession mSyncAppSearchSession;
-    private SyncGlobalSearchSession mSyncGlobalSearchSession;
+    // Volatile, not final due to being swapped during some tests
+    private volatile SyncAppSearchSession mSyncAppSearchSession;
+    private final SyncGlobalSearchSession mSyncGlobalSearchSession;
 
-    /** Creates and initializes an {@link AppSearchHelper} */
-    @NonNull
-    public static AppSearchHelper createAppSearchHelper(@NonNull Context context)
-            throws AppSearchException {
-        Objects.requireNonNull(context);
-
-        AppSearchHelper appSearchHelper = new AppSearchHelper(context);
-        appSearchHelper.initializeAppSearchSessions();
-        return appSearchHelper;
-    }
-
-    /** Creates an initialized {@link AppSearchHelper}. */
-    @VisibleForTesting
-    private AppSearchHelper(@NonNull Context context) {
+    /** Creates an {@link AppSearchHelper}. */
+    public AppSearchHelper(@NonNull Context context) {
         mContext = Objects.requireNonNull(context);
-
-        mAppSearchManager = context.getSystemService(AppSearchManager.class);
-        if (mAppSearchManager == null) {
+        AppSearchManager appSearchManager = mContext.getSystemService(AppSearchManager.class);
+        if (appSearchManager == null) {
             throw new AndroidRuntimeException(
                     "Can't get AppSearchManager to initialize AppSearchHelper.");
         }
-        mExecutor =
+        AppSearchManager.SearchContext searchContext =
+                new AppSearchManager.SearchContext.Builder(APP_DATABASE).build();
+        ExecutorService executor =
                 AppSearchEnvironmentFactory.getEnvironmentInstance().createSingleThreadExecutor();
+        mSyncAppSearchSession =
+                new SyncAppSearchSessionImpl(appSearchManager, searchContext, executor);
+        mSyncGlobalSearchSession = new SyncGlobalSearchSessionImpl(appSearchManager, executor);
     }
 
     /**
-     * Sets up the search session.
+     * Allows us to test various scenarios involving SyncAppSearchSession.
      *
-     * @throws AppSearchException if unable to initialize the {@link SyncAppSearchSession} or the
-     *     {@link SyncGlobalSearchSession}.
+     * <p>This method is not thread-safe, as it could be ran in the middle of a set schema, index,
+     * or search operation. It should only be called from tests, and threading safety should be
+     * handled by the test.
      */
-    private void initializeAppSearchSessions() throws AppSearchException {
-        AppSearchManager.SearchContext searchContext =
-                new AppSearchManager.SearchContext.Builder(APP_DATABASE).build();
-        mSyncAppSearchSession =
-                new SyncAppSearchSessionImpl(mAppSearchManager, searchContext, mExecutor);
-        mSyncGlobalSearchSession = new SyncGlobalSearchSessionImpl(mAppSearchManager, mExecutor);
-    }
-
-    /** Just for testing, allows us to test various scenarios involving SyncAppSearchSession. */
     @VisibleForTesting
-    /* package */ void setAppSearchSession(@NonNull SyncAppSearchSession session) {
-        // Close the old one
-        mSyncAppSearchSession.close();
+    /* package */ void setAppSearchSessionForTest(@NonNull SyncAppSearchSession session) {
+        // Close the existing one
+        if (mSyncAppSearchSession != null) {
+            mSyncAppSearchSession.close();
+        }
         mSyncAppSearchSession = Objects.requireNonNull(session);
     }
 
@@ -129,6 +116,7 @@ public class AppSearchHelper implements Closeable {
      * passed in to this method, it will be erased. And if a schema does not exist in AppSearch that
      * is passed in to this method, it will be created.
      */
+    @WorkerThread
     public void setSchemasForPackages(@NonNull List<PackageIdentifier> pkgs)
             throws AppSearchException {
         Objects.requireNonNull(pkgs);
@@ -165,8 +153,15 @@ public class AppSearchHelper implements Closeable {
      *     results in a system error as in {@link BatchResultCallback#onSystemError}. This may
      *     happen if the AppSearch service unexpectedly fails to initialize and can't be recovered,
      *     for instance.
+     * @return an {@link AppSearchBatchResult} containing the results of the put operation. The keys
+     *     of the returned {@link AppSearchBatchResult} are the IDs of the input documents. The
+     *     values are {@code null} if they were successfully indexed, or a failed {@link
+     *     AppSearchResult} otherwise.
+     * @see AppSearchSession#put
      */
-    public void indexApps(@NonNull List<MobileApplication> apps) throws AppSearchException {
+    @WorkerThread
+    public AppSearchBatchResult<String, Void> indexApps(@NonNull List<MobileApplication> apps)
+            throws AppSearchException {
         Objects.requireNonNull(apps);
 
         // At this point, the document schema names have already been set to the per-package name.
@@ -187,14 +182,18 @@ public class AppSearchHelper implements Closeable {
                 }
             }
         }
+        return result;
     }
 
     /**
      * Searches AppSearch and returns a Map with the package ids and their last updated times. This
      * helps us determine which app documents need to be re-indexed.
+     *
+     * @return a mapping of document id Strings to updated timestamps.
      */
     @NonNull
-    public Map<String, Long> getAppsFromAppSearch() {
+    @WorkerThread
+    public Map<String, Long> getAppsFromAppSearch() throws AppSearchException {
         SearchSpec allAppsSpec =
                 new SearchSpec.Builder()
                         .addFilterNamespaces(MobileApplication.APPS_NAMESPACE)
@@ -209,8 +208,13 @@ public class AppSearchHelper implements Closeable {
         return collectUpdatedTimestampFromAllPages(results);
     }
 
-    /** Iterates through result pages to get the last updated times */
+    /**
+     * Iterates through result pages to get the last updated times
+     *
+     * @return a mapping of document id Strings updated timestamps.
+     */
     @NonNull
+    @WorkerThread
     private Map<String, Long> collectUpdatedTimestampFromAllPages(
             @NonNull SyncSearchResults results) {
         Objects.requireNonNull(results);
