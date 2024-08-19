@@ -77,7 +77,6 @@ java_sdk_library {
     defaults: ["framework-module-defaults"],
     permitted_packages: [
         "android.app.appsearch",
-        "com.android.appsearch.flags",
     ],
     jarjar_rules: "jarjar-rules.txt",
     apex_available: ["com.android.appsearch"],
@@ -89,4 +88,7 @@ java_sdk_library {
     aconfig_declarations: [
         "appsearch_aconfig_flags",
     ],
+    lint: {
+        baseline_filename: "lint-baseline.xml",
+    },
 }

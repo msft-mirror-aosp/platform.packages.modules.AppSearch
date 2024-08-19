@@ -44,7 +44,6 @@ import android.os.UserHandle;
 
 import androidx.test.core.app.ApplicationProvider;
 
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -145,7 +144,7 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
         }
 
         assertThat(mSingleThreadedExecutor.getCompletedTaskCount()).isEqualTo(beforeFirstRun + 1);
-        try (AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext)) {
+        try (AppSearchHelper searchHelper = new AppSearchHelper(mContext)) {
             Map<String, Long> appsTimestampMap = searchHelper.getAppsFromAppSearch();
             assertThat(appsTimestampMap).hasSize(1);
             assertThat(appsTimestampMap.keySet()).containsExactly("com.fake.package0");
@@ -156,6 +155,7 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
     public void testFirstRun_updateAlreadyRan_doesNotUpdate() throws Exception {
         // Pretend we already ran
         AppsIndexerSettings settings = new AppsIndexerSettings(mAppsDir);
+        mAppsDir.mkdirs();
         settings.setLastUpdateTimestampMillis(1000);
         settings.persist();
 
@@ -202,7 +202,7 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
 
         // Even though a task ran and we got 1 app ready, we requested a "firstRun" but the
         // timestamp was not 0, so nothing should've been indexed
-        try (AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext)) {
+        try (AppSearchHelper searchHelper = new AppSearchHelper(mContext)) {
             assertThat(searchHelper.getAppsFromAppSearch()).isEmpty();
         }
     }
@@ -358,10 +358,10 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
                 createFakeResolveInfos(docCount));
         CountDownLatch latch = setupLatch(docCount);
 
-        mInstance.doUpdate(/* firstRun= */ false);
+        mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats());
         latch.await(10, TimeUnit.SECONDS);
 
-        AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext);
+        AppSearchHelper searchHelper = new AppSearchHelper(mContext);
         Map<String, Long> appIds = searchHelper.getAppsFromAppSearch();
         assertThat(appIds.size()).isEqualTo(docCount);
     }
@@ -373,7 +373,7 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
                 mMockPackageManager,
                 createFakePackageInfos(docCount),
                 createFakeResolveInfos(docCount));
-        mInstance.doUpdate(/* firstRun= */ false);
+        mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats());
 
         AppsIndexerSettings settings = new AppsIndexerSettings(mAppsDir);
         settings.load();
@@ -394,18 +394,18 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
         setupMockPackageManager(
                 mMockPackageManager, createFakePackageInfos(10), createFakeResolveInfos(10));
 
-        mInstance.doUpdate(/* firstRun= */ false);
+        mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats());
 
-        AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext);
+        AppSearchHelper searchHelper = new AppSearchHelper(mContext);
         Map<String, Long> appIds = searchHelper.getAppsFromAppSearch();
         assertThat(appIds.size()).isEqualTo(10);
 
         setupMockPackageManager(
                 mMockPackageManager, createFakePackageInfos(6), createFakeResolveInfos(6));
 
-        mInstance.doUpdate(/* firstRun= */ false);
+        mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats());
 
-        searchHelper = AppSearchHelper.createAppSearchHelper(mContext);
+        searchHelper = new AppSearchHelper(mContext);
         appIds = searchHelper.getAppsFromAppSearch();
         assertThat(appIds.size()).isEqualTo(6);
         assertThat(appIds.keySet())
@@ -474,7 +474,7 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
     @Test
     public void testStart_subsequentRunWithNoScheduledJob_schedulesUpdateJob() throws Exception {
         // Trigger an initial update.
-        mInstance.doUpdate(/* firstRun= */ false);
+        mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats());
 
         // This semaphore allows us to pause test execution until we're sure the tasks in
         // AppsIndexerUserInstance (scheduling the maintenance job) are finished.
@@ -669,16 +669,17 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
 
         // As there is nothing else in the executor queue, it should run soon.
         Future<?> unused =
-                mSingleThreadedExecutor.submit(() -> mInstance.doUpdate(/* firstRun= */ false));
+                mSingleThreadedExecutor.submit(
+                        () -> mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats()));
 
         // On the current thread, this update will run at the same time as the task on the executor.
-        mInstance.doUpdate(/* firstRun= */ false);
+        mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats());
 
         // By waiting for the single threaded executor to finish after calling doUpdate, both
         // updates are guaranteed to be finished.
         afterSemaphore.acquire();
 
-        AppSearchHelper searchHelper = AppSearchHelper.createAppSearchHelper(mContext);
+        AppSearchHelper searchHelper = new AppSearchHelper(mContext);
         Map<String, Long> appIds = searchHelper.getAppsFromAppSearch();
         assertThat(appIds.size()).isEqualTo(250);
 
@@ -691,7 +692,7 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
     public void testStart_subsequentRunWithScheduledJob_doesNotScheduleUpdateJob()
             throws Exception {
         // Trigger an initial update.
-        mInstance.doUpdate(/* firstRun= */ false);
+        mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats());
 
         JobScheduler mockJobScheduler = mock(JobScheduler.class);
         JobInfo mockJobInfo = mock(JobInfo.class);
@@ -713,7 +714,7 @@ public class AppsIndexerUserInstanceTest extends AppsIndexerTestBase {
                 mMockPackageManager,
                 createFakePackageInfos(docCount),
                 createFakeResolveInfos(docCount));
-        mInstance.doUpdate(/* firstRun= */ false);
+        mInstance.doUpdate(/* firstRun= */ false, new AppsUpdateStats());
 
         mInstance.updateAsync(/* firstRun= */ false);
 
