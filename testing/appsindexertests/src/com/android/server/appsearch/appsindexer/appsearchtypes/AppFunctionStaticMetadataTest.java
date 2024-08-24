@@ -18,12 +18,13 @@ package com.android.server.appsearch.appsindexer.appsearchtypes;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import android.app.appsearch.AppSearchSchema;
+
 import org.junit.Test;
 
 public class AppFunctionStaticMetadataTest {
     @Test
     public void testAppFunction() {
-
         String functionId = "com.example.message#send_message";
         String schemaName = "send_message";
         String schemaCategory = "messaging";
@@ -54,5 +55,29 @@ public class AppFunctionStaticMetadataTest {
         assertThat(appFunction.getDisplayNameStringRes()).isEqualTo(stringResId);
         assertThat(appFunction.getMobileApplicationQualifiedId())
                 .isEqualTo("android$apps-db/apps#com.example.message");
+    }
+
+    @Test
+    public void testSchemaName() {
+        String packageName = "com.example.message";
+        String schemaName = AppFunctionStaticMetadata.getSchemaNameForPackage(packageName);
+        assertThat(schemaName).isEqualTo("AppFunctionStaticMetadata-com.example.message");
+    }
+
+    @Test
+    public void testChildSchema() {
+        AppSearchSchema appSearchSchema =
+                AppFunctionStaticMetadata.createAppFunctionSchemaForPackage("com.xyz");
+
+        if (AppFunctionStaticMetadata.shouldSetParentType()) {
+            assertThat(appSearchSchema.getParentTypes())
+                    .containsExactly(AppFunctionStaticMetadata.SCHEMA_TYPE);
+        }
+    }
+
+    @Test
+    public void testParentSchema() {
+        assertThat(AppFunctionStaticMetadata.PARENT_TYPE_APPSEARCH_SCHEMA.getSchemaType())
+                .isEqualTo(AppFunctionStaticMetadata.SCHEMA_TYPE);
     }
 }
