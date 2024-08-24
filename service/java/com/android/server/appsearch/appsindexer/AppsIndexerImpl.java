@@ -230,8 +230,8 @@ public final class AppsIndexerImpl implements Closeable {
         Set<String> currentAppFunctionPackages = new ArraySet<>();
         for (Map.Entry<PackageInfo, ResolveInfos> entry : targetedPackages.entrySet()) {
             PackageInfo packageInfo = entry.getKey();
-            ResolveInfos ResolveInfos = entry.getValue();
-            if (ResolveInfos.getAppFunctionServiceInfo() != null) {
+            ResolveInfos resolveInfos = entry.getValue();
+            if (resolveInfos.getAppFunctionServiceInfo() != null) {
                 currentAppFunctionPackages.add(packageInfo.packageName);
             }
         }
