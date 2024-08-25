@@ -114,6 +114,26 @@ public class SyncAppSearchSessionImpl extends SyncAppSearchBase implements SyncA
                 resultHandler -> mSession.put(request, mExecutor, resultHandler));
     }
 
+    /**
+     * Removes documents from AppSearch. Initializes the {@link AppSearchSession} if it hasn't been
+     * initialized already.
+     */
+    @Override
+    @NonNull
+    @WorkerThread
+    public Void remove(@NonNull String queryExpression, @NonNull SearchSpec searchSpec)
+            throws AppSearchException {
+        Objects.requireNonNull(queryExpression);
+        Objects.requireNonNull(searchSpec);
+        ensureSessionInitializedLocked();
+        return executeAppSearchResultOperation(
+                resultHandler -> {
+                    synchronized (mSessionLock) {
+                        mSession.remove(queryExpression, searchSpec, mExecutor, resultHandler);
+                    }
+                });
+    }
+
     // Not asynchronous but it's necessary to be able to close the session
     @Override
     public void close() {
