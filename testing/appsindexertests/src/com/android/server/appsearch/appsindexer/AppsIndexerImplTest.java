@@ -58,6 +58,7 @@ public class AppsIndexerImplTest {
     private Context mContext;
     @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
     private final ExecutorService mSingleThreadedExecutor = Executors.newSingleThreadExecutor();
+    private final AppsIndexerConfig mAppsIndexerConfig = new TestAppsIndexerConfig();
 
     @Before
     public void setUp() throws Exception {
@@ -77,8 +78,11 @@ public class AppsIndexerImplTest {
         MobileApplication app1 = createFakeMobileApplication(0);
         MobileApplication app2 = createFakeMobileApplication(1);
 
-        mAppSearchHelper.setSchemasForPackages(createMockPackageIdentifiers(2));
-        mAppSearchHelper.indexApps(ImmutableList.of(app1, app2));
+        mAppSearchHelper.setSchemasForPackages(createMockPackageIdentifiers(2), new ArrayList<>());
+        mAppSearchHelper.indexApps(
+                ImmutableList.of(app1, app2),
+                /* appFunctions= */ ImmutableList.of(),
+                /* existingAppFunctions= */ ImmutableList.of());
         Map<String, Long> appTimestampMap = mAppSearchHelper.getAppsFromAppSearch();
 
         List<String> packageIds = new ArrayList<>(appTimestampMap.keySet());
@@ -86,7 +90,11 @@ public class AppsIndexerImplTest {
 
         // Set up mock so that just 1 document is returned, as if we deleted a doc
         PackageManager pm = Mockito.mock(PackageManager.class);
-        setupMockPackageManager(pm, createFakePackageInfos(1), createFakeResolveInfos(1));
+        setupMockPackageManager(
+                pm,
+                createFakePackageInfos(1),
+                createFakeResolveInfos(1),
+                /* appFunctionServices= */ ImmutableList.of());
         Context context =
                 new ContextWrapper(mContext) {
                     @Override
@@ -94,7 +102,7 @@ public class AppsIndexerImplTest {
                         return pm;
                     }
                 };
-        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context)) {
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context, mAppsIndexerConfig)) {
             appsIndexerImpl.doUpdate(
                     new AppsIndexerSettings(temporaryFolder.newFolder("temp")),
                     new AppsUpdateStats());
@@ -115,7 +123,7 @@ public class AppsIndexerImplTest {
                         return pm;
                     }
                 };
-        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context)) {
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context, mAppsIndexerConfig)) {
             appsIndexerImpl.doUpdate(
                     new AppsIndexerSettings(temporaryFolder.newFolder("tmp")),
                     new AppsUpdateStats());
@@ -129,7 +137,11 @@ public class AppsIndexerImplTest {
     public void testAppsIndexerImpl_statsSet() throws Exception {
         // Simulate the first update: no changes, just adding initial apps
         PackageManager pm1 = Mockito.mock(PackageManager.class);
-        setupMockPackageManager(pm1, createFakePackageInfos(3), createFakeResolveInfos(3));
+        setupMockPackageManager(
+                pm1,
+                createFakePackageInfos(3),
+                createFakeResolveInfos(3),
+                /* appFunctionServices= */ ImmutableList.of());
         Context context1 =
                 new ContextWrapper(mContext) {
                     @Override
@@ -139,7 +151,7 @@ public class AppsIndexerImplTest {
                 };
 
         // Perform the first update
-        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1)) {
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdate(
                     new AppsIndexerSettings(temporaryFolder.newFolder("temp1")), stats1);
@@ -166,7 +178,8 @@ public class AppsIndexerImplTest {
         fakePackages.remove(0);
         fakeActivities.remove(0);
 
-        setupMockPackageManager(pm2, fakePackages, fakeActivities);
+        setupMockPackageManager(
+                pm2, fakePackages, fakeActivities, /* appFunctionServices= */ ImmutableList.of());
         Context context2 =
                 new ContextWrapper(mContext) {
                     @Override
@@ -176,7 +189,7 @@ public class AppsIndexerImplTest {
                 };
 
         // Perform the second update
-        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context2)) {
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context2, mAppsIndexerConfig)) {
             AppsUpdateStats stats2 = new AppsUpdateStats();
             appsIndexerImpl.doUpdate(
                     new AppsIndexerSettings(temporaryFolder.newFolder("temp2")), stats2);
