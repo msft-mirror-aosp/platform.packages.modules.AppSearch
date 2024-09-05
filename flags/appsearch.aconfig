@@ -187,10 +187,37 @@ flag {
 }
 
 flag {
+    name: "app_open_event_indexer_enabled"
+    namespace: "appsearch"
+    description: "Enables the app open event indexer module"
+    bug: "357835538"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+flag {
     name: "enable_result_already_exists"
     namespace: "appsearch"
     description: "Enable the RESULT_ALREADY_EXISTS constant in AppSearchResult"
     bug: "357708638"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+flag {
+    name: "enable_blob_store"
+    namespace: "appsearch"
+    description: "Enable the BlobHandle and putBlob APIs in AppSearch"
+    bug: "273591938"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+flag {
+    name: "enable_enterprise_empty_batch_result_fix"
+    namespace: "appsearch"
+    description: "Populates the GetDocuments batch result with RESULT_NOT_FOUND when the enterprise user cannot be retrieved."
+    bug: "349805579"
     is_fixed_read_only: true
     is_exported: true
 }
