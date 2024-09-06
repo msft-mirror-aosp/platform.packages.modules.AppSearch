@@ -22,9 +22,11 @@ import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.ParcelableUtil;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
+import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Bundle;
 import android.os.Parcel;
+import android.os.Parcelable;
 
 import java.util.Map;
 import java.util.Objects;
@@ -42,8 +44,10 @@ import java.util.Objects;
  */
 @SafeParcelable.Class(creator = "AppSearchBatchResultParcelCreator", creatorIsFinal = false)
 public final class AppSearchBatchResultParcel<ValueType> extends AbstractSafeParcelable {
+
     @NonNull
-    public static final AppSearchBatchResultParcelCreator CREATOR =
+    @SuppressWarnings("rawtypes")
+    public static final Parcelable.Creator<AppSearchBatchResultParcel> CREATOR =
             new AppSearchBatchResultParcelCreator() {
                 @Override
                 public AppSearchBatchResultParcel createFromParcel(Parcel in) {
@@ -55,7 +59,7 @@ public final class AppSearchBatchResultParcel<ValueType> extends AbstractSafePar
                         int size = unmarshallParcel.dataSize();
                         Bundle inputBundle = new Bundle();
                         while (unmarshallParcel.dataPosition() < size) {
-                            String key = unmarshallParcel.readString();
+                            String key = Objects.requireNonNull(unmarshallParcel.readString());
                             AppSearchResultParcel appSearchResultParcel =
                                     AppSearchResultParcel.directlyReadFromParcel(unmarshallParcel);
                             inputBundle.putParcelable(key, appSearchResultParcel);
@@ -72,34 +76,70 @@ public final class AppSearchBatchResultParcel<ValueType> extends AbstractSafePar
     @NonNull
     final Bundle mAppSearchResultBundle;
 
-    @Nullable
-    private AppSearchBatchResult<String, ValueType> mResultCached;
+    @Nullable private AppSearchBatchResult<String, ValueType> mResultCached;
 
     @Constructor
-    AppSearchBatchResultParcel(
-            @Param(id = 1) Bundle appSearchResultBundle) {
+    AppSearchBatchResultParcel(@Param(id = 1) Bundle appSearchResultBundle) {
         mAppSearchResultBundle = appSearchResultBundle;
     }
 
-    /** Creates a new {@link AppSearchBatchResultParcel} from the given result. */
-    public AppSearchBatchResultParcel(@NonNull AppSearchBatchResult<String, ValueType> result) {
-        mResultCached = result;
-        mAppSearchResultBundle = new Bundle();
-        for (Map.Entry<String, AppSearchResult<ValueType>> entry
-                : result.getAll().entrySet()) {
-            mAppSearchResultBundle.putParcelable(entry.getKey(),
-                    new AppSearchResultParcel<>(entry.getValue()));
+    /**
+     * Creates a new {@link AppSearchBatchResultParcel} from the given {@link GenericDocumentParcel}
+     * results.
+     */
+    @SuppressWarnings("unchecked")
+    public static AppSearchBatchResultParcel<GenericDocumentParcel>
+            fromStringToGenericDocumentParcel(
+                    @NonNull AppSearchBatchResult<String, GenericDocumentParcel> result) {
+        Bundle appSearchResultBundle = new Bundle();
+        for (Map.Entry<String, AppSearchResult<GenericDocumentParcel>> entry :
+                result.getAll().entrySet()) {
+            AppSearchResultParcel<GenericDocumentParcel> appSearchResultParcel;
+            // Create result from value in success case and errorMessage in
+            // failure case.
+            if (entry.getValue().isSuccess()) {
+                GenericDocumentParcel genericDocumentParcel =
+                        Objects.requireNonNull(entry.getValue().getResultValue());
+                appSearchResultParcel =
+                        AppSearchResultParcel.fromGenericDocumentParcel(genericDocumentParcel);
+            } else {
+                appSearchResultParcel = AppSearchResultParcel.fromFailedResult(entry.getValue());
+            }
+            appSearchResultBundle.putParcelable(entry.getKey(), appSearchResultParcel);
         }
+        return new AppSearchBatchResultParcel<>(appSearchResultBundle);
+    }
+
+    /** Creates a new {@link AppSearchBatchResultParcel} from the given {@link Void} results. */
+    @SuppressWarnings("unchecked")
+    public static AppSearchBatchResultParcel<Void> fromStringToVoid(
+            @NonNull AppSearchBatchResult<String, Void> result) {
+        Bundle appSearchResultBundle = new Bundle();
+        for (Map.Entry<String, AppSearchResult<Void>> entry : result.getAll().entrySet()) {
+            AppSearchResultParcel<Void> appSearchResultParcel;
+            // Create result from value in success case and errorMessage in
+            // failure case.
+            if (entry.getValue().isSuccess()) {
+                appSearchResultParcel = AppSearchResultParcel.fromVoid();
+            } else {
+                appSearchResultParcel = AppSearchResultParcel.fromFailedResult(entry.getValue());
+            }
+            appSearchResultBundle.putParcelable(entry.getKey(), appSearchResultParcel);
+        }
+        return new AppSearchBatchResultParcel<>(appSearchResultBundle);
     }
 
     @NonNull
+    @SuppressWarnings("unchecked")
     public AppSearchBatchResult<String, ValueType> getResult() {
         if (mResultCached == null) {
             AppSearchBatchResult.Builder<String, ValueType> builder =
                     new AppSearchBatchResult.Builder<>();
             for (String key : mAppSearchResultBundle.keySet()) {
-                builder.setResult(key, mAppSearchResultBundle
-                        .getParcelable(key, AppSearchResultParcel.class)
+                builder.setResult(
+                        key,
+                        mAppSearchResultBundle
+                                .getParcelable(key, AppSearchResultParcel.class)
                                 .getResult());
             }
             mResultCached = builder.build();
@@ -109,6 +149,7 @@ public final class AppSearchBatchResultParcel<ValueType> extends AbstractSafePar
 
     /** @hide */
     @Override
+    @SuppressWarnings("unchecked")
     public void writeToParcel(@NonNull Parcel dest, int flags) {
         byte[] bytes;
         // Create a parcel object to serialize results. So that we can use Parcel.writeBlob() to

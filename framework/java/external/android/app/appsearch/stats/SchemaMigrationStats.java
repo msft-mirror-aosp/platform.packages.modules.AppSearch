@@ -24,6 +24,7 @@ import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -37,9 +38,10 @@ import java.util.Objects;
 @SafeParcelable.Class(creator = "SchemaMigrationStatsCreator")
 public final class SchemaMigrationStats extends AbstractSafeParcelable {
     @NonNull
-    public static final SchemaMigrationStatsCreator CREATOR = new SchemaMigrationStatsCreator();
+    public static final Parcelable.Creator<SchemaMigrationStats> CREATOR =
+            new SchemaMigrationStatsCreator();
 
-    // Indicate the how a SetSchema call relative to SchemaMigration case.
+    /** Indicate the SetSchema call type relative to SchemaMigration case. */
     @IntDef(
             value = {
                 NO_MIGRATION,
@@ -51,8 +53,10 @@ public final class SchemaMigrationStats extends AbstractSafeParcelable {
 
     /** This SetSchema call is not relative to a SchemaMigration case. */
     public static final int NO_MIGRATION = 0;
+
     /** This is the first SetSchema call in Migration cases to get all incompatible changes. */
     public static final int FIRST_CALL_GET_INCOMPATIBLE = 1;
+
     /** This is the second SetSchema call in Migration cases to apply new schema changes */
     public static final int SECOND_CALL_APPLY_NEW_SCHEMA = 2;
 

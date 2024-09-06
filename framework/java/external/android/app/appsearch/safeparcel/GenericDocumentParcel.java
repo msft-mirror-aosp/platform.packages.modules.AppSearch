@@ -22,6 +22,7 @@ import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSession;
+import android.app.appsearch.EmbeddingVector;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.os.Parcel;
@@ -44,7 +45,8 @@ import java.util.Set;
 @SuppressLint("BanParcelableUsage")
 public final class GenericDocumentParcel extends AbstractSafeParcelable implements Parcelable {
     @NonNull
-    public static final GenericDocumentParcelCreator CREATOR = new GenericDocumentParcelCreator();
+    public static final Parcelable.Creator<GenericDocumentParcel> CREATOR =
+            new GenericDocumentParcelCreator();
 
     /** The default score of document. */
     private static final int DEFAULT_SCORE = 0;
@@ -152,6 +154,14 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
         mProperties = Objects.requireNonNull(properties);
         mPropertyMap = Objects.requireNonNull(propertyMap);
         mParentTypes = parentTypes;
+    }
+
+    /** Returns the {@link GenericDocumentParcel} object from the given {@link GenericDocument}. */
+    @NonNull
+    public static GenericDocumentParcel fromGenericDocument(
+            @NonNull GenericDocument genericDocument) {
+        Objects.requireNonNull(genericDocument);
+        return genericDocument.getDocumentParcel();
     }
 
     private static Map<String, PropertyParcel> createPropertyMapFromPropertyArray(
@@ -275,10 +285,10 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
         private long mTtlMillis;
         private int mScore;
         private Map<String, PropertyParcel> mPropertyMap;
-        private List<String> mParentTypes;
+        @Nullable private List<String> mParentTypes;
 
         /**
-         * Creates a new {@link GenericDocument.Builder}.
+         * Creates a new {@link GenericDocumentParcel.Builder}.
          *
          * <p>Document IDs are unique within a namespace.
          *
@@ -442,6 +452,7 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
         }
 
         /** puts an array of {@link String} in property map. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder putInPropertyMap(@NonNull String name, @NonNull String[] values)
                 throws IllegalArgumentException {
@@ -451,6 +462,7 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
         }
 
         /** puts an array of boolean in property map. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder putInPropertyMap(@NonNull String name, @NonNull boolean[] values) {
             putInPropertyMap(
@@ -459,6 +471,7 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
         }
 
         /** puts an array of double in property map. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder putInPropertyMap(@NonNull String name, @NonNull double[] values) {
             putInPropertyMap(
@@ -467,6 +480,7 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
         }
 
         /** puts an array of long in property map. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder putInPropertyMap(@NonNull String name, @NonNull long[] values) {
             putInPropertyMap(name, new PropertyParcel.Builder(name).setLongValues(values).build());
@@ -474,6 +488,7 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
         }
 
         /** Converts and saves a byte[][] into {@link #mProperties}. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder putInPropertyMap(@NonNull String name, @NonNull byte[][] values) {
             putInPropertyMap(name, new PropertyParcel.Builder(name).setBytesValues(values).build());
@@ -481,6 +496,7 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
         }
 
         /** puts an array of {@link GenericDocumentParcel} in property map. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder putInPropertyMap(
                 @NonNull String name, @NonNull GenericDocumentParcel[] values) {
@@ -489,7 +505,17 @@ public final class GenericDocumentParcel extends AbstractSafeParcelable implemen
             return this;
         }
 
+        /** puts an array of {@link EmbeddingVector} in property map. */
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder putInPropertyMap(@NonNull String name, @NonNull EmbeddingVector[] values) {
+            putInPropertyMap(
+                    name, new PropertyParcel.Builder(name).setEmbeddingValues(values).build());
+            return this;
+        }
+
         /** Directly puts a {@link PropertyParcel} in property map. */
+        @CanIgnoreReturnValue
         @NonNull
         public Builder putInPropertyMap(@NonNull String name, @NonNull PropertyParcel value) {
             Objects.requireNonNull(value);

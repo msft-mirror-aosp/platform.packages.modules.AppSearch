@@ -22,31 +22,37 @@ import android.app.appsearch.observer.ObserverCallback;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
 
 /**
  * Encapsulates a request to make a binder call to remove a previously registered observer.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "UnregisterObserverCallbackAidlRequestCreator")
 public class UnregisterObserverCallbackAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final UnregisterObserverCallbackAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<UnregisterObserverCallbackAidlRequest> CREATOR =
             new UnregisterObserverCallbackAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @NonNull
     @Field(id = 2, getter = "getObservedPackage")
     private final String mObservedPackage;
+
     @NonNull
     @Field(id = 3, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 4, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
 
     /**
      * Removes previously registered {@link ObserverCallback} instances from the system.
