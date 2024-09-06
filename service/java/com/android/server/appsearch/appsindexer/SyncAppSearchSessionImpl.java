@@ -21,6 +21,7 @@ import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.PutDocumentsRequest;
+import android.app.appsearch.RemoveByDocumentIdRequest;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.SetSchemaResponse;
@@ -112,6 +113,45 @@ public class SyncAppSearchSessionImpl extends SyncAppSearchBase implements SyncA
         // executeAppSearchResultOperation. Instead we use executeAppSearchBatchResultOperation.
         return executeAppSearchBatchResultOperation(
                 resultHandler -> mSession.put(request, mExecutor, resultHandler));
+    }
+
+    /**
+     * Removes documents from AppSearch. Initializes the {@link AppSearchSession} if it hasn't been
+     * initialized already.
+     */
+    @Override
+    @NonNull
+    @WorkerThread
+    public Void remove(@NonNull String queryExpression, @NonNull SearchSpec searchSpec)
+            throws AppSearchException {
+        Objects.requireNonNull(queryExpression);
+        Objects.requireNonNull(searchSpec);
+        ensureSessionInitializedLocked();
+        return executeAppSearchResultOperation(
+                resultHandler -> {
+                    synchronized (mSessionLock) {
+                        mSession.remove(queryExpression, searchSpec, mExecutor, resultHandler);
+                    }
+                });
+    }
+
+    /**
+     * Removes documents from AppSearch using a list of ids. Initializes the {@link
+     * AppSearchSession} if it hasn't been initialized already.
+     */
+    @Override
+    @NonNull
+    @WorkerThread
+    public AppSearchBatchResult<String, Void> remove(@NonNull RemoveByDocumentIdRequest request)
+            throws AppSearchException {
+        Objects.requireNonNull(request);
+        ensureSessionInitializedLocked();
+        return executeAppSearchBatchResultOperation(
+                resultHandler -> {
+                    synchronized (mSessionLock) {
+                        mSession.remove(request, mExecutor, resultHandler);
+                    }
+                });
     }
 
     // Not asynchronous but it's necessary to be able to close the session
