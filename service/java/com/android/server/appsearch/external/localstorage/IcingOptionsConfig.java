@@ -33,7 +33,7 @@ public interface IcingOptionsConfig {
 
     boolean DEFAULT_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT = false;
 
-    float DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD = 0.0f;
+    float DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD = 0.9f;
 
     /**
      * The default compression level in IcingSearchEngineOptions proto matches the
@@ -60,7 +60,7 @@ public interface IcingOptionsConfig {
      */
     int DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD = 65536;
 
-    boolean DEFAULT_LITE_INDEX_SORT_AT_INDEXING = false;
+    boolean DEFAULT_LITE_INDEX_SORT_AT_INDEXING = true;
 
     /**
      * The default sort threshold for the lite index when sort at indexing is enabled. 8192 is

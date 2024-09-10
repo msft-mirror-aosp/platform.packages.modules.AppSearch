@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import android.app.appsearch.SearchSuggestionSpec;
 
+import com.android.server.appsearch.external.localstorage.SchemaCache;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
 import com.android.server.appsearch.icing.proto.NamespaceDocumentUriGroup;
 import com.android.server.appsearch.icing.proto.SchemaTypeConfigProto;
@@ -37,7 +38,7 @@ public class SearchSuggestionSpecToProtoConverterTest {
     @Test
     public void testToProto() throws Exception {
         SearchSuggestionSpec searchSuggestionSpec =
-                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 123)
+                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 123)
                         .setRankingStrategy(
                                 SearchSuggestionSpec.SUGGESTION_RANKING_STRATEGY_TERM_FREQUENCY)
                         .addFilterNamespaces("namespace1", "namespace2")
@@ -49,17 +50,18 @@ public class SearchSuggestionSpecToProtoConverterTest {
         SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
         SearchSuggestionSpecToProtoConverter converter =
                 new SearchSuggestionSpecToProtoConverter(
-                        /*queryExpression=*/ "prefix",
+                        /* queryExpression= */ "prefix",
                         searchSuggestionSpec,
-                        /*prefixes=*/ ImmutableSet.of(prefix1),
-                        /*namespaceMap=*/ ImmutableMap.of(
+                        /* prefixes= */ ImmutableSet.of(prefix1),
+                        /* namespaceMap= */ ImmutableMap.of(
                                 prefix1,
                                 ImmutableSet.of(prefix1 + "namespace1", prefix1 + "namespace2")),
-                        /*schemaMap=*/ ImmutableMap.of(
-                                prefix1,
-                                ImmutableMap.of(
-                                        prefix1 + "typeA", configProto,
-                                        prefix1 + "typeB", configProto)));
+                        new SchemaCache(
+                                /* schemaMap= */ ImmutableMap.of(
+                                        prefix1,
+                                        ImmutableMap.of(
+                                                prefix1 + "typeA", configProto,
+                                                prefix1 + "typeB", configProto))));
 
         SuggestionSpecProto proto = converter.toSearchSuggestionSpecProto();
 
@@ -81,7 +83,7 @@ public class SearchSuggestionSpecToProtoConverterTest {
     @Test
     public void testToProto_propertyFilters() throws Exception {
         SearchSuggestionSpec searchSuggestionSpec =
-                new SearchSuggestionSpec.Builder(/*totalResultCount=*/ 123)
+                new SearchSuggestionSpec.Builder(/* totalResultCount= */ 123)
                         .addFilterProperties("typeA", ImmutableList.of("property1", "property2"))
                         .build();
 
@@ -89,15 +91,16 @@ public class SearchSuggestionSpecToProtoConverterTest {
         SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
         SearchSuggestionSpecToProtoConverter converter =
                 new SearchSuggestionSpecToProtoConverter(
-                        /*queryExpression=*/ "prefix",
+                        /* queryExpression= */ "prefix",
                         searchSuggestionSpec,
-                        /*prefixes=*/ ImmutableSet.of(prefix1),
-                        /*namespaceMap=*/ ImmutableMap.of(),
-                        /*schemaMap=*/ ImmutableMap.of(
-                                prefix1,
-                                ImmutableMap.of(
-                                        prefix1 + "typeA", configProto,
-                                        prefix1 + "typeB", configProto)));
+                        /* prefixes= */ ImmutableSet.of(prefix1),
+                        /* namespaceMap= */ ImmutableMap.of(),
+                        new SchemaCache(
+                                /* schemaMap= */ ImmutableMap.of(
+                                        prefix1,
+                                        ImmutableMap.of(
+                                                prefix1 + "typeA", configProto,
+                                                prefix1 + "typeB", configProto))));
 
         SuggestionSpecProto proto = converter.toSearchSuggestionSpecProto();
         assertThat(proto.getTypePropertyFiltersList())

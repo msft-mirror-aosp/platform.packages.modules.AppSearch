@@ -23,6 +23,7 @@ import static com.android.server.appsearch.external.localstorage.util.PrefixUtil
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.EmbeddingVector;
 import android.app.appsearch.FeatureConstants;
 import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchResult;
@@ -33,6 +34,7 @@ import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
+import com.android.server.appsearch.external.localstorage.SchemaCache;
 import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityChecker;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
@@ -64,18 +66,22 @@ public final class SearchSpecToProtoConverter {
     private static final String TAG = "AppSearchSearchSpecConv";
     private final String mQueryExpression;
     private final SearchSpec mSearchSpec;
+
     /** The union of allowed prefixes for the top-level SearchSpec and any nested SearchSpecs. */
     private final Set<String> mAllAllowedPrefixes;
+
     /**
      * The intersection of mAllAllowedPrefixes and prefixes requested in the SearchSpec currently
      * being handled.
      */
     private final Set<String> mCurrentSearchSpecPrefixFilters;
+
     /**
      * The intersected prefixed namespaces that are existing in AppSearch and also accessible to the
      * client.
      */
     private final Set<String> mTargetPrefixedNamespaceFilters;
+
     /**
      * The intersected prefixed schema types that are existing in AppSearch and also accessible to
      * the client.
@@ -88,12 +94,8 @@ public final class SearchSpecToProtoConverter {
      */
     private final Map<String, Set<String>> mNamespaceMap;
 
-    /**
-     * The cached Map of {@code <Prefix, Map<PrefixedSchemaType, schemaProto>>} stores all prefixed
-     * schema filters which are stored inAppSearch. This is a field so that we can generated nested
-     * protos.
-     */
-    private final Map<String, Map<String, SchemaTypeConfigProto>> mSchemaMap;
+    /** The SchemaCache instance held in AppSearch. */
+    private final SchemaCache mSchemaCache;
 
     /** Optional config flags in {@link SearchSpecProto}. */
     private final IcingOptionsConfig mIcingOptionsConfig;
@@ -114,21 +116,20 @@ public final class SearchSpecToProtoConverter {
      *     allowed, so nothing will be searched.
      * @param namespaceMap The cached Map of {@code <Prefix, Set<PrefixedNamespace>>} stores all
      *     prefixed namespace filters which are stored in AppSearch.
-     * @param schemaMap The cached Map of {@code <Prefix, Map<PrefixedSchemaType, schemaProto>>}
-     *     stores all prefixed schema filters which are stored inAppSearch.
+     * @param schemaCache The SchemaCache instance held in AppSearch.
      */
     public SearchSpecToProtoConverter(
             @NonNull String queryExpression,
             @NonNull SearchSpec searchSpec,
             @NonNull Set<String> allAllowedPrefixes,
             @NonNull Map<String, Set<String>> namespaceMap,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
+            @NonNull SchemaCache schemaCache,
             @NonNull IcingOptionsConfig icingOptionsConfig) {
         mQueryExpression = Objects.requireNonNull(queryExpression);
         mSearchSpec = Objects.requireNonNull(searchSpec);
         mAllAllowedPrefixes = Objects.requireNonNull(allAllowedPrefixes);
         mNamespaceMap = Objects.requireNonNull(namespaceMap);
-        mSchemaMap = Objects.requireNonNull(schemaMap);
+        mSchemaCache = Objects.requireNonNull(schemaCache);
         mIcingOptionsConfig = Objects.requireNonNull(icingOptionsConfig);
 
         // This field holds the prefix filters for the SearchSpec currently being handled, which
@@ -165,7 +166,7 @@ public final class SearchSpecToProtoConverter {
             mTargetPrefixedSchemaFilters =
                     SearchSpecToProtoConverterUtil.generateTargetSchemaFilters(
                             mCurrentSearchSpecPrefixFilters,
-                            schemaMap,
+                            schemaCache,
                             searchSpec.getFilterSchemas());
         } else {
             mTargetPrefixedSchemaFilters = new ArraySet<>();
@@ -182,16 +183,17 @@ public final class SearchSpecToProtoConverter {
                         joinSpec.getNestedSearchSpec(),
                         mAllAllowedPrefixes,
                         namespaceMap,
-                        schemaMap,
+                        schemaCache,
                         mIcingOptionsConfig);
     }
 
     /**
-     * @return whether this search's target filters are empty. If any target filter is empty, we
-     *     should skip send request to Icing.
-     *     <p>The nestedConverter is not checked as {@link SearchResult}s from the nested query have
-     *     to be joined to a {@link SearchResult} from the parent query. If the parent query has
-     *     nothing to search, then so does the child query.
+     * Returns whether this search's target filters are empty. If any target filter is empty, we
+     * should skip send request to Icing.
+     *
+     * <p>The nestedConverter is not checked as {@link SearchResult}s from the nested query have to
+     * be joined to a {@link SearchResult} from the parent query. If the parent query has nothing to
+     * search, then so does the child query.
      */
     public boolean hasNothingToSearch() {
         return mTargetPrefixedNamespaceFilters.isEmpty() || mTargetPrefixedSchemaFilters.isEmpty();
@@ -214,8 +216,8 @@ public final class SearchSpecToProtoConverter {
         removeInaccessibleSchemaFilterCached(
                 callerAccess,
                 visibilityStore,
-                /*inaccessibleSchemaPrefixes=*/ new ArraySet<>(),
-                /*accessibleSchemaPrefixes=*/ new ArraySet<>(),
+                /* inaccessibleSchemaPrefixes= */ new ArraySet<>(),
+                /* accessibleSchemaPrefixes= */ new ArraySet<>(),
                 visibilityChecker);
     }
 
@@ -287,6 +289,13 @@ public final class SearchSpecToProtoConverter {
                         .addAllSchemaTypeFilters(mTargetPrefixedSchemaFilters)
                         .setUseReadOnlySearch(mIcingOptionsConfig.getUseReadOnlySearch());
 
+        List<EmbeddingVector> searchEmbeddings = mSearchSpec.getSearchEmbeddings();
+        for (int i = 0; i < searchEmbeddings.size(); i++) {
+            protoBuilder.addEmbeddingQueryVectors(
+                    GenericDocumentToProtoConverter.embeddingVectorToVectorProto(
+                            searchEmbeddings.get(i)));
+        }
+
         // Convert type property filter map into type property mask proto.
         for (Map.Entry<String, List<String>> entry : mSearchSpec.getFilterProperties().entrySet()) {
             if (entry.getKey().equals(SearchSpec.SCHEMA_TYPE_WILDCARD)) {
@@ -316,11 +325,23 @@ public final class SearchSpecToProtoConverter {
         }
         protoBuilder.setTermMatchType(termMatchCodeProto);
 
+        @SearchSpec.EmbeddingSearchMetricType
+        int embeddingSearchMetricType = mSearchSpec.getDefaultEmbeddingSearchMetricType();
+        SearchSpecProto.EmbeddingQueryMetricType.Code embeddingSearchMetricTypeProto =
+                SearchSpecProto.EmbeddingQueryMetricType.Code.forNumber(embeddingSearchMetricType);
+        if (embeddingSearchMetricTypeProto == null
+                || embeddingSearchMetricTypeProto.equals(
+                        SearchSpecProto.EmbeddingQueryMetricType.Code.UNKNOWN)) {
+            throw new IllegalArgumentException(
+                    "Invalid embedding search metric type: " + embeddingSearchMetricType);
+        }
+        protoBuilder.setEmbeddingQueryMetricType(embeddingSearchMetricTypeProto);
+
         if (mNestedConverter != null && !mNestedConverter.hasNothingToSearch()) {
             JoinSpecProto.NestedSpecProto nestedSpec =
                     JoinSpecProto.NestedSpecProto.newBuilder()
                             .setResultSpec(
-                                    mNestedConverter.toResultSpecProto(mNamespaceMap, mSchemaMap))
+                                    mNestedConverter.toResultSpecProto(mNamespaceMap, mSchemaCache))
                             .setScoringSpec(mNestedConverter.toScoringSpecProto())
                             .setSearchSpec(mNestedConverter.toSearchSpecProto())
                             .build();
@@ -347,18 +368,6 @@ public final class SearchSpecToProtoConverter {
                     FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION
                             + " is currently not operational because the building process for the "
                             + "associated metadata has not yet been turned on.");
-        }
-
-        // TODO(b/208654892) Remove this field once EXPERIMENTAL_ICING_ADVANCED_QUERY is fully
-        //  supported.
-        boolean turnOnIcingAdvancedQuery =
-                mSearchSpec.isNumericSearchEnabled()
-                        || mSearchSpec.isVerbatimSearchEnabled()
-                        || mSearchSpec.isListFilterQueryLanguageEnabled()
-                        || mSearchSpec.isListFilterHasPropertyFunctionEnabled();
-        if (turnOnIcingAdvancedQuery) {
-            protoBuilder.setSearchType(
-                    SearchSpecProto.SearchType.Code.EXPERIMENTAL_ICING_ADVANCED_QUERY);
         }
 
         // Set enabled features
@@ -399,13 +408,11 @@ public final class SearchSpecToProtoConverter {
      *
      * @param namespaceMap The cached Map of {@code <Prefix, Set<PrefixedNamespace>>} stores all
      *     existing prefixed namespace.
-     * @param schemaMap The cached Map of {@code <Prefix, Map<PrefixedSchemaType, schemaProto>>}
-     *     stores all prefixed schema filters which are stored inAppSearch.
+     * @param schemaCache The SchemaCache instance held in AppSearch.
      */
     @NonNull
     public ResultSpecProto toResultSpecProto(
-            @NonNull Map<String, Set<String>> namespaceMap,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap) {
+            @NonNull Map<String, Set<String>> namespaceMap, @NonNull SchemaCache schemaCache) {
         ResultSpecProto.Builder resultSpecBuilder =
                 ResultSpecProto.newBuilder()
                         .setNumPerPage(mSearchSpec.getResultCountPerPage())
@@ -448,7 +455,7 @@ public final class SearchSpecToProtoConverter {
                 addPerSchemaResultGrouping(
                         mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
-                        schemaMap,
+                        schemaCache,
                         resultSpecBuilder);
                 resultGroupingType = ResultSpecProto.ResultGroupingType.SCHEMA_TYPE;
                 break;
@@ -464,7 +471,7 @@ public final class SearchSpecToProtoConverter {
                 addPerPackagePerSchemaResultGroupings(
                         mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
-                        schemaMap,
+                        schemaCache,
                         resultSpecBuilder);
                 resultGroupingType = ResultSpecProto.ResultGroupingType.SCHEMA_TYPE;
                 break;
@@ -473,7 +480,7 @@ public final class SearchSpecToProtoConverter {
                         mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         namespaceMap,
-                        schemaMap,
+                        schemaCache,
                         resultSpecBuilder);
                 resultGroupingType = ResultSpecProto.ResultGroupingType.NAMESPACE_AND_SCHEMA_TYPE;
                 break;
@@ -484,7 +491,7 @@ public final class SearchSpecToProtoConverter {
                         mCurrentSearchSpecPrefixFilters,
                         mSearchSpec.getResultGroupingLimit(),
                         namespaceMap,
-                        schemaMap,
+                        schemaCache,
                         resultSpecBuilder);
                 resultGroupingType = ResultSpecProto.ResultGroupingType.NAMESPACE_AND_SCHEMA_TYPE;
                 break;
@@ -537,6 +544,8 @@ public final class SearchSpecToProtoConverter {
         addTypePropertyWeights(mSearchSpec.getPropertyWeights(), protoBuilder);
 
         protoBuilder.setAdvancedScoringExpression(mSearchSpec.getAdvancedRankingExpression());
+        protoBuilder.addAllAdditionalAdvancedScoringExpressions(
+                mSearchSpec.getInformationalRankingExpressions());
 
         return protoBuilder.build();
     }
@@ -646,7 +655,7 @@ public final class SearchSpecToProtoConverter {
             String packageName = getPackageName(prefix);
             // Create a new prefix without the database name. This will allow us to group namespaces
             // that have the same name and package but a different database name together.
-            String emptyDatabasePrefix = createPrefix(packageName, /*databaseName*/ "");
+            String emptyDatabasePrefix = createPrefix(packageName, /* databaseName= */ "");
             for (String prefixedNamespace : prefixedNamespaces) {
                 String namespace;
                 try {
@@ -676,17 +685,14 @@ public final class SearchSpecToProtoConverter {
      * still be grouped together.
      *
      * @param prefixes Prefixes that we should prepend to all our filters.
-     * @param schemaMap The schema map contains all prefixed existing schema types.
+     * @param schemaCache The SchemaCache instance held in AppSearch.
      */
     private static Map<String, List<String>> getSchemaToPrefixedSchemas(
-            @NonNull Set<String> prefixes,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap) {
+            @NonNull Set<String> prefixes, @NonNull SchemaCache schemaCache) {
         Map<String, List<String>> schemaToPrefixedSchemas = new ArrayMap<>();
         for (String prefix : prefixes) {
-            Map<String, SchemaTypeConfigProto> prefixedSchemas = schemaMap.get(prefix);
-            if (prefixedSchemas == null) {
-                continue;
-            }
+            Map<String, SchemaTypeConfigProto> prefixedSchemas =
+                    schemaCache.getSchemaMapForPrefix(prefix);
             for (String prefixedSchema : prefixedSchemas.keySet()) {
                 String schema;
                 try {
@@ -713,17 +719,14 @@ public final class SearchSpecToProtoConverter {
      * should be grouped together.
      *
      * @param prefixes Prefixes that we should prepend to all our filters.
-     * @param schemaMap The schema map contains all prefixed existing schema types.
+     * @param schemaCache The SchemaCache instance held in AppSearch.
      */
     private static Map<String, List<String>> getPackageAndSchemaToPrefixedSchemas(
-            @NonNull Set<String> prefixes,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap) {
+            @NonNull Set<String> prefixes, @NonNull SchemaCache schemaCache) {
         Map<String, List<String>> packageAndSchemaToSchemas = new ArrayMap<>();
         for (String prefix : prefixes) {
-            Map<String, SchemaTypeConfigProto> prefixedSchemas = schemaMap.get(prefix);
-            if (prefixedSchemas == null) {
-                continue;
-            }
+            Map<String, SchemaTypeConfigProto> prefixedSchemas =
+                    schemaCache.getSchemaMapForPrefix(prefix);
             String packageName = getPackageName(prefix);
             // Create a new prefix without the database name. This will allow us to group schemas
             // that have the same name and package but a different database name together.
@@ -787,16 +790,16 @@ public final class SearchSpecToProtoConverter {
      *
      * @param prefixes Prefixes that we should prepend to all our filters.
      * @param maxNumResults The maximum number of results for each grouping to support.
-     * @param schemaMap The schema map contains all prefixed existing schema types.
+     * @param schemaCache The SchemaCache instance held in AppSearch.
      * @param resultSpecBuilder ResultSpecs as a specified by client.
      */
     private static void addPerPackagePerSchemaResultGroupings(
             @NonNull Set<String> prefixes,
             int maxNumResults,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
+            @NonNull SchemaCache schemaCache,
             @NonNull ResultSpecProto.Builder resultSpecBuilder) {
         Map<String, List<String>> packageAndSchemaToSchemas =
-                getPackageAndSchemaToPrefixedSchemas(prefixes, schemaMap);
+                getPackageAndSchemaToPrefixedSchemas(prefixes, schemaCache);
 
         for (List<String> prefixedSchemas : packageAndSchemaToSchemas.values()) {
             List<ResultSpecProto.ResultGrouping.Entry> entries =
@@ -820,19 +823,19 @@ public final class SearchSpecToProtoConverter {
      * @param prefixes Prefixes that we should prepend to all our filters.
      * @param maxNumResults The maximum number of results for each grouping to support.
      * @param namespaceMap The namespace map contains all prefixed existing namespaces.
-     * @param schemaMap The schema map contains all prefixed existing schema types.
+     * @param schemaCache The SchemaCache instance held in AppSearch.
      * @param resultSpecBuilder ResultSpec as specified by client.
      */
     private static void addPerPackagePerNamespacePerSchemaResultGrouping(
             @NonNull Set<String> prefixes,
             int maxNumResults,
             @NonNull Map<String, Set<String>> namespaceMap,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
+            @NonNull SchemaCache schemaCache,
             @NonNull ResultSpecProto.Builder resultSpecBuilder) {
         Map<String, List<String>> packageAndNamespaceToNamespaces =
                 getPackageAndNamespaceToPrefixedNamespaces(prefixes, namespaceMap);
         Map<String, List<String>> packageAndSchemaToSchemas =
-                getPackageAndSchemaToPrefixedSchemas(prefixes, schemaMap);
+                getPackageAndSchemaToPrefixedSchemas(prefixes, schemaCache);
 
         for (List<String> prefixedNamespaces : packageAndNamespaceToNamespaces.values()) {
             for (List<String> prefixedSchemas : packageAndSchemaToSchemas.values()) {
@@ -945,16 +948,16 @@ public final class SearchSpecToProtoConverter {
      *
      * @param prefixes Prefixes that we should prepend to all our filters.
      * @param maxNumResults The maximum number of results for each grouping to support.
-     * @param schemaMap The schema map contains all prefixed existing schema types.
+     * @param schemaCache The SchemaCache instance held in AppSearch.
      * @param resultSpecBuilder ResultSpec as specified by client.
      */
     private static void addPerSchemaResultGrouping(
             @NonNull Set<String> prefixes,
             int maxNumResults,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
+            @NonNull SchemaCache schemaCache,
             @NonNull ResultSpecProto.Builder resultSpecBuilder) {
         Map<String, List<String>> schemaToPrefixedSchemas =
-                getSchemaToPrefixedSchemas(prefixes, schemaMap);
+                getSchemaToPrefixedSchemas(prefixes, schemaCache);
 
         for (List<String> prefixedSchemas : schemaToPrefixedSchemas.values()) {
             List<ResultSpecProto.ResultGrouping.Entry> entries =
@@ -978,19 +981,19 @@ public final class SearchSpecToProtoConverter {
      * @param prefixes Prefixes that we should prepend to all our filters.
      * @param maxNumResults The maximum number of results for each grouping to support.
      * @param namespaceMap The namespace map contains all prefixed existing namespaces.
-     * @param schemaMap The schema map contains all prefixed existing schema types.
+     * @param schemaCache The SchemaCache instance held in AppSearch.
      * @param resultSpecBuilder ResultSpec as specified by client.
      */
     private static void addPerNamespaceAndSchemaResultGrouping(
             @NonNull Set<String> prefixes,
             int maxNumResults,
             @NonNull Map<String, Set<String>> namespaceMap,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap,
+            @NonNull SchemaCache schemaCache,
             @NonNull ResultSpecProto.Builder resultSpecBuilder) {
         Map<String, List<String>> namespaceToPrefixedNamespaces =
                 getNamespaceToPrefixedNamespaces(prefixes, namespaceMap);
         Map<String, List<String>> schemaToPrefixedSchemas =
-                getSchemaToPrefixedSchemas(prefixes, schemaMap);
+                getSchemaToPrefixedSchemas(prefixes, schemaCache);
 
         for (List<String> prefixedNamespaces : namespaceToPrefixedNamespaces.values()) {
             for (List<String> prefixedSchemas : schemaToPrefixedSchemas.values()) {
