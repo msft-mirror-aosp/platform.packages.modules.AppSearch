@@ -35,6 +35,7 @@ import java.util.Objects;
  * @hide
  */
 public final class RemoveStats {
+    /** Types of stats available for remove API. */
     @IntDef(
             value = {
                 // It needs to be sync with DeleteType.Code in
@@ -50,17 +51,22 @@ public final class RemoveStats {
 
     /** Default. Should never be used. */
     public static final int UNKNOWN = 0;
+
     /** Delete by namespace + id. */
     public static final int SINGLE = 1;
+
     /** Delete by query. */
     public static final int QUERY = 2;
+
     /** Delete by namespace. */
     public static final int NAMESPACE = 3;
+
     /** Delete by schema type. */
     public static final int SCHEMA_TYPE = 4;
 
     @NonNull private final String mPackageName;
     @NonNull private final String mDatabase;
+
     /**
      * The status code returned by {@link AppSearchResult#getResultCode()} for the call or internal
      * state.

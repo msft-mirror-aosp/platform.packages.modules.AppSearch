@@ -22,37 +22,45 @@ import android.app.appsearch.SearchSuggestionSpec;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
 
 /**
  * Encapsulates a request to make a binder call to retrieve suggested search strings.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "SearchSuggestionAidlRequestCreator")
 public class SearchSuggestionAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final SearchSuggestionAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<SearchSuggestionAidlRequest> CREATOR =
             new SearchSuggestionAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @NonNull
     @Field(id = 2, getter = "getDatabaseName")
     private final String mDatabaseName;
+
     @NonNull
     @Field(id = 3, getter = "getSuggestionQueryExpression")
     private final String mSuggestionQueryExpression;
+
     @NonNull
     @Field(id = 4, getter = "getSearchSuggestionSpec")
     private final SearchSuggestionSpec mSearchSuggestionSpec;
+
     @NonNull
     @Field(id = 5, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 6, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
 
     /**
      * Retrieves suggested Strings that could be used as {@code queryExpression} in search API.
