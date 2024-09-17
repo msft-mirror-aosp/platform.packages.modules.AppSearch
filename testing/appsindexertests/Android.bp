@@ -31,9 +31,9 @@ android_test {
         "truth",
     ],
     libs: [
-        "android.test.runner",
-        "android.test.mock",
-        "android.test.base",
+        "android.test.base.stubs.system",
+        "android.test.mock.stubs.system",
+        "android.test.runner.stubs.system",
         "framework-appsearch.impl",
     ],
     test_suites: [
