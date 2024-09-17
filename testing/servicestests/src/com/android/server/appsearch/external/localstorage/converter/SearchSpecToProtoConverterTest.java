@@ -30,6 +30,7 @@ import android.app.appsearch.testutil.AppSearchTestUtils;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfig;
 import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
@@ -90,13 +91,16 @@ public class SearchSpecToProtoConverterTest {
 
     @Before
     public void setUp() throws Exception {
+        AppSearchConfig config =
+                new AppSearchConfigImpl(
+                        new UnlimitedLimitConfig(), mLocalStorageIcingOptionsConfig);
         mAppSearchImpl =
                 AppSearchImpl.create(
                         mTemporaryFolder.newFolder(),
-                        new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), mLocalStorageIcingOptionsConfig),
+                        config,
                         /* initStatsBuilder= */ null,
                         /* visibilityChecker= */ null,
+                        /* revocableFileDescriptorStore= */ null,
                         ALWAYS_OPTIMIZE);
     }
 

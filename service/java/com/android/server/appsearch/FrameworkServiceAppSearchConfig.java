@@ -111,6 +111,8 @@ public final class FrameworkServiceAppSearchConfig implements ServiceAppSearchCo
     public static final String KEY_APP_FUNCTION_CALL_TIMEOUT_MILLIS =
             "app_function_call_timeout_millis";
     public static final String KEY_FULLY_PERSIST_JOB_INTERVAL = "fully_persist_job_interval";
+    public static final String KEY_MAX_OPEN_BLOB_COUNT = "max_open_blob_count";
+    public static final String KEY_ORPHAN_BLOB_TIME_TO_LIVE_MS = "orphan_blob_time_to_live_ms";
 
     /**
      * This config does not need to be cached in FrameworkServiceAppSearchConfig as it is only
@@ -158,7 +160,9 @@ public final class FrameworkServiceAppSearchConfig implements ServiceAppSearchCo
         KEY_USE_NEW_QUALIFIED_ID_JOIN_INDEX,
         KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS,
         KEY_APP_FUNCTION_CALL_TIMEOUT_MILLIS,
-        KEY_FULLY_PERSIST_JOB_INTERVAL
+        KEY_FULLY_PERSIST_JOB_INTERVAL,
+        KEY_MAX_OPEN_BLOB_COUNT,
+        KEY_ORPHAN_BLOB_TIME_TO_LIVE_MS
     };
 
     // Lock needed for all the operations in this class.
@@ -393,6 +397,14 @@ public final class FrameworkServiceAppSearchConfig implements ServiceAppSearchCo
     }
 
     @Override
+    public int getMaxOpenBlobCount() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getInt(KEY_MAX_OPEN_BLOB_COUNT, DEFAULT_MAX_OPEN_BLOB_COUNT);
+        }
+    }
+
+    @Override
     public int getCachedBytesOptimizeThreshold() {
         synchronized (mLock) {
             throwIfClosedLocked();
@@ -615,6 +627,15 @@ public final class FrameworkServiceAppSearchConfig implements ServiceAppSearchCo
     public boolean getBuildPropertyExistenceMetadataHits() {
         // This option is always true in Framework due to trunk stable frozen flags.
         return true;
+    }
+
+    @Override
+    public long getOrphanBlobTimeToLiveMs() {
+        synchronized (mLock) {
+            throwIfClosedLocked();
+            return mBundleLocked.getLong(
+                    KEY_ORPHAN_BLOB_TIME_TO_LIVE_MS, DEFAULT_ORPHAN_BLOB_TIME_TO_LIVE_MS);
+        }
     }
 
     @Override
@@ -900,6 +921,17 @@ public final class FrameworkServiceAppSearchConfig implements ServiceAppSearchCo
                 synchronized (mLock) {
                     mBundleLocked.putLong(
                             key, properties.getLong(key, DEFAULT_FULLY_PERSIST_JOB_INTERVAL));
+                }
+                break;
+            case KEY_ORPHAN_BLOB_TIME_TO_LIVE_MS:
+                synchronized (mLock) {
+                    mBundleLocked.putLong(
+                            key, properties.getLong(key, DEFAULT_ORPHAN_BLOB_TIME_TO_LIVE_MS));
+                }
+                break;
+            case KEY_MAX_OPEN_BLOB_COUNT:
+                synchronized (mLock) {
+                    mBundleLocked.putInt(key, properties.getInt(key, DEFAULT_MAX_OPEN_BLOB_COUNT));
                 }
                 break;
             case KEY_BUILD_PROPERTY_EXISTENCE_METADATA_HITS:
