@@ -20,18 +20,20 @@ import android.annotation.NonNull;
 import android.annotation.WorkerThread;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.GenericDocument;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.os.SystemClock;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.appsearch.appsindexer.appsearchtypes.AppFunctionStaticMetadata;
+import com.android.server.appsearch.appsindexer.appsearchtypes.MobileApplication;
 
 import java.io.Closeable;
 import java.util.ArrayList;
@@ -53,10 +55,13 @@ public final class AppsIndexerImpl implements Closeable {
 
     private final Context mContext;
     private final AppSearchHelper mAppSearchHelper;
+    private final AppsIndexerConfig mAppsIndexerConfig;
 
-    public AppsIndexerImpl(@NonNull Context context) throws AppSearchException {
+    public AppsIndexerImpl(@NonNull Context context, @NonNull AppsIndexerConfig appsIndexerConfig)
+            throws AppSearchException {
         mContext = Objects.requireNonNull(context);
         mAppSearchHelper = new AppSearchHelper(context);
+        mAppsIndexerConfig = Objects.requireNonNull(appsIndexerConfig);
     }
 
     /**
@@ -87,13 +92,13 @@ public final class AppsIndexerImpl implements Closeable {
 
         long beforePackageManagerTimestamp = SystemClock.elapsedRealtime();
         PackageManager packageManager = mContext.getPackageManager();
-        Map<PackageInfo, ResolveInfo> launchablePackages =
-                AppsUtil.getLaunchablePackages(packageManager);
+        Map<PackageInfo, ResolveInfos> packagesToIndex =
+                AppsUtil.getPackagesToIndex(packageManager);
         appsUpdateStats.mPackageManagerLatencyMillis =
                 SystemClock.elapsedRealtime() - beforePackageManagerTimestamp;
-        Set<PackageInfo> packageInfos = launchablePackages.keySet();
+        Set<PackageInfo> packageInfos = packagesToIndex.keySet();
 
-        Map<PackageInfo, ResolveInfo> packagesToBeAddedOrUpdated = new ArrayMap<>();
+        Map<PackageInfo, ResolveInfos> packagesToBeAddedOrUpdated = new ArrayMap<>();
         long mostRecentAppUpdatedTimestampMillis = settings.getLastAppUpdateTimestampMillis();
 
         // Prepare a set of current app IDs for efficient lookup
@@ -119,18 +124,22 @@ public final class AppsIndexerImpl implements Closeable {
                 appsUpdateStats.mNumberOfAppsUpdated++;
             }
             if (added || updated) {
-                packagesToBeAddedOrUpdated.put(packageInfo, launchablePackages.get(packageInfo));
+                packagesToBeAddedOrUpdated.put(packageInfo, packagesToIndex.get(packageInfo));
             } else {
                 appsUpdateStats.mNumberOfAppsUnchanged++;
             }
         }
 
+        List<GenericDocument> appSearchAppFunctions =
+                mAppSearchHelper.getAppFunctionsFromAppSearch();
+
         try {
-            if (!currentAppIds.equals(appUpdatedTimestamps.keySet())) {
-                // The current list of apps in AppSearch does not match what is in PackageManager.
-                // This means this is the first sync, an app was removed, or an app was added. In
-                // all cases, we need to call setSchema to keep AppSearch in sync with
-                // PackageManager.
+            if (!currentAppIds.equals(appUpdatedTimestamps.keySet())
+                    || requiresInsertSchemaForAppFunction(packagesToIndex, appSearchAppFunctions)) {
+                // The current list of apps/app functions in AppSearch does not match what is in
+                // PackageManager. This means this is the first sync, an app/app function was
+                // removed, or an app/app function was added. In all cases, we need to call
+                // setSchema to keep AppSearch in sync with PackageManager.
 
                 // currentAppIds comes from PackageManager, appUpdatedTimestamps comes from
                 // AppSearch. Deleted apps are those in appUpdateTimestamps and NOT in currentAppIds
@@ -142,31 +151,47 @@ public final class AppsIndexerImpl implements Closeable {
                 }
 
                 List<PackageIdentifier> packageIdentifiers = new ArrayList<>();
-                for (PackageInfo packageInfo : packageInfos) {
+                List<PackageIdentifier> packageIdentifiersWithAppFunctions = new ArrayList<>();
+                for (Map.Entry<PackageInfo, ResolveInfos> entry : packagesToIndex.entrySet()) {
                     // We get certificates here as getting the certificates during the previous for
                     // loop would be wasteful if we end up not needing to call set schema
+                    PackageInfo packageInfo = entry.getKey();
                     byte[] certificate = AppsUtil.getCertificate(packageInfo);
                     if (certificate == null) {
                         Log.e(TAG, "Certificate not found for package: " + packageInfo.packageName);
                         continue;
                     }
-                    packageIdentifiers.add(
-                            new PackageIdentifier(packageInfo.packageName, certificate));
+                    PackageIdentifier packageIdentifier =
+                            new PackageIdentifier(packageInfo.packageName, certificate);
+                    packageIdentifiers.add(packageIdentifier);
+                    if (entry.getValue().getAppFunctionServiceInfo() != null) {
+                        packageIdentifiersWithAppFunctions.add(packageIdentifier);
+                    }
                 }
                 // The certificate is necessary along with the package name as it is used in
                 // visibility settings.
                 long beforeSetSchemaTimestamp = SystemClock.elapsedRealtime();
-                mAppSearchHelper.setSchemasForPackages(packageIdentifiers);
+                mAppSearchHelper.setSchemasForPackages(
+                        packageIdentifiers, packageIdentifiersWithAppFunctions);
                 appsUpdateStats.mAppSearchSetSchemaLatencyMillis =
                         SystemClock.elapsedRealtime() - beforeSetSchemaTimestamp;
             }
 
             if (!packagesToBeAddedOrUpdated.isEmpty()) {
                 long beforePutTimestamp = SystemClock.elapsedRealtime();
+                List<MobileApplication> mobileApplications =
+                        AppsUtil.buildAppsFromPackageInfos(
+                                packageManager, packagesToBeAddedOrUpdated);
+                List<AppFunctionStaticMetadata> appFunctions =
+                        AppsUtil.buildAppFunctionStaticMetadata(
+                                packageManager,
+                                packagesToBeAddedOrUpdated,
+                                /* indexerPackageName= */ mContext.getPackageName(),
+                                mAppsIndexerConfig.getMaxAppFunctionsPerPackage());
+
                 AppSearchBatchResult<String, Void> result =
                         mAppSearchHelper.indexApps(
-                                AppsUtil.buildAppsFromPackageInfos(
-                                        packageManager, packagesToBeAddedOrUpdated));
+                                mobileApplications, appFunctions, appSearchAppFunctions);
                 if (result.isSuccess()) {
                     appsUpdateStats.mUpdateStatusCodes.add(AppSearchResult.RESULT_OK);
                 } else {
@@ -191,6 +216,38 @@ public final class AppsIndexerImpl implements Closeable {
             appsUpdateStats.mUpdateStatusCodes.add(e.getResultCode());
             throw e;
         }
+    }
+
+    /** Returns whether the indexer should insert schema for app functions. */
+    private boolean requiresInsertSchemaForAppFunction(
+            @NonNull Map<PackageInfo, ResolveInfos> targetedPackages,
+            List<GenericDocument> appSearchAppFunctions)
+            throws AppSearchException {
+        // Should re-insert the schema as long as the indexed packages does not match the current
+        // set of packages.
+        Set<String> indexedAppFunctionPackages = new ArraySet<>();
+        for (int i = 0; i < appSearchAppFunctions.size(); i++) {
+            indexedAppFunctionPackages.add(
+                    appSearchAppFunctions
+                            .get(i)
+                            .getPropertyString(AppFunctionStaticMetadata.PROPERTY_PACKAGE_NAME));
+        }
+        Set<String> currentAppFunctionPackages = getCurrentAppFunctionPackages(targetedPackages);
+        return !indexedAppFunctionPackages.equals(currentAppFunctionPackages);
+    }
+
+    /** Returns a set of currently installed packages that have app functions. */
+    private Set<String> getCurrentAppFunctionPackages(
+            @NonNull Map<PackageInfo, ResolveInfos> targetedPackages) {
+        Set<String> currentAppFunctionPackages = new ArraySet<>();
+        for (Map.Entry<PackageInfo, ResolveInfos> entry : targetedPackages.entrySet()) {
+            PackageInfo packageInfo = entry.getKey();
+            ResolveInfos resolveInfos = entry.getValue();
+            if (resolveInfos.getAppFunctionServiceInfo() != null) {
+                currentAppFunctionPackages.add(packageInfo.packageName);
+            }
+        }
+        return currentAppFunctionPackages;
     }
 
     /** Shuts down the {@link AppsIndexerImpl} and its {@link AppSearchHelper}. */
