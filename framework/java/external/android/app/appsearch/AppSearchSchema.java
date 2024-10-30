@@ -214,7 +214,7 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
 
     /** Builder for {@link AppSearchSchema objects}. */
     public static final class Builder {
-        private String mSchemaType;
+        private final String mSchemaType;
         private String mDescription = "";
         private ArrayList<PropertyConfigParcel> mPropertyConfigParcels = new ArrayList<>();
         private LinkedHashSet<String> mParentTypes = new LinkedHashSet<>();
@@ -224,29 +224,6 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
         /** Creates a new {@link AppSearchSchema.Builder}. */
         public Builder(@NonNull String schemaType) {
             mSchemaType = Objects.requireNonNull(schemaType);
-        }
-
-        /** Creates a new {@link AppSearchSchema.Builder} from the given {@link AppSearchSchema}. */
-        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
-        public Builder(@NonNull AppSearchSchema schema) {
-            mSchemaType = schema.getSchemaType();
-            mDescription = schema.getDescription();
-            mPropertyConfigParcels.addAll(schema.mPropertyConfigParcels);
-            mParentTypes.addAll(schema.mParentTypes);
-            for (int i = 0; i < mPropertyConfigParcels.size(); i++) {
-                mPropertyNames.add(mPropertyConfigParcels.get(i).getName());
-            }
-        }
-
-        /** Sets the schema type name. */
-        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
-        @CanIgnoreReturnValue
-        @NonNull
-        public AppSearchSchema.Builder setSchemaType(@NonNull String schemaType) {
-            Objects.requireNonNull(schemaType);
-            resetIfBuilt();
-            mSchemaType = schemaType;
-            return this;
         }
 
         /**
@@ -276,17 +253,6 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
                 throw new IllegalSchemaException("Property defined more than once: " + name);
             }
             mPropertyConfigParcels.add(propertyConfig.mPropertyConfigParcel);
-            return this;
-        }
-
-        /** Clears all properties from the given type. */
-        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
-        @CanIgnoreReturnValue
-        @NonNull
-        public AppSearchSchema.Builder clearProperties() {
-            resetIfBuilt();
-            mPropertyConfigParcels.clear();
-            mPropertyNames.clear();
             return this;
         }
 
@@ -356,16 +322,6 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             Objects.requireNonNull(parentSchemaType);
             resetIfBuilt();
             mParentTypes.add(parentSchemaType);
-            return this;
-        }
-
-        /** Clears all parent types from the given type. */
-        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
-        @CanIgnoreReturnValue
-        @NonNull
-        public AppSearchSchema.Builder clearParentTypes() {
-            resetIfBuilt();
-            mParentTypes.clear();
             return this;
         }
 
