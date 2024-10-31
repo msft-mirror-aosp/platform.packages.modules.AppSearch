@@ -19,14 +19,19 @@ package com.android.server.appsearch.appsindexer;
 import static com.android.server.appsearch.appsindexer.TestUtils.createFakeAppFunctionResolveInfo;
 import static com.android.server.appsearch.appsindexer.TestUtils.createFakeLaunchResolveInfo;
 import static com.android.server.appsearch.appsindexer.TestUtils.createFakePackageInfo;
+import static com.android.server.appsearch.appsindexer.TestUtils.createIndividualUsageEvent;
+import static com.android.server.appsearch.appsindexer.TestUtils.createUsageEvents;
 import static com.android.server.appsearch.appsindexer.TestUtils.setupMockPackageManager;
 
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import android.app.usage.UsageEvents;
+import android.app.usage.UsageStatsManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.pm.PackageInfo;
@@ -39,6 +44,7 @@ import android.util.ArrayMap;
 import androidx.test.core.app.ApplicationProvider;
 
 import com.android.server.appsearch.appsindexer.appsearchtypes.AppFunctionStaticMetadata;
+import com.android.server.appsearch.appsindexer.appsearchtypes.AppOpenEvent;
 import com.android.server.appsearch.appsindexer.appsearchtypes.MobileApplication;
 
 import com.google.common.collect.ImmutableList;
@@ -48,11 +54,16 @@ import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /** This tests that we can convert what comes from PackageManager to a MobileApplication */
 public class AppsUtilTest {
+
     @Test
     public void testBuildAppsFromPackageInfos_ReturnsNonNullList() throws Exception {
         PackageManager pm = Mockito.mock(PackageManager.class);
@@ -108,6 +119,35 @@ public class AppsUtilTest {
 
     // TODO(b/361879099): Add a test that checks that building apps from real PackageManager info
     // results in non-empty documents
+
+    @Test
+    public void testRealUsageStatsManager() {
+        UsageStatsManager mockUsageStatsManager = Mockito.mock(UsageStatsManager.class);
+
+        UsageEvents.Event[] events =
+                new UsageEvents.Event[] {
+                    createIndividualUsageEvent(
+                            UsageEvents.Event.MOVE_TO_FOREGROUND, 1000L, "com.example.package"),
+                    createIndividualUsageEvent(
+                            UsageEvents.Event.ACTIVITY_RESUMED, 2000L, "com.example.package"),
+                    createIndividualUsageEvent(
+                            UsageEvents.Event.MOVE_TO_FOREGROUND, 3000L, "com.example.package2"),
+                    createIndividualUsageEvent(
+                            UsageEvents.Event.MOVE_TO_BACKGROUND, 4000L, "com.example.package2")
+                };
+
+        UsageEvents mockUsageEvents = createUsageEvents(events);
+        when(mockUsageStatsManager.queryEvents(anyLong(), anyLong())).thenReturn(mockUsageEvents);
+
+        Map<String, List<Long>> appOpenTimestamps =
+                AppsUtil.getAppOpenTimestamps(
+                        mockUsageStatsManager, 0, Calendar.getInstance().getTimeInMillis());
+
+        assertThat(appOpenTimestamps)
+                .containsExactly(
+                        "com.example.package", List.of(1000L, 2000L),
+                        "com.example.package2", List.of(3000L));
+    }
 
     @Test
     public void testRetrieveAppFunctionResolveInfo() throws Exception {
@@ -195,5 +235,45 @@ public class AppsUtilTest {
         for (AppFunctionStaticMetadata appFunction : resultAppFunctions) {
             assertThat(appFunction.getFunctionId()).isEqualTo("com.example.utils#print");
         }
+    }
+
+    @Test
+    public void testConvertAppOpenEventsToMap() {
+        List<AppOpenEvent> appOpenEvents =
+                Arrays.asList(
+                        new AppOpenEvent.Builder("com.example.app1", 1000L).build(),
+                        new AppOpenEvent.Builder("com.example.app2", 2000L).build(),
+                        new AppOpenEvent.Builder("com.example.app1", 3000L).build());
+
+        Map<String, List<Long>> result = AppsUtil.convertAppOpenEventsToMap(appOpenEvents);
+
+        assertThat(result)
+                .containsExactly(
+                        "com.example.app1", List.of(1000L, 3000L),
+                        "com.example.app2", List.of(2000L));
+    }
+
+    @Test
+    public void testConvertMapToAppOpenEvents() {
+        Map<String, List<Long>> appOpenEventsMap = new TreeMap<>();
+        appOpenEventsMap.put("com.example.app1", Arrays.asList(1000L, 3000L));
+        appOpenEventsMap.put("com.example.app2", Arrays.asList(2000L));
+
+        List<AppOpenEvent> result = AppsUtil.convertMapToAppOpenEvents(appOpenEventsMap);
+
+        // Extract package names and timestamps from the result list
+        List<String> packageNames =
+                result.stream().map(AppOpenEvent::getPackageName).collect(Collectors.toList());
+        List<Long> timestamps =
+                result.stream()
+                        .map(AppOpenEvent::getAppOpenEventTimestampMillis)
+                        .collect(Collectors.toList());
+
+        // Assert the order of package names and timestamps without creating app open events to
+        // compare them to, since creation timestamps will mismatch
+        assertThat(packageNames)
+                .containsExactly("com.example.app1", "com.example.app1", "com.example.app2")
+                .inOrder();
+        assertThat(timestamps).containsExactly(1000L, 3000L, 2000L).inOrder();
     }
 }
