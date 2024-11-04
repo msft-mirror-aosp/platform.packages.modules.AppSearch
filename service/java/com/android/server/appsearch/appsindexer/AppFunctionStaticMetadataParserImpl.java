@@ -135,30 +135,31 @@ public class AppFunctionStaticMetadataParserImpl implements AppFunctionStaticMet
         Boolean restrictCallersWithExecuteAppFunctions = null;
         int eventType = parser.getEventType();
         while (!(eventType == XmlPullParser.END_TAG && TAG_APPFUNCTION.equals(parser.getName()))) {
-            if (eventType == XmlPullParser.START_TAG) {
+            if (eventType == XmlPullParser.START_TAG && !TAG_APPFUNCTION.equals(parser.getName())) {
                 String tagName = parser.getName();
+                String tagValue = parser.nextText().trim();
                 switch (tagName) {
                     case "function_id":
-                        functionId = parser.nextText();
+                        functionId = tagValue;
                         break;
                     case "schema_name":
-                        schemaName = parser.nextText();
+                        schemaName = tagValue;
                         break;
                     case "schema_version":
-                        schemaVersion = Long.parseLong(parser.nextText());
+                        schemaVersion = Long.parseLong(tagValue);
                         break;
                     case "schema_category":
-                        schemaCategory = parser.nextText();
+                        schemaCategory = tagValue;
                         break;
                     case "enabled_by_default":
-                        enabledByDefault = Boolean.parseBoolean(parser.nextText());
+                        enabledByDefault = Boolean.parseBoolean(tagValue);
                         break;
                     case "restrict_callers_with_execute_app_functions":
                         restrictCallersWithExecuteAppFunctions =
-                                Boolean.parseBoolean(parser.nextText());
+                                Boolean.parseBoolean(tagValue);
                         break;
                     case "display_name_string_res":
-                        displayNameStringRes = Integer.parseInt(parser.nextText());
+                        displayNameStringRes = Integer.parseInt(tagValue);
                         break;
                 }
             }
