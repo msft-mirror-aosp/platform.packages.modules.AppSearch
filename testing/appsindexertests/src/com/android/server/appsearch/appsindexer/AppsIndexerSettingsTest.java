@@ -27,8 +27,7 @@ import java.io.IOException;
 
 public class AppsIndexerSettingsTest {
 
-    @Rule
-    public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
+    @Rule public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
 
     private AppsIndexerSettings mIndexerSettings;
 
@@ -68,5 +67,3 @@ public class AppsIndexerSettingsTest {
         Assert.assertEquals(0, mIndexerSettings.getLastAppUpdateTimestampMillis());
     }
 }
-;
-

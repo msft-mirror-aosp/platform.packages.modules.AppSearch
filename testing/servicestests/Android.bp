@@ -21,10 +21,13 @@ android_test {
     srcs: ["src/**/*.java"],
     static_libs: [
         "CtsAppSearchTestUtils",
+        "android.app.appfunctions.flags-aconfig-java",
         "androidx.test.ext.junit",
         "androidx.test.rules",
         "compatibility-device-util-axt",
+        "flag-junit",
         "framework-appsearch.impl",
+        "platform-test-annotations",
         "service-appsearch-for-tests",
         "truth",
     ],
