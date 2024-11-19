@@ -2535,6 +2535,38 @@ public class AppSearchManagerService extends SystemService {
         }
 
         @BinderThread
+        private void dumpAppsIndexer(@NonNull PrintWriter pw) {
+            Objects.requireNonNull(pw);
+            UserHandle currentUser = UserHandle.getUserHandleForUid(Binder.getCallingUid());
+            try {
+                pw.println("AppsIndexer stats for " + currentUser);
+                mLifecycle.dumpAppsIndexerForUser(currentUser, pw);
+            } catch (Exception e) {
+                String errorMessage =
+                        "Unable to dump the internal app indexer state for the user: "
+                                + currentUser;
+                Log.e(TAG, errorMessage, e);
+                pw.println(errorMessage);
+            }
+        }
+
+        @BinderThread
+        private void dumpAppOpenEventIndexer(@NonNull PrintWriter pw) {
+            Objects.requireNonNull(pw);
+            UserHandle currentUser = UserHandle.getUserHandleForUid(Binder.getCallingUid());
+            try {
+                pw.println("AppOpenEventIndexer stats for " + currentUser);
+                mLifecycle.dumpAppOpenEventIndexerForUser(currentUser, pw);
+            } catch (Exception e) {
+                String errorMessage =
+                        "Unable to dump the internal app open event indexer state for the user: "
+                                + currentUser;
+                Log.e(TAG, errorMessage, e);
+                pw.println(errorMessage);
+            }
+        }
+
+        @BinderThread
         private void dumpAppSearch(@NonNull PrintWriter pw, boolean verbose) {
             Objects.requireNonNull(pw);
 
@@ -2606,6 +2638,8 @@ public class AppSearchManagerService extends SystemService {
             }
             dumpAppSearch(pw, verbose);
             dumpContactsIndexer(pw, verbose);
+            dumpAppsIndexer(pw);
+            dumpAppOpenEventIndexer(pw);
         }
     }
 
