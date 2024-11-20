@@ -17,6 +17,25 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.AppSearchBatchResult.Builder<KeyType,ValueType> setSuccess(@NonNull KeyType, @Nullable ValueType);
   }
 
+  @FlaggedApi("com.android.appsearch.flags.enable_blob_store") public final class AppSearchBlobHandle implements android.os.Parcelable {
+    method @NonNull public static android.app.appsearch.AppSearchBlobHandle createWithSha256(@NonNull byte[], @NonNull String, @NonNull String, @NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public final int describeContents();
+    method @NonNull public String getDatabaseName();
+    method @NonNull public String getNamespace();
+    method @NonNull public String getPackageName();
+    method @NonNull public byte[] getSha256Digest();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.AppSearchBlobHandle> CREATOR;
+  }
+
+  @FlaggedApi("com.android.appsearch.flags.enable_blob_store") public final class AppSearchCommitBlobResponse implements android.os.Parcelable {
+    ctor public AppSearchCommitBlobResponse(@NonNull android.app.appsearch.AppSearchBatchResult<android.app.appsearch.AppSearchBlobHandle,java.lang.Void>);
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public final int describeContents();
+    method @NonNull public android.app.appsearch.AppSearchBatchResult<android.app.appsearch.AppSearchBlobHandle,java.lang.Void> getResult();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.AppSearchCommitBlobResponse> CREATOR;
+  }
+
   public class AppSearchManager {
     method @FlaggedApi("com.android.appsearch.flags.enable_enterprise_global_search_session") public void createEnterpriseGlobalSearchSession(@NonNull java.util.concurrent.Executor, @NonNull java.util.function.Consumer<android.app.appsearch.AppSearchResult<android.app.appsearch.EnterpriseGlobalSearchSession>>);
     method public void createGlobalSearchSession(@NonNull java.util.concurrent.Executor, @NonNull java.util.function.Consumer<android.app.appsearch.AppSearchResult<android.app.appsearch.GlobalSearchSession>>);
@@ -31,6 +50,24 @@ package android.app.appsearch {
   public static final class AppSearchManager.SearchContext.Builder {
     ctor public AppSearchManager.SearchContext.Builder(@NonNull String);
     method @NonNull public android.app.appsearch.AppSearchManager.SearchContext build();
+  }
+
+  @FlaggedApi("com.android.appsearch.flags.enable_blob_store") public final class AppSearchOpenBlobForReadResponse implements java.io.Closeable android.os.Parcelable {
+    ctor public AppSearchOpenBlobForReadResponse(@NonNull android.app.appsearch.AppSearchBatchResult<android.app.appsearch.AppSearchBlobHandle,android.os.ParcelFileDescriptor>);
+    method public void close();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public final int describeContents();
+    method @NonNull public android.app.appsearch.AppSearchBatchResult<android.app.appsearch.AppSearchBlobHandle,android.os.ParcelFileDescriptor> getResult();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.AppSearchOpenBlobForReadResponse> CREATOR;
+  }
+
+  @FlaggedApi("com.android.appsearch.flags.enable_blob_store") public final class AppSearchOpenBlobForWriteResponse implements java.io.Closeable android.os.Parcelable {
+    ctor public AppSearchOpenBlobForWriteResponse(@NonNull android.app.appsearch.AppSearchBatchResult<android.app.appsearch.AppSearchBlobHandle,android.os.ParcelFileDescriptor>);
+    method public void close();
+    method @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") public final int describeContents();
+    method @NonNull public android.app.appsearch.AppSearchBatchResult<android.app.appsearch.AppSearchBlobHandle,android.os.ParcelFileDescriptor> getResult();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.AppSearchOpenBlobForWriteResponse> CREATOR;
   }
 
   public final class AppSearchResult<ValueType> {
@@ -523,6 +560,7 @@ package android.app.appsearch {
     method @NonNull public String getAdvancedRankingExpression();
     method @FlaggedApi("com.android.appsearch.flags.enable_schema_embedding_property_config") public int getDefaultEmbeddingSearchMetricType();
     method @FlaggedApi("com.android.appsearch.flags.enable_schema_embedding_property_config") @NonNull public java.util.List<android.app.appsearch.EmbeddingVector> getEmbeddingParameters();
+    method @FlaggedApi("com.android.appsearch.flags.enable_search_spec_filter_document_ids") @NonNull public java.util.List<java.lang.String> getFilterDocumentIds();
     method @NonNull public java.util.List<java.lang.String> getFilterNamespaces();
     method @NonNull public java.util.List<java.lang.String> getFilterPackageNames();
     method @FlaggedApi("com.android.appsearch.flags.enable_search_spec_filter_properties") @NonNull public java.util.Map<java.lang.String,java.util.List<java.lang.String>> getFilterProperties();
@@ -580,6 +618,8 @@ package android.app.appsearch {
     ctor @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") public SearchSpec.Builder(@NonNull android.app.appsearch.SearchSpec);
     method @FlaggedApi("com.android.appsearch.flags.enable_schema_embedding_property_config") @NonNull public android.app.appsearch.SearchSpec.Builder addEmbeddingParameters(@NonNull android.app.appsearch.EmbeddingVector...);
     method @FlaggedApi("com.android.appsearch.flags.enable_schema_embedding_property_config") @NonNull public android.app.appsearch.SearchSpec.Builder addEmbeddingParameters(@NonNull java.util.Collection<android.app.appsearch.EmbeddingVector>);
+    method @FlaggedApi("com.android.appsearch.flags.enable_search_spec_filter_document_ids") @NonNull public android.app.appsearch.SearchSpec.Builder addFilterDocumentIds(@NonNull java.lang.String...);
+    method @FlaggedApi("com.android.appsearch.flags.enable_search_spec_filter_document_ids") @NonNull public android.app.appsearch.SearchSpec.Builder addFilterDocumentIds(@NonNull java.util.Collection<java.lang.String>);
     method @NonNull public android.app.appsearch.SearchSpec.Builder addFilterNamespaces(@NonNull java.lang.String...);
     method @NonNull public android.app.appsearch.SearchSpec.Builder addFilterNamespaces(@NonNull java.util.Collection<java.lang.String>);
     method @NonNull public android.app.appsearch.SearchSpec.Builder addFilterPackageNames(@NonNull java.lang.String...);
@@ -596,6 +636,7 @@ package android.app.appsearch {
     method @FlaggedApi("com.android.appsearch.flags.enable_search_spec_search_string_parameters") @NonNull public android.app.appsearch.SearchSpec.Builder addSearchStringParameters(@NonNull java.util.List<java.lang.String>);
     method @NonNull public android.app.appsearch.SearchSpec build();
     method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.SearchSpec.Builder clearEmbeddingParameters();
+    method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.SearchSpec.Builder clearFilterDocumentIds();
     method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.SearchSpec.Builder clearFilterNamespaces();
     method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.SearchSpec.Builder clearFilterPackageNames();
     method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.SearchSpec.Builder clearFilterProperties();
@@ -811,7 +852,7 @@ package android.app.appsearch.ast.operators {
     method public void setChildren(@NonNull java.util.List<android.app.appsearch.ast.Node>);
   }
 
-  @FlaggedApi("com.android.appsearch.flags.enable_abstract_syntax_trees") public class ComparatorNode implements android.app.appsearch.ast.Node {
+  @FlaggedApi("com.android.appsearch.flags.enable_abstract_syntax_trees") public final class ComparatorNode implements android.app.appsearch.ast.Node {
     ctor public ComparatorNode(int, @NonNull android.app.appsearch.PropertyPath, long);
     method public int getComparator();
     method @NonNull public android.app.appsearch.PropertyPath getPropertyPath();
@@ -836,7 +877,7 @@ package android.app.appsearch.ast.operators {
     method public void setChildren(@NonNull java.util.List<android.app.appsearch.ast.Node>);
   }
 
-  @FlaggedApi("com.android.appsearch.flags.enable_abstract_syntax_trees") public class PropertyRestrictNode implements android.app.appsearch.ast.Node {
+  @FlaggedApi("com.android.appsearch.flags.enable_abstract_syntax_trees") public final class PropertyRestrictNode implements android.app.appsearch.ast.Node {
     ctor public PropertyRestrictNode(@NonNull android.app.appsearch.PropertyPath, @NonNull android.app.appsearch.ast.Node);
     method @NonNull public android.app.appsearch.ast.Node getChild();
     method @NonNull public java.util.List<android.app.appsearch.ast.Node> getChildren();

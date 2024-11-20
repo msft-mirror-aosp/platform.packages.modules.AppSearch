@@ -89,4 +89,33 @@ public final class GetSearchStringParameterNode implements FunctionNode {
                 searchStringIndex >= 0, "SearchStringIndex must be non-negative.");
         mSearchStringIndex = searchStringIndex;
     }
+
+    /**
+     * Returns the string representation of {@link GetSearchStringParameterNode}.
+     *
+     * <p>The string representation of {@link GetSearchStringParameterNode} is the function name
+     * followed by the {@code searchStringIndex} surrounded by parentheses. For example, the string
+     * representation of {@code GetSearchStringParameterNode(1)} is `getSearchStringParameter(1)`.
+     */
+    @NonNull
+    @Override
+    public String toString() {
+        return FunctionNode.FUNCTION_NAME_GET_SEARCH_STRING_PARAMETER
+                + "("
+                + mSearchStringIndex
+                + ")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        GetSearchStringParameterNode that = (GetSearchStringParameterNode) o;
+        return mSearchStringIndex == that.mSearchStringIndex;
+    }
+
+    @Override
+    public int hashCode() {
+        return Integer.hashCode(mSearchStringIndex);
+    }
 }

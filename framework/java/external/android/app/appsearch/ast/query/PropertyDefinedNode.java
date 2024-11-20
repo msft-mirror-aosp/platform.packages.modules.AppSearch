@@ -71,4 +71,29 @@ public final class PropertyDefinedNode implements FunctionNode {
     public void setProperty(@NonNull PropertyPath property) {
         mProperty = Objects.requireNonNull(property);
     }
+
+    /**
+     * Get the string representation of {@link PropertyDefinedNode}.
+     *
+     * <p>The string representation of {@link PropertyDefinedNode} is the function name followed by
+     * the property path in quotes surrounded by parentheses.
+     */
+    @NonNull
+    @Override
+    public String toString() {
+        return FUNCTION_NAME_PROPERTY_DEFINED + "(\"" + mProperty + "\")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PropertyDefinedNode that = (PropertyDefinedNode) o;
+        return Objects.equals(mProperty, that.mProperty);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(mProperty);
+    }
 }

@@ -248,3 +248,12 @@ flag {
     is_fixed_read_only: true
     is_exported: true
 }
+
+flag {
+    name: "enable_search_spec_filter_document_ids"
+    namespace: "appsearch"
+    description: "Enables the addFilterDocumentId API in the SearchSpec."
+    bug: "367464836"
+    is_fixed_read_only: true
+    is_exported: true
+}
