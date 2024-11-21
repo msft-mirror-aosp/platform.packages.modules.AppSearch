@@ -21,7 +21,6 @@ import android.annotation.FlaggedApi;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.annotation.RequiresApi;
 import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
@@ -138,14 +137,27 @@ public class GenericDocument {
     // GenericDocument is an open class that can be extended, whereas parcelable classes must be
     // final in those methods. Thus, we make this a system api to avoid 3p apps depending on it
     // and getting confused by the inheritability.
+    @SuppressWarnings("deprecation")
     @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
-    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_OVER_IPC)
     @NonNull
     public static GenericDocument createFromParcel(@NonNull Parcel parcel) {
         Objects.requireNonNull(parcel);
-        GenericDocumentParcel documentParcel =
-                parcel.readParcelable(GenericDocumentParcel.class.getClassLoader());
+        GenericDocumentParcel documentParcel;
+
+        // Code built in Framework cannot depend on Androidx libraries. Therefore, we must call
+        // Parcel#readParcelable directly.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            documentParcel =
+                    parcel.readParcelable(
+                            GenericDocumentParcel.class.getClassLoader(),
+                            GenericDocumentParcel.class);
+        } else {
+            // The Parcel#readParcelable(ClassLoader, Class) function has a known issue on Android
+            // T. This was fixed on Android U. When on Android T, call the older version of
+            // Parcel#readParcelable.
+            documentParcel = parcel.readParcelable(GenericDocumentParcel.class.getClassLoader());
+        }
         return new GenericDocument(documentParcel);
     }
 
