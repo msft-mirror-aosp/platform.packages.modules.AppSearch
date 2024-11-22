@@ -154,6 +154,15 @@ public final class SearchSpec extends AbstractSafeParcelable {
     private final List<String> mSearchStringParameters;
 
     /**
+     * Holds the list of document ids to search over.
+     *
+     * <p>If empty, the query will search over all documents.
+     */
+    @NonNull
+    @Field(id = 24, getter = "getFilterDocumentIds")
+    private final List<String> mFilterDocumentIds;
+
+    /**
      * Default number of documents per page.
      *
      * @hide
@@ -371,7 +380,8 @@ public final class SearchSpec extends AbstractSafeParcelable {
             @Param(id = 20) @Nullable List<EmbeddingVector> embeddingParameters,
             @Param(id = 21) int defaultEmbeddingSearchMetricType,
             @Param(id = 22) @Nullable List<String> informationalRankingExpressions,
-            @Param(id = 23) @Nullable List<String> searchStringParameters) {
+            @Param(id = 23) @Nullable List<String> searchStringParameters,
+            @Param(id = 24) @Nullable List<String> filterDocumentIds) {
         mTermMatchType = termMatchType;
         mSchemas = Collections.unmodifiableList(Objects.requireNonNull(schemas));
         mNamespaces = Collections.unmodifiableList(Objects.requireNonNull(namespaces));
@@ -406,6 +416,10 @@ public final class SearchSpec extends AbstractSafeParcelable {
         mSearchStringParameters =
                 (searchStringParameters != null)
                         ? Collections.unmodifiableList(searchStringParameters)
+                        : Collections.emptyList();
+        mFilterDocumentIds =
+                (filterDocumentIds != null)
+                        ? Collections.unmodifiableList(filterDocumentIds)
                         : Collections.emptyList();
     }
 
@@ -475,6 +489,17 @@ public final class SearchSpec extends AbstractSafeParcelable {
             return Collections.emptyList();
         }
         return mPackageNames;
+    }
+
+    /**
+     * Returns the list of document ids to search over.
+     *
+     * <p>If empty, the query will search over all documents.
+     */
+    @NonNull
+    @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_DOCUMENT_IDS)
+    public List<String> getFilterDocumentIds() {
+        return mFilterDocumentIds;
     }
 
     /** Returns the number of results per page in the result set. */
@@ -772,6 +797,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
         private Bundle mTypePropertyWeights = new Bundle();
         private List<EmbeddingVector> mEmbeddingParameters = new ArrayList<>();
         private List<String> mSearchStringParameters = new ArrayList<>();
+        private List<String> mFilterDocumentIds = new ArrayList<>();
 
         private int mResultCountPerPage = DEFAULT_NUM_PER_PAGE;
         @TermMatch private int mTermMatchType = TERM_MATCH_PREFIX;
@@ -831,6 +857,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
             mInformationalRankingExpressions =
                     new ArrayList<>(searchSpec.getInformationalRankingExpressions());
             mSearchSourceLogTag = searchSpec.getSearchSourceLogTag();
+            mFilterDocumentIds = new ArrayList<>(searchSpec.getFilterDocumentIds());
         }
 
         /**
@@ -1041,6 +1068,47 @@ public final class SearchSpec extends AbstractSafeParcelable {
         public Builder clearFilterPackageNames() {
             resetIfBuilt();
             mPackageNames.clear();
+            return this;
+        }
+
+        /**
+         * Adds a document id filter to {@link SearchSpec} Entry. Only search for documents that
+         * have the specified document ids.
+         *
+         * <p>If unset, the query will search over all documents.
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_DOCUMENT_IDS)
+        public Builder addFilterDocumentIds(@NonNull String... documentIds) {
+            Objects.requireNonNull(documentIds);
+            resetIfBuilt();
+            return addFilterDocumentIds(Arrays.asList(documentIds));
+        }
+
+        /**
+         * Adds a document id filter to {@link SearchSpec} Entry. Only search for documents that
+         * have the specified document ids.
+         *
+         * <p>If unset, the query will search over all documents.
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_DOCUMENT_IDS)
+        public Builder addFilterDocumentIds(@NonNull Collection<String> documentIds) {
+            Objects.requireNonNull(documentIds);
+            resetIfBuilt();
+            mFilterDocumentIds.addAll(documentIds);
+            return this;
+        }
+
+        /** Clears the document id filters. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearFilterDocumentIds() {
+            resetIfBuilt();
+            mFilterDocumentIds.clear();
             return this;
         }
 
@@ -1939,7 +2007,8 @@ public final class SearchSpec extends AbstractSafeParcelable {
                     mEmbeddingParameters,
                     mDefaultEmbeddingSearchMetricType,
                     mInformationalRankingExpressions,
-                    mSearchStringParameters);
+                    mSearchStringParameters,
+                    mFilterDocumentIds);
         }
 
         private void resetIfBuilt() {
@@ -1954,6 +2023,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
                 mInformationalRankingExpressions =
                         new ArrayList<>(mInformationalRankingExpressions);
                 mSearchStringParameters = new ArrayList<>(mSearchStringParameters);
+                mFilterDocumentIds = new ArrayList<>(mFilterDocumentIds);
                 mBuilt = false;
             }
         }

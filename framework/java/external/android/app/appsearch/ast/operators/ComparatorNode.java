@@ -42,7 +42,7 @@ import java.util.Objects;
  * Definition</a>.
  */
 @FlaggedApi(Flags.FLAG_ENABLE_ABSTRACT_SYNTAX_TREES)
-public class ComparatorNode implements Node {
+public final class ComparatorNode implements Node {
     /**
      * Enums representing different comparators for numeric search expressions in the query
      * language.
@@ -162,5 +162,20 @@ public class ComparatorNode implements Node {
         // Equivalent in behavior but more efficient than
         // String.format("(%s %s %s)", mPropertyPath, comparatorString, mValue);
         return "(" + mPropertyPath + " " + comparatorString + " " + mValue + ")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ComparatorNode)) return false;
+        ComparatorNode that = (ComparatorNode) o;
+        return mComparator == that.mComparator
+                && mValue == that.mValue
+                && Objects.equals(mPropertyPath, that.mPropertyPath);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(mComparator, mPropertyPath, mValue);
     }
 }
