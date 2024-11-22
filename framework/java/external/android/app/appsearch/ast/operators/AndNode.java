@@ -135,4 +135,17 @@ public final class AndNode implements Node {
     public String toString() {
         return "(" + TextUtils.join(" AND ", mChildren) + ")";
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AndNode andNode = (AndNode) o;
+        return Objects.equals(mChildren, andNode.mChildren);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(mChildren);
+    }
 }
