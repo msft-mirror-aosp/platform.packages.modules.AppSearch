@@ -36,7 +36,8 @@ import java.util.Objects;
  *       "world peace" instead of terms "world" and "peace".
  *   <li>49.99 is a number. {@link TextNode}s may represent integers or doubles and treat numbers as
  *       terms.
- *   <li>price is NOT a string but a property path as part of a {@link PropertyRestrictNode}.
+ *   <li>price is NOT a string but a property path as part of a {@link
+ *       android.app.appsearch.ast.operators.PropertyRestrictNode}.
  * </ul>
  *
  * <p>The node will be segmented and normalized based on the flags set in the Node. For example, if
@@ -251,5 +252,20 @@ public final class TextNode implements Node {
     /** Returns whether or not a given character is a letter in the Latin alphabet. */
     private boolean isLatinLetter(char c) {
         return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TextNode textNode = (TextNode) o;
+        return mPrefix == textNode.mPrefix
+                && mVerbatim == textNode.mVerbatim
+                && Objects.equals(mValue, textNode.mValue);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(mValue, mPrefix, mVerbatim);
     }
 }

@@ -33,8 +33,6 @@ import java.io.File;
 
 public class AppSearchBatchResultGeneralKeyParcelTest {
 
-    // TODO(b/273591938) remove label and use namespace to create blob handle when sync support blob
-    //  namespace to the framework.
     @Test
     public void testFromBlobHandleToPfd() throws Exception {
         File file = File.createTempFile(/* prefix= */ "appsearch", /* suffix= */ null);
@@ -47,8 +45,10 @@ public class AppSearchBatchResultGeneralKeyParcelTest {
         byte[] digest1 = calculateDigest(data1);
         byte[] data2 = generateRandomBytes(10); // 10 Bytes
         byte[] digest2 = calculateDigest(data2);
-        AppSearchBlobHandle blobHandle1 = AppSearchBlobHandle.createWithSha256(digest1, "label123");
-        AppSearchBlobHandle blobHandle2 = AppSearchBlobHandle.createWithSha256(digest2, "label123");
+        AppSearchBlobHandle blobHandle1 =
+                AppSearchBlobHandle.createWithSha256(digest1, "package1", "db1", "ns");
+        AppSearchBlobHandle blobHandle2 =
+                AppSearchBlobHandle.createWithSha256(digest2, "package1", "db1", "ns");
         AppSearchBatchResult<AppSearchBlobHandle, ParcelFileDescriptor> result =
                 new AppSearchBatchResult.Builder<AppSearchBlobHandle, ParcelFileDescriptor>()
                         .setResult(blobHandle1, successResult)
@@ -70,8 +70,10 @@ public class AppSearchBatchResultGeneralKeyParcelTest {
         byte[] digest1 = calculateDigest(data1);
         byte[] data2 = generateRandomBytes(10); // 10 Bytes
         byte[] digest2 = calculateDigest(data2);
-        AppSearchBlobHandle blobHandle1 = AppSearchBlobHandle.createWithSha256(digest1, "label123");
-        AppSearchBlobHandle blobHandle2 = AppSearchBlobHandle.createWithSha256(digest2, "label123");
+        AppSearchBlobHandle blobHandle1 =
+                AppSearchBlobHandle.createWithSha256(digest1, "package1", "db1", "ns");
+        AppSearchBlobHandle blobHandle2 =
+                AppSearchBlobHandle.createWithSha256(digest2, "package1", "db1", "ns");
         AppSearchResult<Void> successResult = AppSearchResult.newSuccessfulResult(null);
         AppSearchResult<Void> failureResult =
                 AppSearchResult.newFailedResult(AppSearchResult.RESULT_NOT_FOUND, "not found");

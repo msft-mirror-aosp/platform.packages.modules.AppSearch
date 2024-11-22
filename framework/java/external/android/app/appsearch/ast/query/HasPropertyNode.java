@@ -72,4 +72,29 @@ public final class HasPropertyNode implements FunctionNode {
     public void setProperty(@NonNull PropertyPath property) {
         mProperty = Objects.requireNonNull(property);
     }
+
+    /**
+     * Get the string representation of {@link HasPropertyNode}.
+     *
+     * <p>The string representation of {@link HasPropertyNode} is the function name followed by the
+     * property path in quotes.
+     */
+    @NonNull
+    @Override
+    public String toString() {
+        return FunctionNode.FUNCTION_NAME_HAS_PROPERTY + "(\"" + mProperty + "\")";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        HasPropertyNode that = (HasPropertyNode) o;
+        return Objects.equals(mProperty, that.mProperty);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(mProperty);
+    }
 }

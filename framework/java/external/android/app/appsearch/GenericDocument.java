@@ -949,23 +949,6 @@ public class GenericDocument {
         }
     }
 
-    /**
-     * Copies the contents of this {@link GenericDocument} into a new {@link
-     * GenericDocument.Builder}.
-     *
-     * <p>The returned builder is a deep copy whose data is separate from this document.
-     *
-     * @deprecated This API is not compliant with API guidelines. Use {@link
-     *     Builder#Builder(GenericDocument)} instead.
-     * @hide
-     */
-    // TODO(b/171882200): Expose this API in Android T
-    @NonNull
-    @Deprecated
-    public GenericDocument.Builder<GenericDocument.Builder<?>> toBuilder() {
-        return new Builder<>(new GenericDocumentParcel.Builder(mDocumentParcel));
-    }
-
     @Override
     public boolean equals(@Nullable Object other) {
         if (this == other) {

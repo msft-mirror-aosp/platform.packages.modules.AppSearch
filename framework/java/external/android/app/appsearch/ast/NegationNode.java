@@ -116,4 +116,17 @@ public final class NegationNode implements Node {
     public String toString() {
         return "NOT " + getChild();
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        NegationNode that = (NegationNode) o;
+        return Objects.equals(mChildren, that.mChildren);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(mChildren);
+    }
 }
