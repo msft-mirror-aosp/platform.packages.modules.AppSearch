@@ -44,27 +44,24 @@ import java.util.Objects;
 @FlaggedApi(Flags.FLAG_ENABLE_BLOB_STORE)
 @SuppressWarnings("HiddenSuperclass")
 @SafeParcelable.Class(creator = "OpenBlobForWriteResponseCreator")
-public final class AppSearchOpenBlobForWriteResponse extends AbstractSafeParcelable
-        implements Closeable {
+public final class OpenBlobForWriteResponse extends AbstractSafeParcelable implements Closeable {
 
     @NonNull
-    public static final Parcelable.Creator<AppSearchOpenBlobForWriteResponse> CREATOR =
+    public static final Parcelable.Creator<OpenBlobForWriteResponse> CREATOR =
             new OpenBlobForWriteResponseCreator();
 
     @Field(id = 1)
     final AppSearchBatchResultGeneralKeyParcel<AppSearchBlobHandle, ParcelFileDescriptor>
             mResultParcel;
 
-    /**
-     * Creates a {@link AppSearchOpenBlobForWriteResponse} with given {@link AppSearchBatchResult}.
-     */
-    public AppSearchOpenBlobForWriteResponse(
+    /** Creates a {@link OpenBlobForWriteResponse} with given {@link AppSearchBatchResult}. */
+    public OpenBlobForWriteResponse(
             @NonNull AppSearchBatchResult<AppSearchBlobHandle, ParcelFileDescriptor> result) {
         this(AppSearchBatchResultGeneralKeyParcel.fromBlobHandleToPfd(result));
     }
 
-    @AbstractSafeParcelable.Constructor
-    AppSearchOpenBlobForWriteResponse(
+    @Constructor
+    OpenBlobForWriteResponse(
             @AbstractSafeParcelable.Param(id = 1) @NonNull
                     AppSearchBatchResultGeneralKeyParcel<AppSearchBlobHandle, ParcelFileDescriptor>
                             resultParcel) {

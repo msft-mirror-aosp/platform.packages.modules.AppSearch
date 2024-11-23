@@ -36,23 +36,22 @@ import java.util.Objects;
 @FlaggedApi(Flags.FLAG_ENABLE_BLOB_STORE)
 @SuppressWarnings("HiddenSuperclass")
 @SafeParcelable.Class(creator = "CommitBlobResponseCreator")
-public final class AppSearchCommitBlobResponse extends AbstractSafeParcelable {
+public final class CommitBlobResponse extends AbstractSafeParcelable {
 
     @NonNull
-    public static final Parcelable.Creator<AppSearchCommitBlobResponse> CREATOR =
+    public static final Parcelable.Creator<CommitBlobResponse> CREATOR =
             new CommitBlobResponseCreator();
 
     @Field(id = 1, getter = "getResponseParcel")
     private final AppSearchBatchResultGeneralKeyParcel<AppSearchBlobHandle, Void> mResultParcel;
 
-    /** Creates a {@link AppSearchCommitBlobResponse} with given {@link AppSearchBatchResult}. */
-    public AppSearchCommitBlobResponse(
-            @NonNull AppSearchBatchResult<AppSearchBlobHandle, Void> result) {
+    /** Creates a {@link CommitBlobResponse} with given {@link AppSearchBatchResult}. */
+    public CommitBlobResponse(@NonNull AppSearchBatchResult<AppSearchBlobHandle, Void> result) {
         this(AppSearchBatchResultGeneralKeyParcel.fromBlobHandleToVoid(result));
     }
 
     @Constructor
-    AppSearchCommitBlobResponse(
+    CommitBlobResponse(
             @Param(id = 1) @NonNull
                     AppSearchBatchResultGeneralKeyParcel<AppSearchBlobHandle, Void> resultParcel) {
         mResultParcel = Objects.requireNonNull(resultParcel);
