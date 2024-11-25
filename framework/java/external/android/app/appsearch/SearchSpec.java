@@ -154,6 +154,15 @@ public final class SearchSpec extends AbstractSafeParcelable {
     private final List<String> mSearchStringParameters;
 
     /**
+     * Holds the list of document ids to search over.
+     *
+     * <p>If empty, the query will search over all documents.
+     */
+    @NonNull
+    @Field(id = 24, getter = "getFilterDocumentIds")
+    private final List<String> mFilterDocumentIds;
+
+    /**
      * Default number of documents per page.
      *
      * @hide
@@ -320,12 +329,20 @@ public final class SearchSpec extends AbstractSafeParcelable {
 
     @IntDef(
             value = {
+                EMBEDDING_SEARCH_METRIC_TYPE_DEFAULT,
                 EMBEDDING_SEARCH_METRIC_TYPE_COSINE,
                 EMBEDDING_SEARCH_METRIC_TYPE_DOT_PRODUCT,
                 EMBEDDING_SEARCH_METRIC_TYPE_EUCLIDEAN,
             })
     @Retention(RetentionPolicy.SOURCE)
     public @interface EmbeddingSearchMetricType {}
+
+    /**
+     * Use the default metric set in {@link SearchSpec#getDefaultEmbeddingSearchMetricType()} for
+     * embedding search and ranking.
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_PROPERTY_CONFIG)
+    public static final int EMBEDDING_SEARCH_METRIC_TYPE_DEFAULT = 0;
 
     /** Cosine similarity as metric for embedding search and ranking. */
     @FlaggedApi(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_PROPERTY_CONFIG)
@@ -363,7 +380,8 @@ public final class SearchSpec extends AbstractSafeParcelable {
             @Param(id = 20) @Nullable List<EmbeddingVector> embeddingParameters,
             @Param(id = 21) int defaultEmbeddingSearchMetricType,
             @Param(id = 22) @Nullable List<String> informationalRankingExpressions,
-            @Param(id = 23) @Nullable List<String> searchStringParameters) {
+            @Param(id = 23) @Nullable List<String> searchStringParameters,
+            @Param(id = 24) @Nullable List<String> filterDocumentIds) {
         mTermMatchType = termMatchType;
         mSchemas = Collections.unmodifiableList(Objects.requireNonNull(schemas));
         mNamespaces = Collections.unmodifiableList(Objects.requireNonNull(namespaces));
@@ -398,6 +416,10 @@ public final class SearchSpec extends AbstractSafeParcelable {
         mSearchStringParameters =
                 (searchStringParameters != null)
                         ? Collections.unmodifiableList(searchStringParameters)
+                        : Collections.emptyList();
+        mFilterDocumentIds =
+                (filterDocumentIds != null)
+                        ? Collections.unmodifiableList(filterDocumentIds)
                         : Collections.emptyList();
     }
 
@@ -467,6 +489,17 @@ public final class SearchSpec extends AbstractSafeParcelable {
             return Collections.emptyList();
         }
         return mPackageNames;
+    }
+
+    /**
+     * Returns the list of document ids to search over.
+     *
+     * <p>If empty, the query will search over all documents.
+     */
+    @NonNull
+    @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_DOCUMENT_IDS)
+    public List<String> getFilterDocumentIds() {
+        return mFilterDocumentIds;
     }
 
     /** Returns the number of results per page in the result set. */
@@ -627,7 +660,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
     /**
      * Get the maximum number of results to return for each group.
      *
-     * @return the maximum number of results to return for each group or Integer.MAX_VALUE if {@link
+     * @return the maximum number of results to return for each group or 0 if {@link
      *     Builder#setResultGrouping(int, int)} was not called.
      */
     public int getResultGroupingLimit() {
@@ -730,10 +763,23 @@ public final class SearchSpec extends AbstractSafeParcelable {
         return mEnabledFeatures.contains(FeatureConstants.LIST_FILTER_QUERY_LANGUAGE);
     }
 
+    /** Returns whether the ScorablePropertyRanking feature is enabled. */
+    @FlaggedApi(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+    public boolean isScorablePropertyRankingEnabled() {
+        return mEnabledFeatures.contains(FeatureConstants.SCHEMA_SCORABLE_PROPERTY_CONFIG);
+    }
+
     /** Returns whether the LIST_FILTER_HAS_PROPERTY_FUNCTION feature is enabled. */
     @FlaggedApi(Flags.FLAG_ENABLE_LIST_FILTER_HAS_PROPERTY_FUNCTION)
     public boolean isListFilterHasPropertyFunctionEnabled() {
         return mEnabledFeatures.contains(FeatureConstants.LIST_FILTER_HAS_PROPERTY_FUNCTION);
+    }
+
+    /** Returns whether the LIST_FILTER_MATCH_SCORE_EXPRESSION_FUNCTION feature is enabled. */
+    @FlaggedApi(Flags.FLAG_ENABLE_LIST_FILTER_MATCH_SCORE_EXPRESSION_FUNCTION)
+    public boolean isListFilterMatchScoreExpressionFunctionEnabled() {
+        return mEnabledFeatures.contains(
+                FeatureConstants.LIST_FILTER_MATCH_SCORE_EXPRESSION_FUNCTION);
     }
 
     /**
@@ -764,6 +810,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
         private Bundle mTypePropertyWeights = new Bundle();
         private List<EmbeddingVector> mEmbeddingParameters = new ArrayList<>();
         private List<String> mSearchStringParameters = new ArrayList<>();
+        private List<String> mFilterDocumentIds = new ArrayList<>();
 
         private int mResultCountPerPage = DEFAULT_NUM_PER_PAGE;
         @TermMatch private int mTermMatchType = TERM_MATCH_PREFIX;
@@ -784,10 +831,11 @@ public final class SearchSpec extends AbstractSafeParcelable {
         @Nullable private String mSearchSourceLogTag;
         private boolean mBuilt = false;
 
-        /** Constructs a new builder for {@link SearchSpec} objects. */
+        /** Constructs a new {@link Builder} for {@link SearchSpec} objects. */
         public Builder() {}
 
-        /** @hide */
+        /** Constructs a new {@link Builder} from the given {@link SearchSpec}. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
         public Builder(@NonNull SearchSpec searchSpec) {
             Objects.requireNonNull(searchSpec);
             mSchemas = new ArrayList<>(searchSpec.getFilterSchemas());
@@ -822,6 +870,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
             mInformationalRankingExpressions =
                     new ArrayList<>(searchSpec.getInformationalRankingExpressions());
             mSearchSourceLogTag = searchSpec.getSearchSourceLogTag();
+            mFilterDocumentIds = new ArrayList<>(searchSpec.getFilterDocumentIds());
         }
 
         /**
@@ -866,6 +915,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
             Objects.requireNonNull(schemas);
             resetIfBuilt();
             mSchemas.addAll(schemas);
+            return this;
+        }
+
+        /** Clears all schema type filters. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearFilterSchemas() {
+            resetIfBuilt();
+            mSchemas.clear();
             return this;
         }
 
@@ -933,6 +992,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
             return addFilterProperties(schema, propertyPathsArrayList);
         }
 
+        /** Clears the property filters for all schema types. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearFilterProperties() {
+            resetIfBuilt();
+            mTypePropertyFilters.clear();
+            return this;
+        }
+
         /**
          * Adds a namespace filter to {@link SearchSpec} Entry. Only search for documents that have
          * the specified namespaces.
@@ -959,6 +1028,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
             Objects.requireNonNull(namespaces);
             resetIfBuilt();
             mNamespaces.addAll(namespaces);
+            return this;
+        }
+
+        /** Clears all namespace filters. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearFilterNamespaces() {
+            resetIfBuilt();
+            mNamespaces.clear();
             return this;
         }
 
@@ -992,6 +1071,57 @@ public final class SearchSpec extends AbstractSafeParcelable {
             Objects.requireNonNull(packageNames);
             resetIfBuilt();
             mPackageNames.addAll(packageNames);
+            return this;
+        }
+
+        /** Clears all package name filters. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearFilterPackageNames() {
+            resetIfBuilt();
+            mPackageNames.clear();
+            return this;
+        }
+
+        /**
+         * Adds a document id filter to {@link SearchSpec} Entry. Only search for documents that
+         * have the specified document ids.
+         *
+         * <p>If unset, the query will search over all documents.
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_DOCUMENT_IDS)
+        public Builder addFilterDocumentIds(@NonNull String... documentIds) {
+            Objects.requireNonNull(documentIds);
+            resetIfBuilt();
+            return addFilterDocumentIds(Arrays.asList(documentIds));
+        }
+
+        /**
+         * Adds a document id filter to {@link SearchSpec} Entry. Only search for documents that
+         * have the specified document ids.
+         *
+         * <p>If unset, the query will search over all documents.
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_DOCUMENT_IDS)
+        public Builder addFilterDocumentIds(@NonNull Collection<String> documentIds) {
+            Objects.requireNonNull(documentIds);
+            resetIfBuilt();
+            mFilterDocumentIds.addAll(documentIds);
+            return this;
+        }
+
+        /** Clears the document id filters. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearFilterDocumentIds() {
+            resetIfBuilt();
+            mFilterDocumentIds.clear();
             return this;
         }
 
@@ -1035,8 +1165,8 @@ public final class SearchSpec extends AbstractSafeParcelable {
          * <p>The ranking expression is a mathematical expression that will be evaluated to a
          * floating-point number of double type representing the score of each document.
          *
-         * <p>Numeric literals, arithmetic operators, mathematical functions, and document-based
-         * functions are supported to build expressions.
+         * <p>Numeric literals, arithmetic operators, mathematical functions, document-based, and
+         * property-value-based functions are supported to build expressions.
          *
          * <p>The following are supported arithmetic operators:
          *
@@ -1119,6 +1249,38 @@ public final class SearchSpec extends AbstractSafeParcelable {
          *       return a list of matched scores within the range of [0.5, 1], if
          *       `semanticSearch(getEmbeddingParameter(0), 0.5, 1, "COSINE")` is called in the query
          *       expression.
+         * </ul>
+         *
+         * <p>Property-value-based functions can be called via the function of
+         * getScorableProperty(schemaType, propertyPath)
+         *
+         * <ul>
+         *   <li>In order to use this function, ScorablePropertyRanking feature must be enabled via
+         *       {@link SearchSpec.Builder#setScorablePropertyRankingEnabled(boolean)}.
+         *   <li>Param 'schemaType' must be a valid AppSearch SchemaType otherwise an error is
+         *       returned.
+         *   <li>Param 'propertyPath' must be valid and scorable otherwise an error is returned. It
+         *       is considered scorable when:
+         *       <ul>
+         *         <li>It is to a property that is set to be enabled for scoring, or that
+         *         <li>It points to a scorable property of nested schema types.
+         *       </ul>
+         *   <li>This function returns a list double values for the matched documents.
+         *       <ul>
+         *         <li>If the matched document's schema is different from 'schemaType', or the
+         *             property under the 'propertyPath' holds no element, an empty list is
+         *             returned.
+         *       </ul>
+         *   <li>Some examples below:
+         *       <p>Suppose that there are two schemas: 'Gmail' and 'Person'. 'Gmail' schema has a
+         *       property 'recipient' with schema type 'Person'. In the advanced ranking expression,
+         *       you can have:
+         *       <ul>
+         *         <li>"sum(getScorableProperty('Gmail', 'viewTimes'))"
+         *         <li>"maxOrDefault(getScorableProperty('Person', 'income'), 0)"
+         *         <li>"sum(getScorableProperty('Gmail', 'recipient.income'))"
+         *         <li>"this.documentScore() + sum(getScorableProperty('Gmail', 'viewTimes'))"
+         *       </ul>
          * </ul>
          *
          * <p>Some errors may occur when using advanced ranking.
@@ -1215,6 +1377,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
             return this;
         }
 
+        /** Clears all informational ranking expressions. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearInformationalRankingExpressions() {
+            resetIfBuilt();
+            mInformationalRankingExpressions.clear();
+            return this;
+        }
+
         /**
          * Sets an optional log tag to indicate the source of this search.
          *
@@ -1243,6 +1415,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
                             + searchSourceLogTag.length());
             resetIfBuilt();
             mSearchSourceLogTag = searchSourceLogTag;
+            return this;
+        }
+
+        /** Clears the log tag that indicates the source of this search. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearSearchSourceLogTag() {
+            resetIfBuilt();
+            mSearchSourceLogTag = null;
             return this;
         }
 
@@ -1435,6 +1617,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
             return addProjection(schema, propertyPathsArrayList);
         }
 
+        /** Clears the projections for all schema types. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearProjections() {
+            resetIfBuilt();
+            mProjectionTypePropertyMasks.clear();
+            return this;
+        }
+
         /**
          * Sets the maximum number of results to return for each group, where groups are defined by
          * grouping type.
@@ -1462,6 +1654,17 @@ public final class SearchSpec extends AbstractSafeParcelable {
             resetIfBuilt();
             mGroupingTypeFlags = groupingTypeFlags;
             mGroupingLimit = limit;
+            return this;
+        }
+
+        /** Clears the result grouping and limit. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearResultGrouping() {
+            resetIfBuilt();
+            mGroupingTypeFlags = 0;
+            mGroupingLimit = 0;
             return this;
         }
 
@@ -1516,6 +1719,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
             return this;
         }
 
+        /** Clears the property weights for all schema types. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearPropertyWeights() {
+            resetIfBuilt();
+            mTypePropertyWeights.clear();
+            return this;
+        }
+
         /**
          * Specifies which documents to join with, and how to join.
          *
@@ -1529,6 +1742,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
         public Builder setJoinSpec(@NonNull JoinSpec joinSpec) {
             resetIfBuilt();
             mJoinSpec = Objects.requireNonNull(joinSpec);
+            return this;
+        }
+
+        /** Clears the {@link JoinSpec}. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearJoinSpec() {
+            resetIfBuilt();
+            mJoinSpec = null;
             return this;
         }
 
@@ -1608,6 +1831,16 @@ public final class SearchSpec extends AbstractSafeParcelable {
             return this;
         }
 
+        /** Clears the embedding parameters. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearEmbeddingParameters() {
+            resetIfBuilt();
+            mEmbeddingParameters.clear();
+            return this;
+        }
+
         /**
          * Sets the default embedding metric type used for embedding search (see {@link
          * AppSearchSession#search}) and ranking (see {@link
@@ -1661,6 +1894,19 @@ public final class SearchSpec extends AbstractSafeParcelable {
             Objects.requireNonNull(searchStringParameters);
             resetIfBuilt();
             mSearchStringParameters.addAll(searchStringParameters);
+            return this;
+        }
+
+        /**
+         * Clears the list of String parameters that can be referenced in the query through the
+         * "getSearchStringParameter({index})" function.
+         */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public Builder clearSearchStringParameters() {
+            resetIfBuilt();
+            mSearchStringParameters.clear();
             return this;
         }
 
@@ -1746,6 +1992,40 @@ public final class SearchSpec extends AbstractSafeParcelable {
         }
 
         /**
+         * Sets the LIST_FILTER_MATCH_SCORE_EXPRESSION_FUNCTION feature as enabled/disabled
+         * according to the enabled parameter.
+         *
+         * <p>If not enabled, the use of the "matchScoreExpression" function is disallowed. See
+         * {@link AppSearchSession#search} for more details about the function.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_LIST_FILTER_MATCH_SCORE_EXPRESSION_FUNCTION)
+        public Builder setListFilterMatchScoreExpressionFunctionEnabled(boolean enabled) {
+            modifyEnabledFeature(
+                    FeatureConstants.LIST_FILTER_MATCH_SCORE_EXPRESSION_FUNCTION, enabled);
+            return this;
+        }
+
+        /**
+         * Sets the ScorablePropertyRanking feature as enabled or disabled.
+         *
+         * <p>If enabled, 'getScorableProperty' function can be used in the advanced ranking
+         * expression. For details, see {@link SearchSpec.Builder#setRankingStrategy(String)}.
+         *
+         * @param enabled Enables the feature if true, otherwise disables it.
+         */
+        @CanIgnoreReturnValue
+        @FlaggedApi(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+        @NonNull
+        public Builder setScorablePropertyRankingEnabled(boolean enabled) {
+            modifyEnabledFeature(FeatureConstants.SCHEMA_SCORABLE_PROPERTY_CONFIG, enabled);
+            return this;
+        }
+
+        /**
          * Constructs a new {@link SearchSpec} from the contents of this builder.
          *
          * @throws IllegalArgumentException if property weights are provided with a ranking strategy
@@ -1806,7 +2086,8 @@ public final class SearchSpec extends AbstractSafeParcelable {
                     mEmbeddingParameters,
                     mDefaultEmbeddingSearchMetricType,
                     mInformationalRankingExpressions,
-                    mSearchStringParameters);
+                    mSearchStringParameters,
+                    mFilterDocumentIds);
         }
 
         private void resetIfBuilt() {
@@ -1821,6 +2102,7 @@ public final class SearchSpec extends AbstractSafeParcelable {
                 mInformationalRankingExpressions =
                         new ArrayList<>(mInformationalRankingExpressions);
                 mSearchStringParameters = new ArrayList<>(mSearchStringParameters);
+                mFilterDocumentIds = new ArrayList<>(mFilterDocumentIds);
                 mBuilt = false;
             }
         }

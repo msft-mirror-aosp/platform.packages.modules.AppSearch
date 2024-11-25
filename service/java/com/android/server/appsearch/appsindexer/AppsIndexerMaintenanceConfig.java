@@ -17,14 +17,11 @@ package com.android.server.appsearch.appsindexer;
 
 import android.annotation.NonNull;
 
-import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.indexer.IndexerLocalService;
 import com.android.server.appsearch.indexer.IndexerMaintenanceConfig;
 
 /** Singleton class containing configuration for the apps indexer maintenance task. */
 public class AppsIndexerMaintenanceConfig implements IndexerMaintenanceConfig {
-    @VisibleForTesting
-    static final int MIN_APPS_INDEXER_JOB_ID = 16964307; // Contacts Indexer Max Job Id + 1
 
     public static final IndexerMaintenanceConfig INSTANCE = new AppsIndexerMaintenanceConfig();
 

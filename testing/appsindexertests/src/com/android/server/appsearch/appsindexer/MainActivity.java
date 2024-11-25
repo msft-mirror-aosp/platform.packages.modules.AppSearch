@@ -14,23 +14,20 @@
  * limitations under the License.
  */
 
-package android.app.appsearch.aidl;
+package com.android.server.appsearch.appsindexer;
 
+import android.app.Activity;
 import android.os.Bundle;
-import android.app.appsearch.aidl.IAppSearchResultCallback;
-import android.app.appsearch.functions.ExecuteAppFunctionRequest;
+import android.widget.TextView;
 
+public class MainActivity extends Activity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
- /** {@hide} */
-oneway interface IAppFunctionService {
-    /**
-     * Called by the system to execute a specific app function.
-     *
-     * @param request  the function execution request.
-     * @param callback a callback to report back the result.
-     */
-    void executeAppFunction(
-        in ExecuteAppFunctionRequest request,
-        in IAppSearchResultCallback callback
-    );
+        TextView label = new TextView(this);
+        label.setText("I am MainActivity!");
+
+        setContentView(label);
+    }
 }

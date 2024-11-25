@@ -214,7 +214,7 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
 
     /** Builder for {@link AppSearchSchema objects}. */
     public static final class Builder {
-        private final String mSchemaType;
+        private String mSchemaType;
         private String mDescription = "";
         private ArrayList<PropertyConfigParcel> mPropertyConfigParcels = new ArrayList<>();
         private LinkedHashSet<String> mParentTypes = new LinkedHashSet<>();
@@ -224,6 +224,29 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
         /** Creates a new {@link AppSearchSchema.Builder}. */
         public Builder(@NonNull String schemaType) {
             mSchemaType = Objects.requireNonNull(schemaType);
+        }
+
+        /** Creates a new {@link AppSearchSchema.Builder} from the given {@link AppSearchSchema}. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        public Builder(@NonNull AppSearchSchema schema) {
+            mSchemaType = schema.getSchemaType();
+            mDescription = schema.getDescription();
+            mPropertyConfigParcels.addAll(schema.mPropertyConfigParcels);
+            mParentTypes.addAll(schema.mParentTypes);
+            for (int i = 0; i < mPropertyConfigParcels.size(); i++) {
+                mPropertyNames.add(mPropertyConfigParcels.get(i).getName());
+            }
+        }
+
+        /** Sets the schema type name. */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public AppSearchSchema.Builder setSchemaType(@NonNull String schemaType) {
+            Objects.requireNonNull(schemaType);
+            resetIfBuilt();
+            mSchemaType = schemaType;
+            return this;
         }
 
         /**
@@ -242,7 +265,7 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             return this;
         }
 
-        /** Adds a property to the given type. */
+        /** Adds a property to the schema type. */
         @CanIgnoreReturnValue
         @NonNull
         public AppSearchSchema.Builder addProperty(@NonNull PropertyConfig propertyConfig) {
@@ -257,7 +280,21 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
         }
 
         /**
-         * Adds a parent type to the given type for polymorphism, so that the given type will be
+         * Clears all properties added through {@link #addProperty(PropertyConfig)} from the schema
+         * type.
+         */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public AppSearchSchema.Builder clearProperties() {
+            resetIfBuilt();
+            mPropertyConfigParcels.clear();
+            mPropertyNames.clear();
+            return this;
+        }
+
+        /**
+         * Adds a parent type to the schema type for polymorphism, so that the schema type will be
          * considered as a subtype of {@code parentSchemaType}.
          *
          * <p>Subtype relations are automatically considered transitive, so callers are only
@@ -322,6 +359,19 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             Objects.requireNonNull(parentSchemaType);
             resetIfBuilt();
             mParentTypes.add(parentSchemaType);
+            return this;
+        }
+
+        /**
+         * Clears all parent types added through {@link #addParentType(String)} from the schema
+         * type.
+         */
+        @FlaggedApi(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+        @CanIgnoreReturnValue
+        @NonNull
+        public AppSearchSchema.Builder clearParentTypes() {
+            resetIfBuilt();
+            mParentTypes.clear();
             return this;
         }
 
@@ -1035,12 +1085,19 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             return indexingConfigParcel.getIndexingType();
         }
 
+        /** Returns if the property is enabled for scoring. */
+        @FlaggedApi(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+        public boolean isScoringEnabled() {
+            return mPropertyConfigParcel.isScoringEnabled();
+        }
+
         /** Builder for {@link LongPropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
             private String mDescription = "";
             @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
             @LongPropertyConfig.IndexingType private int mIndexingType = INDEXING_TYPE_NONE;
+            private boolean mScoringEnabled = false;
 
             /** Creates a new {@link LongPropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -1095,12 +1152,35 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
                 return this;
             }
 
+            /**
+             * Sets the property enabled or disabled for scoring.
+             *
+             * <p>If this method is not called, the default value is false.
+             *
+             * <p>If enabled, it can be used in the advanced ranking expression via the function of
+             * 'getScorableProperty'.
+             *
+             * <p>For the detailed documentation, see {@link
+             * SearchSpec.Builder#setRankingStrategy(String)}.
+             */
+            @CanIgnoreReturnValue
+            @FlaggedApi(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+            @NonNull
+            public LongPropertyConfig.Builder setScoringEnabled(boolean scoringEnabled) {
+                mScoringEnabled = scoringEnabled;
+                return this;
+            }
+
             /** Constructs a new {@link LongPropertyConfig} from the contents of this builder. */
             @NonNull
             public LongPropertyConfig build() {
                 return new LongPropertyConfig(
                         PropertyConfigParcel.createForLong(
-                                mPropertyName, mDescription, mCardinality, mIndexingType));
+                                mPropertyName,
+                                mDescription,
+                                mCardinality,
+                                mIndexingType,
+                                mScoringEnabled));
             }
         }
 
@@ -1132,11 +1212,18 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             super(propertyConfigParcel);
         }
 
+        /** Returns if the property is enabled for scoring. */
+        @FlaggedApi(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+        public boolean isScoringEnabled() {
+            return mPropertyConfigParcel.isScoringEnabled();
+        }
+
         /** Builder for {@link DoublePropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
             private String mDescription = "";
             @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
+            private boolean mScoringEnabled = false;
 
             /** Creates a new {@link DoublePropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -1174,12 +1261,31 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
                 return this;
             }
 
+            /**
+             * Sets the property enabled or disabled for scoring.
+             *
+             * <p>If this method is not called, the default value is false.
+             *
+             * <p>If enabled, it can be used in the advanced ranking expression via the function of
+             * 'getScorableProperty'.
+             *
+             * <p>For the detailed documentation, see {@link
+             * SearchSpec.Builder#setRankingStrategy(String)}.
+             */
+            @CanIgnoreReturnValue
+            @FlaggedApi(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+            @NonNull
+            public DoublePropertyConfig.Builder setScoringEnabled(boolean scoringEnabled) {
+                mScoringEnabled = scoringEnabled;
+                return this;
+            }
+
             /** Constructs a new {@link DoublePropertyConfig} from the contents of this builder. */
             @NonNull
             public DoublePropertyConfig build() {
                 return new DoublePropertyConfig(
                         PropertyConfigParcel.createForDouble(
-                                mPropertyName, mDescription, mCardinality));
+                                mPropertyName, mDescription, mCardinality, mScoringEnabled));
             }
         }
     }
@@ -1190,11 +1296,18 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             super(propertyConfigParcel);
         }
 
+        /** Returns if the property is enabled for scoring. */
+        @FlaggedApi(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+        public boolean isScoringEnabled() {
+            return mPropertyConfigParcel.isScoringEnabled();
+        }
+
         /** Builder for {@link BooleanPropertyConfig}. */
         public static final class Builder {
             private final String mPropertyName;
             private String mDescription = "";
             @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
+            private boolean mScoringEnabled = false;
 
             /** Creates a new {@link BooleanPropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -1232,12 +1345,31 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
                 return this;
             }
 
+            /**
+             * Sets the property enabled or disabled for scoring.
+             *
+             * <p>If this method is not called, the default value is false.
+             *
+             * <p>If enabled, it can be used in the advanced ranking expression via the function of
+             * 'getScorableProperty'.
+             *
+             * <p>For the detailed documentation, see {@link
+             * SearchSpec.Builder#setRankingStrategy(String)}.
+             */
+            @CanIgnoreReturnValue
+            @FlaggedApi(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+            @NonNull
+            public BooleanPropertyConfig.Builder setScoringEnabled(boolean scoringEnabled) {
+                mScoringEnabled = scoringEnabled;
+                return this;
+            }
+
             /** Constructs a new {@link BooleanPropertyConfig} from the contents of this builder. */
             @NonNull
             public BooleanPropertyConfig build() {
                 return new BooleanPropertyConfig(
                         PropertyConfigParcel.createForBoolean(
-                                mPropertyName, mDescription, mCardinality));
+                                mPropertyName, mDescription, mCardinality, mScoringEnabled));
             }
         }
     }
@@ -1582,6 +1714,25 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
          */
         public static final int INDEXING_TYPE_SIMILARITY = 1;
 
+        /**
+         * Indicates whether the vector contents of this property should be quantized.
+         *
+         * @hide
+         */
+        @IntDef(
+                value = {
+                    QUANTIZATION_TYPE_NONE,
+                    QUANTIZATION_TYPE_8_BIT,
+                })
+        @Retention(RetentionPolicy.SOURCE)
+        public @interface QuantizationType {}
+
+        /** Contents in this property will not be quantized. */
+        public static final int QUANTIZATION_TYPE_NONE = 0;
+
+        /** Contents in this property will be quantized to 8 bits. */
+        public static final int QUANTIZATION_TYPE_8_BIT = 1;
+
         EmbeddingPropertyConfig(@NonNull PropertyConfigParcel propertyConfigParcel) {
             super(propertyConfigParcel);
         }
@@ -1597,6 +1748,22 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             return indexingConfigParcel.getIndexingType();
         }
 
+        /**
+         * Returns how the embedding contents of this property should be quantized.
+         *
+         * <p>If the property isn't indexed, returns {@link #QUANTIZATION_TYPE_NONE}.
+         */
+        @EmbeddingPropertyConfig.QuantizationType
+        @FlaggedApi(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_QUANTIZATION)
+        public int getQuantizationType() {
+            PropertyConfigParcel.EmbeddingIndexingConfigParcel indexingConfigParcel =
+                    mPropertyConfigParcel.getEmbeddingIndexingConfigParcel();
+            if (indexingConfigParcel == null) {
+                return QUANTIZATION_TYPE_NONE;
+            }
+            return indexingConfigParcel.getQuantizationType();
+        }
+
         /** Builder for {@link EmbeddingPropertyConfig}. */
         @FlaggedApi(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_PROPERTY_CONFIG)
         public static final class Builder {
@@ -1604,6 +1771,9 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             private String mDescription = "";
             @Cardinality private int mCardinality = CARDINALITY_OPTIONAL;
             @EmbeddingPropertyConfig.IndexingType private int mIndexingType = INDEXING_TYPE_NONE;
+
+            @EmbeddingPropertyConfig.QuantizationType
+            private int mQuantizationType = QUANTIZATION_TYPE_NONE;
 
             /** Creates a new {@link EmbeddingPropertyConfig.Builder}. */
             public Builder(@NonNull String propertyName) {
@@ -1659,13 +1829,42 @@ public final class AppSearchSchema extends AbstractSafeParcelable {
             }
 
             /**
+             * Configures whether the vector contents of this property should be quantized.
+             *
+             * <p>Quantization can reduce the size of the embedding search index, potentially
+             * leading to faster embedding search due to lower I/O bandwidth. Quantization is
+             * usually very reliable and in most cases will have a negligible impact on recall.
+             * Using quantization is strongly recommended.
+             *
+             * <p>If this method is not called, the default quantization type is {@link
+             * EmbeddingPropertyConfig#QUANTIZATION_TYPE_NONE}.
+             */
+            @FlaggedApi(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_QUANTIZATION)
+            @CanIgnoreReturnValue
+            @NonNull
+            public EmbeddingPropertyConfig.Builder setQuantizationType(
+                    @EmbeddingPropertyConfig.QuantizationType int quantizationType) {
+                Preconditions.checkArgumentInRange(
+                        quantizationType,
+                        QUANTIZATION_TYPE_NONE,
+                        QUANTIZATION_TYPE_8_BIT,
+                        "quantizationType");
+                mQuantizationType = quantizationType;
+                return this;
+            }
+
+            /**
              * Constructs a new {@link EmbeddingPropertyConfig} from the contents of this builder.
              */
             @NonNull
             public EmbeddingPropertyConfig build() {
                 return new EmbeddingPropertyConfig(
                         PropertyConfigParcel.createForEmbedding(
-                                mPropertyName, mDescription, mCardinality, mIndexingType));
+                                mPropertyName,
+                                mDescription,
+                                mCardinality,
+                                mIndexingType,
+                                mQuantizationType));
             }
         }
     }
