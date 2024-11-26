@@ -34,9 +34,10 @@ import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_I
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_ICING_USE_PERSISTENT_HASHMAP;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_ICING_USE_PRE_MAPPING_WITH_FILE_BACKED_VECTOR;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_ICING_USE_READ_ONLY_SEARCH;
-import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT;
+import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_LIMIT_CONFIG_DOCUMENT_COUNT_LIMIT_START_THRESHOLD;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT;
+import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_LIMIT_CONFIG_PER_PACKAGE_DOCUMENT_COUNT_LIMIT;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_RATE_LIMIT_API_COSTS;
@@ -58,9 +59,10 @@ import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_DOC_CO
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_FULLY_PERSIST_JOB_INTERVAL;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_ICING_CONFIG_USE_READ_ONLY_SEARCH;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD;
-import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT;
+import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LIMIT_CONFIG_DOCUMENT_COUNT_LIMIT_START_THRESHOLD;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT;
+import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LIMIT_CONFIG_PER_PACKAGE_DOCUMENT_COUNT_LIMIT;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LITE_INDEX_SORT_AT_INDEXING;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LITE_INDEX_SORT_SIZE;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
@@ -112,8 +114,10 @@ public class ServiceAppSearchConfigTest {
                 DEFAULT_SAMPLING_INTERVAL);
         assertThat(appSearchConfig.getMaxDocumentSizeBytes()).isEqualTo(
                 DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES);
-        assertThat(appSearchConfig.getMaxDocumentCount()).isEqualTo(
-                DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT);
+        assertThat(appSearchConfig.getPerPackageDocumentCountLimit())
+                .isEqualTo(DEFAULT_LIMIT_CONFIG_PER_PACKAGE_DOCUMENT_COUNT_LIMIT);
+        assertThat(appSearchConfig.getDocumentCountLimitStartThreshold())
+                .isEqualTo(DEFAULT_LIMIT_CONFIG_DOCUMENT_COUNT_LIMIT_START_THRESHOLD);
         assertThat(appSearchConfig.getMaxSuggestionCount()).isEqualTo(
                 DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT);
         assertThat(appSearchConfig.getCachedBytesOptimizeThreshold()).isEqualTo(
@@ -472,28 +476,42 @@ public class ServiceAppSearchConfigTest {
                 KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
                 Integer.toString(2001),
                 /*makeDefault=*/ false);
-        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_LIMIT_CONFIG_PER_PACKAGE_DOCUMENT_COUNT_LIMIT,
                 Integer.toString(2002),
-                /*makeDefault=*/ false);
+                /* makeDefault= */ false);
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_LIMIT_CONFIG_DOCUMENT_COUNT_LIMIT_START_THRESHOLD,
+                Integer.toString(2003),
+                /* makeDefault= */ false);
 
         ServiceAppSearchConfig appSearchConfig =
                 FrameworkServiceAppSearchConfig.create(DIRECT_EXECUTOR);
         assertThat(appSearchConfig.getMaxDocumentSizeBytes()).isEqualTo(2001);
-        assertThat(appSearchConfig.getMaxDocumentCount()).isEqualTo(2002);
+        assertThat(appSearchConfig.getPerPackageDocumentCountLimit()).isEqualTo(2002);
+        assertThat(appSearchConfig.getDocumentCountLimitStartThreshold()).isEqualTo(2003);
 
         // Override
         DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
                 KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES,
                 Integer.toString(1775),
                 /*makeDefault=*/ false);
-        DeviceConfig.setProperty(DeviceConfig.NAMESPACE_APPSEARCH,
-                KEY_LIMIT_CONFIG_MAX_DOCUMENT_COUNT,
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_LIMIT_CONFIG_PER_PACKAGE_DOCUMENT_COUNT_LIMIT,
                 Integer.toString(1776),
-                /*makeDefault=*/ false);
+                /* makeDefault= */ false);
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_LIMIT_CONFIG_DOCUMENT_COUNT_LIMIT_START_THRESHOLD,
+                Integer.toString(1777),
+                /* makeDefault= */ false);
 
         assertThat(appSearchConfig.getMaxDocumentSizeBytes()).isEqualTo(1775);
-        assertThat(appSearchConfig.getMaxDocumentCount()).isEqualTo(1776);
+        assertThat(appSearchConfig.getPerPackageDocumentCountLimit()).isEqualTo(1776);
+        assertThat(appSearchConfig.getDocumentCountLimitStartThreshold()).isEqualTo(1777);
     }
 
     @Test
@@ -921,9 +939,14 @@ public class ServiceAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getMaxDocumentSizeBytes());
-        Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
+        Assert.assertThrows(
+                "Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
-                () -> appSearchConfig.getMaxDocumentCount());
+                () -> appSearchConfig.getPerPackageDocumentCountLimit());
+        Assert.assertThrows(
+                "Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getDocumentCountLimitStartThreshold());
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getMaxSuggestionCount());
