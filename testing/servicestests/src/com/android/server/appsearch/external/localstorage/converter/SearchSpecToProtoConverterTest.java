@@ -27,6 +27,8 @@ import static com.google.common.truth.Truth.assertThat;
 import android.app.appsearch.JoinSpec;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.testutil.AppSearchTestUtils;
+import android.util.ArrayMap;
+import android.util.ArraySet;
 
 import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
@@ -42,7 +44,9 @@ import com.android.server.appsearch.icing.proto.JoinSpecProto;
 import com.android.server.appsearch.icing.proto.NamespaceDocumentUriGroup;
 import com.android.server.appsearch.icing.proto.PropertyWeight;
 import com.android.server.appsearch.icing.proto.ResultSpecProto;
+import com.android.server.appsearch.icing.proto.SchemaTypeAliasMapProto;
 import com.android.server.appsearch.icing.proto.SchemaTypeConfigProto;
+import com.android.server.appsearch.icing.proto.ScoringFeatureType;
 import com.android.server.appsearch.icing.proto.ScoringSpecProto;
 import com.android.server.appsearch.icing.proto.SearchSpecProto;
 import com.android.server.appsearch.icing.proto.TypePropertyWeights;
@@ -71,6 +75,18 @@ public class SearchSpecToProtoConverterTest {
             new LocalStorageIcingOptionsConfig();
 
     private AppSearchImpl mAppSearchImpl;
+
+    private Map<String, Set<String>> extractSchemaToPrefixedSchemasMap(
+            ScoringSpecProto scoringSpecProto) {
+        Map<String, Set<String>> schemaToSchemaTypesMap = new ArrayMap<>();
+        for (SchemaTypeAliasMapProto schemaTypeAliasMapProto :
+                scoringSpecProto.getSchemaTypeAliasMapProtosList()) {
+            schemaToSchemaTypesMap.put(
+                    schemaTypeAliasMapProto.getAliasSchemaType(),
+                    new ArraySet<>(schemaTypeAliasMapProto.getSchemaTypesList()));
+        }
+        return schemaToSchemaTypesMap;
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -335,6 +351,50 @@ public class SearchSpecToProtoConverterTest {
                 .isEqualTo(ScoringSpecProto.RankingStrategy.Code.RELEVANCE_SCORE.getNumber());
         assertThat(scoringSpecProto.getTypePropertyWeightsList())
                 .containsExactly(typePropertyWeights);
+    }
+
+    @Test
+    public void testGenerateScoringSpecProtoWhenScorableRankingIsEnabled() {
+        String prefix1 = PrefixUtil.createPrefix("package1", "database2");
+        String prefix2 = PrefixUtil.createPrefix("package2", "database1");
+        String gmailSchemaType = "gmail";
+        String personSchemaType = "person";
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setRankingStrategy(RANKING_STRATEGY_RELEVANCE_SCORE)
+                        .setScorablePropertyRankingEnabled(true)
+                        .build();
+        SchemaTypeConfigProto configProto = SchemaTypeConfigProto.getDefaultInstance();
+        ScoringSpecProto scoringSpecProto =
+                new SearchSpecToProtoConverter(
+                                /* queryExpression= */ "",
+                                searchSpec,
+                                /* prefixes= */ ImmutableSet.of(prefix1, prefix2),
+                                /* namespaceMap= */ ImmutableMap.of(
+                                        prefix1, ImmutableSet.of(prefix1 + "namespace1"),
+                                        prefix2, ImmutableSet.of(prefix2 + "namespace1")),
+                                new SchemaCache(
+                                        /* schemaMap= */ ImmutableMap.of(
+                                                prefix1,
+                                                ImmutableMap.of(
+                                                        prefix1 + gmailSchemaType, configProto,
+                                                        prefix1 + personSchemaType, configProto),
+                                                prefix2,
+                                                ImmutableMap.of(
+                                                        prefix2 + gmailSchemaType, configProto))),
+                                mLocalStorageIcingOptionsConfig)
+                        .toScoringSpecProto();
+        assertThat(scoringSpecProto.getScoringFeatureTypesEnabledList())
+                .containsExactly(ScoringFeatureType.SCORABLE_PROPERTY_RANKING);
+        Map<String, Set<String>> schemaToPrefixedSchemasMap =
+                extractSchemaToPrefixedSchemasMap(scoringSpecProto);
+        assertThat(schemaToPrefixedSchemasMap)
+                .containsExactly(
+                        "person",
+                        ImmutableSet.of("package1$database2/person"),
+                        "gmail",
+                        ImmutableSet.of("package1$database2/gmail", "package2$database1/gmail"));
     }
 
     @Test
