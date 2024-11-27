@@ -38,8 +38,10 @@ import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_L
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_LIMIT_CONFIG_MAX_SUGGESTION_COUNT;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_LIMIT_CONFIG_PER_PACKAGE_DOCUMENT_COUNT_LIMIT;
+import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_MAX_OPEN_BLOB_COUNT;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS;
+import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_ORPHAN_BLOB_TIME_TO_LIVE_MS;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_RATE_LIMIT_API_COSTS;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_RATE_LIMIT_ENABLED;
 import static com.android.server.appsearch.FrameworkServiceAppSearchConfig.KEY_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
@@ -65,12 +67,14 @@ import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LIMIT_
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LIMIT_CONFIG_PER_PACKAGE_DOCUMENT_COUNT_LIMIT;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LITE_INDEX_SORT_AT_INDEXING;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_LITE_INDEX_SORT_SIZE;
+import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_MAX_OPEN_BLOB_COUNT;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_MIN_TIME_INTERVAL_BETWEEN_SAMPLES_MILLIS;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_RATE_LIMIT_ENABLED;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_PER_PACKAGE_CAPACITY_PERCENTAGE;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_SAMPLING_INTERVAL;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS;
+import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_ORPHAN_BLOB_TIME_TO_LIVE_MS;
 import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX;
 
 import static com.google.common.truth.Truth.assertThat;
@@ -173,6 +177,9 @@ public class ServiceAppSearchConfigTest {
                 .isEqualTo(DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX);
         assertThat(appSearchConfig.getCachedFullyPersistJobIntervalMillis())
                 .isEqualTo(DEFAULT_FULLY_PERSIST_JOB_INTERVAL);
+        assertThat(appSearchConfig.getMaxOpenBlobCount()).isEqualTo(DEFAULT_MAX_OPEN_BLOB_COUNT);
+        assertThat(appSearchConfig.getOrphanBlobTimeToLiveMs())
+                .isEqualTo(DEFAULT_ORPHAN_BLOB_TIME_TO_LIVE_MS);
     }
 
     @Test
@@ -904,6 +911,39 @@ public class ServiceAppSearchConfigTest {
         assertThat(appSearchConfig.getCachedFullyPersistJobIntervalMillis()).isEqualTo(1777);
     }
 
+    @Test
+    public void testCustomizedValueOverride_blobStore() {
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_MAX_OPEN_BLOB_COUNT,
+                Integer.toString(2003),
+                /* makeDefault= */ false);
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_ORPHAN_BLOB_TIME_TO_LIVE_MS,
+                Integer.toString(2004),
+                /* makeDefault= */ false);
+
+        ServiceAppSearchConfig appSearchConfig =
+                FrameworkServiceAppSearchConfig.create(DIRECT_EXECUTOR);
+        assertThat(appSearchConfig.getMaxOpenBlobCount()).isEqualTo(2003);
+        assertThat(appSearchConfig.getOrphanBlobTimeToLiveMs()).isEqualTo(2004);
+
+        // Override
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_MAX_OPEN_BLOB_COUNT,
+                Integer.toString(1777),
+                /* makeDefault= */ false);
+        DeviceConfig.setProperty(
+                DeviceConfig.NAMESPACE_APPSEARCH,
+                KEY_ORPHAN_BLOB_TIME_TO_LIVE_MS,
+                Integer.toString(1778),
+                /* makeDefault= */ false);
+
+        assertThat(appSearchConfig.getMaxOpenBlobCount()).isEqualTo(1777);
+        assertThat(appSearchConfig.getOrphanBlobTimeToLiveMs()).isEqualTo(1778);
+    }
 
     @Test
     public void testNotUsable_afterClose() {
@@ -1013,5 +1053,13 @@ public class ServiceAppSearchConfigTest {
         Assert.assertThrows("Trying to use a closed AppSearchConfig instance.",
                 IllegalStateException.class,
                 () -> appSearchConfig.getCachedFullyPersistJobIntervalMillis());
+        Assert.assertThrows(
+                "Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getMaxOpenBlobCount());
+        Assert.assertThrows(
+                "Trying to use a closed AppSearchConfig instance.",
+                IllegalStateException.class,
+                () -> appSearchConfig.getOrphanBlobTimeToLiveMs());
     }
 }

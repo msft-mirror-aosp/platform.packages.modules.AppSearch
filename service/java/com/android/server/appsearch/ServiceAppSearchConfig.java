@@ -87,6 +87,12 @@ public interface ServiceAppSearchConfig extends AppSearchConfig, AutoCloseable {
     /** The default interval in millisecond to trigger fully persist job. */
     long DEFAULT_FULLY_PERSIST_JOB_INTERVAL = DAY_IN_MILLIS;
 
+    /**
+     * The default number of active fds an app is allowed to open for read and write blob from
+     * AppSearch.
+     */
+    int DEFAULT_MAX_OPEN_BLOB_COUNT = 250;
+
     /** Returns cached value for minTimeIntervalBetweenSamplesMillis. */
     long getCachedMinTimeIntervalBetweenSamplesMillis();
 
