@@ -17,6 +17,7 @@
 package com.android.server.appsearch.external.localstorage;
 
 import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
+import static android.app.appsearch.AppSearchResult.RESULT_OUT_OF_SPACE;
 import static android.app.appsearch.testutil.AppSearchTestUtils.calculateDigest;
 import static android.app.appsearch.testutil.AppSearchTestUtils.createMockVisibilityChecker;
 import static android.app.appsearch.testutil.AppSearchTestUtils.generateRandomBytes;
@@ -2635,6 +2636,147 @@ public class AppSearchImplTest {
                 InputStream inputStream = new ParcelFileDescriptor.AutoCloseInputStream(writePfd)) {
             inputStream.read(new byte[10]);
         }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_BLOB_STORE)
+    public void testOptimizeBlob() throws Exception {
+        // Create a new AppSearchImpl with lower orphan blob time to live.
+        mAppSearchImpl.close();
+        File tempFolder = mTemporaryFolder.newFolder();
+        mAppSearchImpl =
+                AppSearchImpl.create(
+                        tempFolder,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(),
+                                new LocalStorageIcingOptionsConfig() {
+                                    @Override
+                                    public long getOrphanBlobTimeToLiveMs() {
+                                        // 0 will make it non-expire
+                                        return 1L;
+                                    }
+                                }),
+                        /* initStatsBuilder= */ null,
+                        /* visibilityChecker= */ null,
+                        new JetpackRevocableFileDescriptorStore(mUnlimitedConfig),
+                        ALWAYS_OPTIMIZE);
+
+        // Write the blob and commit it.
+        byte[] data = generateRandomBytes(20); // 20 Bytes
+        byte[] digest = calculateDigest(data);
+        AppSearchBlobHandle handle =
+                AppSearchBlobHandle.createWithSha256(digest, "package", "db1", "namespace");
+        ParcelFileDescriptor writePfd = mAppSearchImpl.openWriteBlob("package", "db1", handle);
+        try (OutputStream outputStream = new ParcelFileDescriptor.AutoCloseOutputStream(writePfd)) {
+            outputStream.write(data);
+            outputStream.flush();
+        }
+        writePfd.close();
+        mAppSearchImpl.commitBlob("package", "db1", handle);
+
+        mAppSearchImpl.persistToDisk(PersistType.Code.FULL);
+
+        // Optimize remove the expired orphan blob.
+        mAppSearchImpl.optimize(/* builder= */ null);
+        AppSearchException e =
+                assertThrows(
+                        AppSearchException.class,
+                        () -> {
+                            mAppSearchImpl.openReadBlob("package", "db1", handle);
+                        });
+        assertThat(e.getResultCode()).isEqualTo(AppSearchResult.RESULT_NOT_FOUND);
+        assertThat(e.getMessage()).contains("Cannot find the blob for handle");
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_BLOB_STORE)
+    public void testOptimizeBlobWithDocument() throws Exception {
+        // Create a new AppSearchImpl with lower orphan blob time to live.
+        mAppSearchImpl.close();
+        File tempFolder = mTemporaryFolder.newFolder();
+        mAppSearchImpl =
+                AppSearchImpl.create(
+                        tempFolder,
+                        new AppSearchConfigImpl(
+                                new UnlimitedLimitConfig(),
+                                new LocalStorageIcingOptionsConfig() {
+                                    @Override
+                                    public long getOrphanBlobTimeToLiveMs() {
+                                        // 0 will make it non-expire
+                                        return 1L;
+                                    }
+                                }),
+                        /* initStatsBuilder= */ null,
+                        /* visibilityChecker= */ null,
+                        new JetpackRevocableFileDescriptorStore(mUnlimitedConfig),
+                        ALWAYS_OPTIMIZE);
+
+        // Write the blob and commit it.
+        byte[] data = generateRandomBytes(20); // 20 Bytes
+        byte[] digest = calculateDigest(data);
+        AppSearchBlobHandle handle =
+                AppSearchBlobHandle.createWithSha256(digest, "package", "db1", "namespace");
+        ParcelFileDescriptor writePfd = mAppSearchImpl.openWriteBlob("package", "db1", handle);
+        try (OutputStream outputStream = new ParcelFileDescriptor.AutoCloseOutputStream(writePfd)) {
+            outputStream.write(data);
+            outputStream.flush();
+        }
+        writePfd.close();
+        mAppSearchImpl.commitBlob("package", "db1", handle);
+
+        // Put a document link that blob handle.
+        AppSearchSchema schema =
+                new AppSearchSchema.Builder("Type")
+                        .addProperty(
+                                new AppSearchSchema.BlobHandlePropertyConfig.Builder("blob")
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .build())
+                        .build();
+        InternalSetSchemaResponse internalSetSchemaResponse =
+                mAppSearchImpl.setSchema(
+                        "package",
+                        "db1",
+                        ImmutableList.of(schema),
+                        /* visibilityConfigs= */ Collections.emptyList(),
+                        /* forceOverride= */ true,
+                        /* version= */ 0,
+                        /* setSchemaStatsBuilder= */ null);
+        assertThat(internalSetSchemaResponse.isSuccess()).isTrue();
+        GenericDocument document =
+                new GenericDocument.Builder<>("namespace", "id", "Type")
+                        .setPropertyBlobHandle("blob", handle)
+                        .build();
+        mAppSearchImpl.putDocument(
+                "package",
+                "db1",
+                document,
+                /* sendChangeNotifications= */ false,
+                /* logger= */ null);
+
+        mAppSearchImpl.persistToDisk(PersistType.Code.FULL);
+
+        // Optimize won't remove the blob since it has reference document.
+        mAppSearchImpl.optimize(/* builder= */ null);
+        byte[] readBytes = new byte[20];
+        try (ParcelFileDescriptor readPfd = mAppSearchImpl.openReadBlob("package", "db1", handle);
+                InputStream inputStream = new ParcelFileDescriptor.AutoCloseInputStream(readPfd)) {
+            inputStream.read(readBytes);
+        }
+        assertThat(readBytes).isEqualTo(data);
+
+        mAppSearchImpl.remove("package", "db1", "namespace", "id", /* statsBuilder= */ null);
+
+        // The blob is orphan now and optimize will remove it.
+        mAppSearchImpl.optimize(/* builder= */ null);
+        AppSearchException e =
+                assertThrows(
+                        AppSearchException.class,
+                        () -> {
+                            mAppSearchImpl.openReadBlob("package", "db1", handle);
+                        });
+        assertThat(e.getResultCode()).isEqualTo(AppSearchResult.RESULT_NOT_FOUND);
+        assertThat(e.getMessage()).contains("Cannot find the blob for handle");
     }
 
     @Test
@@ -5543,6 +5685,78 @@ public class AppSearchImplTest {
                 document5,
                 /* sendChangeNotifications= */ false,
                 /* logger= */ null);
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_BLOB_STORE)
+    public void testLimitConfig_activeFds() throws Exception {
+        mAppSearchImpl.close();
+        File tempFolder = mTemporaryFolder.newFolder();
+        AppSearchConfig config =
+                new AppSearchConfigImpl(
+                        new LimitConfig() {
+                            @Override
+                            public int getMaxDocumentSizeBytes() {
+                                return Integer.MAX_VALUE;
+                            }
+
+                            @Override
+                            public int getPerPackageDocumentCountLimit() {
+                                return Integer.MAX_VALUE;
+                            }
+
+                            @Override
+                            public int getDocumentCountLimitStartThreshold() {
+                                return Integer.MAX_VALUE;
+                            }
+
+                            @Override
+                            public int getMaxSuggestionCount() {
+                                return Integer.MAX_VALUE;
+                            }
+
+                            @Override
+                            public int getMaxOpenBlobCount() {
+                                return 2;
+                            }
+                        },
+                        new LocalStorageIcingOptionsConfig());
+        mAppSearchImpl =
+                AppSearchImpl.create(
+                        tempFolder,
+                        config,
+                        /* initStatsBuilder= */ null,
+                        /* visibilityChecker= */ null,
+                        new JetpackRevocableFileDescriptorStore(config),
+                        ALWAYS_OPTIMIZE);
+        // We could open only 2 fds per package.
+        byte[] data1 = generateRandomBytes(20 * 1024); // 20 KiB
+        byte[] digest1 = calculateDigest(data1);
+        AppSearchBlobHandle handle1 =
+                AppSearchBlobHandle.createWithSha256(digest1, "package", "db1", "ns");
+        mAppSearchImpl.openWriteBlob("package", "db1", handle1);
+
+        byte[] data2 = generateRandomBytes(20 * 1024); // 20 KiB
+        byte[] digest2 = calculateDigest(data2);
+        AppSearchBlobHandle handle2 =
+                AppSearchBlobHandle.createWithSha256(digest2, "package", "db1", "ns");
+        mAppSearchImpl.openWriteBlob("package", "db1", handle2);
+
+        // Open 3rd fd will fail.
+        byte[] data3 = generateRandomBytes(20 * 1024); // 20 KiB
+        byte[] digest3 = calculateDigest(data3);
+        AppSearchBlobHandle handle3 =
+                AppSearchBlobHandle.createWithSha256(digest3, "package", "db1", "ns");
+        AppSearchException e =
+                assertThrows(
+                        AppSearchException.class,
+                        () -> mAppSearchImpl.openWriteBlob("package", "db1", handle3));
+        assertThat(e.getResultCode()).isEqualTo(RESULT_OUT_OF_SPACE);
+        assertThat(e)
+                .hasMessageThat()
+                .contains(
+                        "Package \"package\" exceeded limit of 2 opened file descriptors. "
+                                + "Some file descriptors must be closed to open additional ones.");
     }
 
     /**
