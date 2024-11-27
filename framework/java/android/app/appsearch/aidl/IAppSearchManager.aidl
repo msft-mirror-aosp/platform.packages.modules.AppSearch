@@ -24,7 +24,6 @@ import android.app.appsearch.aidl.AppSearchResultParcelV2;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
-import android.app.appsearch.aidl.IAppSearchResultV2Callback;
 import android.app.appsearch.aidl.CommitBlobAidlRequest;
 import android.app.appsearch.aidl.DocumentsParcel;
 import android.app.appsearch.aidl.GetDocumentsAidlRequest;
@@ -337,7 +336,7 @@ interface IAppSearchManager {
      */
     void openBlobForWrite(
        in OpenBlobForWriteAidlRequest request,
-       in IAppSearchResultV2Callback callback) = 21;
+       in IAppSearchResultCallback callback) = 21;
 
     /**
      * Commits the blobs to make it retrievable and immutable.
@@ -348,7 +347,7 @@ interface IAppSearchManager {
      */
     void commitBlob(
        in CommitBlobAidlRequest request,
-       in IAppSearchResultV2Callback callback) = 22;
+       in IAppSearchResultCallback callback) = 22;
 
     /**
      * Opens a batch of AppSearch Blobs for reading.
@@ -359,7 +358,7 @@ interface IAppSearchManager {
      */
    void openBlobForRead(
        in OpenBlobForReadAidlRequest request,
-       in IAppSearchResultV2Callback callback) = 23;
+       in IAppSearchResultCallback callback) = 23;
 
     // next function transaction ID = 24;
 }
