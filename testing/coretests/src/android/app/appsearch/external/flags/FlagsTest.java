@@ -18,8 +18,6 @@ package android.app.appsearch.flags;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.android.appsearch.flags.Flags;
-
 import org.junit.Test;
 
 public class FlagsTest {
@@ -33,6 +31,14 @@ public class FlagsTest {
     public void testFlagValue_enableListFilterHasPropertyFunction() {
         assertThat(Flags.FLAG_ENABLE_LIST_FILTER_HAS_PROPERTY_FUNCTION)
                 .isEqualTo("com.android.appsearch.flags.enable_list_filter_has_property_function");
+    }
+
+    @Test
+    public void testFlagValue_enableListFilterMatchScoreExpressionFunction() {
+        assertThat(Flags.FLAG_ENABLE_LIST_FILTER_MATCH_SCORE_EXPRESSION_FUNCTION)
+                .isEqualTo(
+                        "com.android.appsearch"
+                                + ".flags.enable_list_filter_match_score_expression_function");
     }
 
     @Test
@@ -116,6 +122,12 @@ public class FlagsTest {
     }
 
     @Test
+    public void testFlagValue_enableSchemaEmbeddingQuantization() {
+        assertThat(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_QUANTIZATION)
+                .isEqualTo("com.android.appsearch.flags.enable_schema_embedding_quantization");
+    }
+
+    @Test
     public void testFlagValue_enableSearchSpecSearchStringParameters() {
         assertThat(Flags.FLAG_ENABLE_SEARCH_SPEC_SEARCH_STRING_PARAMETERS)
                 .isEqualTo(
@@ -144,5 +156,36 @@ public class FlagsTest {
     public void testFlagValue_enableEnterpriseEmptyBatchResultFix() {
         assertThat(Flags.FLAG_ENABLE_ENTERPRISE_EMPTY_BATCH_RESULT_FIX)
                 .isEqualTo("com.android.appsearch.flags.enable_enterprise_empty_batch_result_fix");
+    }
+
+    @Test
+    public void testFlagValue_enableAbstractSyntaxTree() {
+        assertThat(Flags.FLAG_ENABLE_ABSTRACT_SYNTAX_TREES)
+                .isEqualTo("com.android.appsearch.flags" + ".enable_abstract_syntax_trees");
+    }
+
+    @Test
+    public void testFlagValue_enableAdditionalBuilderCopyConstructors() {
+        assertThat(Flags.FLAG_ENABLE_ADDITIONAL_BUILDER_COPY_CONSTRUCTORS)
+                .isEqualTo(
+                        "com.android.appsearch.flags.enable_additional_builder_copy_constructors");
+    }
+
+    @Test
+    public void testFlagValue_enableSearchSpecFilterDocumentIds() {
+        assertThat(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_DOCUMENT_IDS)
+                .isEqualTo("com.android.appsearch.flags.enable_search_spec_filter_document_ids");
+    }
+
+    @Test
+    public void testFlagValue_enableScorableSchemaProperty() {
+        assertThat(Flags.FLAG_ENABLE_SCORABLE_PROPERTY)
+                .isEqualTo("com.android.appsearch.flags.enable_scorable_property");
+    }
+
+    @Test
+    public void testFlagValue_enableSearchResultParentTypes() {
+        assertThat(Flags.FLAG_ENABLE_SEARCH_RESULT_PARENT_TYPES)
+                .isEqualTo("com.android.appsearch.flags.enable_search_result_parent_types");
     }
 }

@@ -16,7 +16,6 @@
 
 package com.android.server.appsearch.appsindexer;
 
-import static com.android.server.appsearch.appsindexer.AppsUtil.convertAppOpenEventsToMap;
 import static com.android.server.appsearch.appsindexer.TestUtils.COMPATIBLE_APP_OPEN_EVENT_SCHEMA;
 import static com.android.server.appsearch.appsindexer.TestUtils.COMPATIBLE_APP_SCHEMA;
 import static com.android.server.appsearch.appsindexer.TestUtils.FAKE_PACKAGE_PREFIX;
@@ -34,6 +33,8 @@ import static com.android.server.appsearch.appsindexer.TestUtils.createMockPacka
 import static com.android.server.appsearch.appsindexer.TestUtils.removeFakeAppOpenEventDocuments;
 import static com.android.server.appsearch.appsindexer.TestUtils.removeFakePackageDocuments;
 import static com.android.server.appsearch.appsindexer.TestUtils.searchAppSearchForApps;
+import static com.android.server.appsearch.appsindexer.appsearchtypes.AppOpenEvent.APP_OPEN_EVENT_PROPERTY_MOBILE_APPLICATION_QUALIFIED_ID;
+import static com.android.server.appsearch.appsindexer.appsearchtypes.AppOpenEvent.APP_OPEN_EVENT_PROPERTY_PACKAGE_NAME;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -43,14 +44,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import android.app.appsearch.AppSearchBatchResult;
+import android.app.appsearch.AppSearchManager;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSessionShim;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
+import android.app.appsearch.JoinSpec;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.PutDocumentsRequest;
 import android.app.appsearch.SearchResult;
+import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.content.Context;
@@ -102,7 +106,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 createMobileApplications(1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         AppSearchSessionShim session =
                 createFakeAppIndexerSession(mContext, mSingleThreadedExecutor);
@@ -129,14 +134,19 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 createMobileApplications(1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         AppSearchSessionShim session =
                 createFakeAppIndexerSession(mContext, mSingleThreadedExecutor);
         GetSchemaResponse response = session.getSchemaAsync().get();
 
-        assertThat(response.getSchemas().stream().map(AppSearchSchema::getSchemaType).toList())
-                .doesNotContain(AppFunctionStaticMetadata.SCHEMA_TYPE);
+        List<String> schemaTypes = new ArrayList<>();
+        for (AppSearchSchema schema : response.getSchemas()) {
+            schemaTypes.add(schema.getSchemaType());
+        }
+        assertThat(schemaTypes).doesNotContain(AppFunctionStaticMetadata.SCHEMA_TYPE);
     }
 
     @Test
@@ -146,7 +156,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 createMobileApplications(600),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         Map<String, Long> appsearchIds = mAppSearchHelper.getAppsFromAppSearch();
         assertThat(appsearchIds.size()).isEqualTo(600);
         List<SearchResult> real = searchAppSearchForApps(600 + 1);
@@ -173,7 +184,8 @@ public class AppSearchHelperTest {
         appSearchHelper.indexApps(
                 ImmutableList.of(createFakeMobileApplication(variant)),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         assertThat(appSearchHelper).isNotNull();
         List<SearchResult> results = searchAppSearchForApps(1 + 1);
@@ -198,7 +210,7 @@ public class AppSearchHelperTest {
         AppSearchHelper appSearchHelper = new AppSearchHelper(mContext);
         appSearchHelper.setSchemaForAppOpenEvents();
         AppOpenEvent fakeAppOpenEvent = createFakeAppOpenEvent(currentTimeMillis);
-        appSearchHelper.indexAppOpenEvents(convertAppOpenEventsToMap(List.of(fakeAppOpenEvent)));
+        appSearchHelper.indexAppOpenEvents(ImmutableList.of(fakeAppOpenEvent));
 
         assertThat(appSearchHelper).isNotNull();
         AppOpenEvent appOpenEvent =
@@ -225,7 +237,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 createMobileApplications(50),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         List<SearchResult> real = searchAppSearchForApps(50 + 1);
         assertThat(real).hasSize(50);
@@ -269,7 +282,7 @@ public class AppSearchHelperTest {
         appSearchHelper.setSchemaForAppOpenEvents();
         AppOpenEvent fakeAppOpenEvent = createFakeAppOpenEvent(currentTimeMillis);
         appSearchHelper.indexAppOpenEvents(
-                convertAppOpenEventsToMap(List.of(createFakeAppOpenEvent(currentTimeMillis))));
+                ImmutableList.of(createFakeAppOpenEvent(currentTimeMillis)));
 
         assertThat(appSearchHelper).isNotNull();
         AppOpenEvent appOpenEvent =
@@ -322,7 +335,8 @@ public class AppSearchHelperTest {
                         mocked.indexApps(
                                 ImmutableList.of(createFakeMobileApplication(0)),
                                 /* appFunctions= */ ImmutableList.of(),
-                                /* existingAppFunctions= */ ImmutableList.of()));
+                                /* existingAppFunctions= */ ImmutableList.of(),
+                                /* appsUpdateStats= */ new AppsUpdateStats()));
     }
 
     @Test
@@ -332,7 +346,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 createMobileApplications(100),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         mAppSearchHelper.setSchemasForPackages(createMockPackageIdentifiers(50), new ArrayList<>());
 
@@ -357,7 +372,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         Map<String, Long> timestampMapping = mAppSearchHelper.getAppsFromAppSearch();
         assertThat(timestampMapping)
                 .containsExactly("com.fake.package0", 0L, "com.fake.package1", 1L);
@@ -366,7 +382,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         // Should still be two
         timestampMapping = mAppSearchHelper.getAppsFromAppSearch();
@@ -383,7 +400,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         Map<String, Long> timestampMapping = mAppSearchHelper.getAppsFromAppSearch();
         assertThat(timestampMapping)
                 .containsExactly("com.fake.package0", 0L, "com.fake.package1", 1L);
@@ -402,7 +420,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         timestampMapping = mAppSearchHelper.getAppsFromAppSearch();
         assertThat(timestampMapping)
                 .containsExactly("com.fake.package0", 0L, "com.fake.package1", 300L);
@@ -417,7 +436,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         assertThat(mAppSearchHelper.getAppsFromAppSearch()).hasSize(2);
 
         MobileApplication app2 = createFakeMobileApplication(2);
@@ -426,7 +446,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1, app2),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         // Should be three
         Map<String, Long> timestampMapping = mAppSearchHelper.getAppsFromAppSearch();
@@ -447,7 +468,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         assertThat(mAppSearchHelper.getAppFunctionsFromAppSearch()).isEmpty();
 
         // Now app0 has an app function.
@@ -457,7 +479,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(app0Function0),
-                /* existingAppFunctions= */ ImmutableList.of(app0Function0));
+                /* existingAppFunctions= */ ImmutableList.of(app0Function0),
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         assertThat(mAppSearchHelper.getAppFunctionsFromAppSearch().get(0).getId())
                 .isEqualTo("com.fake.package0/function_id0");
@@ -475,13 +498,17 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0),
                 /* appFunctions= */ ImmutableList.of(app0Function0),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
 
         AppSearchSessionShim session =
                 createFakeAppIndexerSession(mContext, mSingleThreadedExecutor);
         GetSchemaResponse response = session.getSchemaAsync().get();
-        assertThat(response.getSchemas().stream().map(AppSearchSchema::getSchemaType).toList())
-                .contains(AppFunctionStaticMetadata.SCHEMA_TYPE);
+        List<String> schemaTypes = new ArrayList<>();
+        for (AppSearchSchema schema : response.getSchemas()) {
+            schemaTypes.add(schema.getSchemaType());
+        }
+        assertThat(schemaTypes).contains(AppFunctionStaticMetadata.SCHEMA_TYPE);
     }
 
     @Test
@@ -498,7 +525,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(app0Function0, app0Function1),
-                /* existingAppFunctions= */ ImmutableList.of());
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         List<GenericDocument> appFunctionsInAppSearch =
                 mAppSearchHelper.getAppFunctionsFromAppSearch();
         assertThat(appFunctionsInAppSearch).hasSize(2);
@@ -515,7 +543,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(app0Function0),
-                /* existingAppFunctions= */ ImmutableList.of(app0Function0, app0Function1));
+                /* existingAppFunctions= */ ImmutableList.of(app0Function0, app0Function1),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         // app0 still have one app function. so app0 is being indexed.
         assertThat(mAppSearchHelper.getAppFunctionsFromAppSearch().get(0).getId())
                 .isEqualTo("com.fake.package0/function_id0");
@@ -526,7 +555,8 @@ public class AppSearchHelperTest {
         mAppSearchHelper.indexApps(
                 ImmutableList.of(app0, app1),
                 /* appFunctions= */ ImmutableList.of(),
-                /* existingAppFunctions= */ ImmutableList.of(app0Function0));
+                /* existingAppFunctions= */ ImmutableList.of(app0Function0),
+                /* appsUpdateStats= */ new AppsUpdateStats());
         // App0 is no longer indexed for app functions cause it no longer has any of them.
         assertThat(mAppSearchHelper.getAppFunctionsFromAppSearch()).isEmpty();
     }
@@ -536,11 +566,11 @@ public class AppSearchHelperTest {
         long currentTimeMillis = System.currentTimeMillis();
         AppOpenEvent event1 = createFakeAppOpenEvent(currentTimeMillis + 100L);
         mAppSearchHelper.setSchemaForAppOpenEvents();
-        mAppSearchHelper.indexAppOpenEvents(convertAppOpenEventsToMap(ImmutableList.of(event1)));
+        mAppSearchHelper.indexAppOpenEvents(ImmutableList.of(event1));
 
         AppOpenEvent event2 = createFakeAppOpenEvent(currentTimeMillis + 200L);
         mAppSearchHelper.setSchemaForAppOpenEvents();
-        mAppSearchHelper.indexAppOpenEvents(convertAppOpenEventsToMap(ImmutableList.of(event2)));
+        mAppSearchHelper.indexAppOpenEvents(ImmutableList.of(event2));
 
         assertThat(
                         mAppSearchHelper
@@ -561,7 +591,7 @@ public class AppSearchHelperTest {
         AppOpenEvent event1 = createFakeAppOpenEvent(currentTimeMillis + 100L);
         mAppSearchHelper.setSchemasForPackages(createMockPackageIdentifiers(1), new ArrayList<>());
 
-        mAppSearchHelper.indexAppOpenEvents(convertAppOpenEventsToMap(ImmutableList.of(event1)));
+        mAppSearchHelper.indexAppOpenEvents(ImmutableList.of(event1));
         assertThat(
                         mAppSearchHelper
                                 .getSubsequentAppOpenEventAfterThreshold(currentTimeMillis)
@@ -580,8 +610,7 @@ public class AppSearchHelperTest {
                 AppSearchException.class,
                 () -> mAppSearchHelper.getSubsequentAppOpenEventAfterThreshold(currentTimeMillis));
 
-        mAppSearchHelper.indexAppOpenEvents(
-                convertAppOpenEventsToMap(ImmutableList.of(event1, event2)));
+        mAppSearchHelper.indexAppOpenEvents(ImmutableList.of(event1, event2));
         assertThat(
                         mAppSearchHelper
                                 .getSubsequentAppOpenEventAfterThreshold(currentTimeMillis)
@@ -597,5 +626,63 @@ public class AppSearchHelperTest {
                 () ->
                         mAppSearchHelper.getSubsequentAppOpenEventAfterThreshold(
                                 currentTimeMillis + 300L));
+    }
+
+    @Test
+    public void testAppOpenEventJoinsToMobileApplication() throws Exception {
+        mAppSearchHelper.setSchemasForPackages(createMockPackageIdentifiers(1), new ArrayList<>());
+        List<MobileApplication> apps = createMobileApplications(1);
+        mAppSearchHelper.indexApps(
+                apps,
+                /* appFunctions= */ ImmutableList.of(),
+                /* existingAppFunctions= */ ImmutableList.of(),
+                /* appsUpdateStats= */ new AppsUpdateStats());
+
+        long currentTimeMillis = System.currentTimeMillis();
+        AppOpenEvent event1 =
+                AppOpenEvent.create(
+                        apps.get(0).getPackageName(), currentTimeMillis, mContext.getPackageName());
+        mAppSearchHelper.setSchemaForAppOpenEvents();
+        mAppSearchHelper.indexAppOpenEvents(ImmutableList.of(event1));
+
+        SearchSpec nestedSearchSpec =
+                new SearchSpec.Builder()
+                        .addFilterSchemas(AppOpenEvent.SCHEMA_TYPE)
+                        .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
+                        .build();
+
+        JoinSpec joinSpec =
+                new JoinSpec.Builder(
+                                AppOpenEvent
+                                        .APP_OPEN_EVENT_PROPERTY_MOBILE_APPLICATION_QUALIFIED_ID)
+                        .setNestedSearch("", nestedSearchSpec)
+                        .build();
+
+        SearchSpec searchSpec =
+                new SearchSpec.Builder()
+                        .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
+                        .addFilterNamespaces(MobileApplication.APPS_NAMESPACE)
+                        .setResultCountPerPage(1000)
+                        .setJoinSpec(joinSpec)
+                        .build();
+
+        try (SyncGlobalSearchSession globalSession =
+                new SyncGlobalSearchSessionImpl(
+                        mContext.getSystemService(AppSearchManager.class),
+                        mSingleThreadedExecutor)) {
+
+            SyncSearchResults searchResults = globalSession.search("", searchSpec);
+            List<SearchResult> joinedResults =
+                    searchResults.getNextPage().get(0).getJoinedResults();
+
+            GenericDocument appOpenEventDocument = joinedResults.get(0).getGenericDocument();
+
+            assertThat(appOpenEventDocument.getPropertyString(APP_OPEN_EVENT_PROPERTY_PACKAGE_NAME))
+                    .isEqualTo(apps.get(0).getPackageName());
+            assertThat(
+                            appOpenEventDocument.getPropertyString(
+                                    APP_OPEN_EVENT_PROPERTY_MOBILE_APPLICATION_QUALIFIED_ID))
+                    .isEqualTo(event1.getMobileApplicationQualifiedId());
+        }
     }
 }
