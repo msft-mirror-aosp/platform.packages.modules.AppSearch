@@ -21,10 +21,10 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
+import android.app.appsearch.aidl.AppSearchResultCallback;
 import android.app.appsearch.aidl.AppSearchResultParcel;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
-import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.ReportUsageAidlRequest;
@@ -225,14 +225,10 @@ public class GlobalSearchSession extends ReadOnlyGlobalSearchSession implements 
                             /* systemUsage= */ true,
                             mUserHandle,
                             /* binderCallStartTimeMillis= */ SystemClock.elapsedRealtime()),
-                    new IAppSearchResultCallback.Stub() {
+                    new AppSearchResultCallback<Void>() {
                         @Override
-                        @SuppressWarnings({"rawtypes", "unchecked"})
-                        public void onResult(AppSearchResultParcel resultParcel) {
-                            safeExecute(
-                                    executor,
-                                    callback,
-                                    () -> callback.accept(resultParcel.getResult()));
+                        public void onResult(@NonNull AppSearchResult<Void> result) {
+                            safeExecute(executor, callback, () -> callback.accept(result));
                         }
                     });
             mIsMutated = true;

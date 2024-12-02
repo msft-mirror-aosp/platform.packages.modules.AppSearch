@@ -75,6 +75,16 @@ package android.app.appsearch {
     field @FlaggedApi("com.android.appsearch.flags.enable_safe_parcelable_2") @NonNull public static final android.os.Parcelable.Creator<android.app.appsearch.AppSearchSchema> CREATOR;
   }
 
+  @FlaggedApi("com.android.appsearch.flags.enable_blob_store") public static final class AppSearchSchema.BlobHandlePropertyConfig extends android.app.appsearch.AppSearchSchema.PropertyConfig {
+  }
+
+  @FlaggedApi("com.android.appsearch.flags.enable_blob_store") public static final class AppSearchSchema.BlobHandlePropertyConfig.Builder {
+    ctor public AppSearchSchema.BlobHandlePropertyConfig.Builder(@NonNull String);
+    method @NonNull public android.app.appsearch.AppSearchSchema.BlobHandlePropertyConfig build();
+    method @NonNull public android.app.appsearch.AppSearchSchema.BlobHandlePropertyConfig.Builder setCardinality(int);
+    method @FlaggedApi("com.android.appsearch.flags.enable_app_functions") @NonNull public android.app.appsearch.AppSearchSchema.BlobHandlePropertyConfig.Builder setDescription(@NonNull String);
+  }
+
   public static final class AppSearchSchema.BooleanPropertyConfig extends android.app.appsearch.AppSearchSchema.PropertyConfig {
     method @FlaggedApi("com.android.appsearch.flags.enable_scorable_property") public boolean isScoringEnabled();
   }
@@ -264,6 +274,8 @@ package android.app.appsearch {
     method public static int getMaxIndexedProperties();
     method @NonNull public String getNamespace();
     method @Nullable public Object getProperty(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_blob_store") @Nullable public android.app.appsearch.AppSearchBlobHandle getPropertyBlobHandle(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_blob_store") @Nullable public android.app.appsearch.AppSearchBlobHandle[] getPropertyBlobHandleArray(@NonNull String);
     method public boolean getPropertyBoolean(@NonNull String);
     method @Nullable public boolean[] getPropertyBooleanArray(@NonNull String);
     method @Nullable public byte[] getPropertyBytes(@NonNull String);
@@ -292,6 +304,7 @@ package android.app.appsearch {
     method @NonNull public BuilderType setCreationTimestampMillis(long);
     method @FlaggedApi("com.android.appsearch.flags.enable_generic_document_builder_hidden_methods") @NonNull public BuilderType setId(@NonNull String);
     method @FlaggedApi("com.android.appsearch.flags.enable_generic_document_builder_hidden_methods") @NonNull public BuilderType setNamespace(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_blob_store") @NonNull public BuilderType setPropertyBlobHandle(@NonNull String, @NonNull android.app.appsearch.AppSearchBlobHandle...);
     method @NonNull public BuilderType setPropertyBoolean(@NonNull String, @NonNull boolean...);
     method @NonNull public BuilderType setPropertyBytes(@NonNull String, @NonNull byte[]...);
     method @NonNull public BuilderType setPropertyDocument(@NonNull String, @NonNull android.app.appsearch.GenericDocument...);
