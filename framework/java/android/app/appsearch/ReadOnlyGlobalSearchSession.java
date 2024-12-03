@@ -21,11 +21,10 @@ import static android.app.appsearch.SearchSessionUtil.safeExecute;
 import android.annotation.CallbackExecutor;
 import android.annotation.NonNull;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
-import android.app.appsearch.aidl.AppSearchResultParcel;
+import android.app.appsearch.aidl.AppSearchResultCallback;
 import android.app.appsearch.aidl.GetDocumentsAidlRequest;
 import android.app.appsearch.aidl.GetSchemaAidlRequest;
 import android.app.appsearch.aidl.IAppSearchManager;
-import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.util.ExceptionUtil;
 import android.os.RemoteException;
@@ -82,15 +81,13 @@ public abstract class ReadOnlyGlobalSearchSession {
                             mCallerAttributionSource,
                             mUserHandle,
                             /* binderCallStartTimeMillis= */ SystemClock.elapsedRealtime()),
-                    new IAppSearchResultCallback.Stub() {
+                    new AppSearchResultCallback<Void>() {
                         @Override
-                        @SuppressWarnings({"rawtypes", "unchecked"})
-                        public void onResult(AppSearchResultParcel resultParcel) {
+                        public void onResult(@NonNull AppSearchResult<Void> result) {
                             safeExecute(
                                     executor,
                                     callback,
                                     () -> {
-                                        AppSearchResult<Void> result = resultParcel.getResult();
                                         if (result.isSuccess()) {
                                             callback.accept(
                                                     AppSearchResult.newSuccessfulResult(null));
@@ -221,16 +218,13 @@ public abstract class ReadOnlyGlobalSearchSession {
                             mUserHandle,
                             /* binderCallStartTimeMillis= */ SystemClock.elapsedRealtime(),
                             mIsForEnterprise),
-                    new IAppSearchResultCallback.Stub() {
-                        @SuppressWarnings({"rawtypes", "unchecked"})
+                    new AppSearchResultCallback<GetSchemaResponse>() {
                         @Override
-                        public void onResult(AppSearchResultParcel resultParcel) {
+                        public void onResult(@NonNull AppSearchResult<GetSchemaResponse> result) {
                             safeExecute(
                                     executor,
                                     callback,
                                     () -> {
-                                        AppSearchResult<GetSchemaResponse> result =
-                                                resultParcel.getResult();
                                         if (result.isSuccess()) {
                                             GetSchemaResponse response = result.getResultValue();
                                             callback.accept(

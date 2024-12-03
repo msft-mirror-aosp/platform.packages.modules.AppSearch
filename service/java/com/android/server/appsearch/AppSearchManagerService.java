@@ -65,7 +65,6 @@ import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchManager;
 import android.app.appsearch.aidl.IAppSearchObserverProxy;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
-import android.app.appsearch.aidl.IAppSearchResultV2Callback;
 import android.app.appsearch.aidl.InitializeAidlRequest;
 import android.app.appsearch.aidl.InvalidateNextPageTokenAidlRequest;
 import android.app.appsearch.aidl.OpenBlobForReadAidlRequest;
@@ -1015,7 +1014,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void openBlobForWrite(
-                OpenBlobForWriteAidlRequest request, @NonNull IAppSearchResultV2Callback callback) {
+                OpenBlobForWriteAidlRequest request, @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1059,7 +1058,7 @@ public class AppSearchManagerService extends SystemService {
                     OpenBlobForWriteResponse response =
                             new OpenBlobForWriteResponse(resultBuilder.build());
                     try {
-                        callback.onResult(AppSearchResultParcelV2
+                            callback.onResultV2(AppSearchResultParcelV2
                                 .fromOpenBlobForWriteResponse(response));
                     } catch (RemoteException e) {
                         Log.e(TAG, "Unable to send result to the callback", e);
@@ -1110,7 +1109,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void commitBlob(
-                CommitBlobAidlRequest request, @NonNull IAppSearchResultV2Callback callback) {
+                CommitBlobAidlRequest request, @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1154,7 +1153,7 @@ public class AppSearchManagerService extends SystemService {
                     CommitBlobResponse response =
                             new CommitBlobResponse(resultBuilder.build());
                     try {
-                        callback.onResult(AppSearchResultParcelV2
+                            callback.onResultV2(AppSearchResultParcelV2
                                 .fromCommitBlobResponseParcel(response));
                     } catch (RemoteException e) {
                         Log.e(TAG, "Unable to send result to the callback", e);
@@ -1206,7 +1205,7 @@ public class AppSearchManagerService extends SystemService {
 
         @Override
         public void openBlobForRead(
-                OpenBlobForReadAidlRequest request, @NonNull IAppSearchResultV2Callback callback) {
+                OpenBlobForReadAidlRequest request, @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1249,7 +1248,7 @@ public class AppSearchManagerService extends SystemService {
                     OpenBlobForReadResponse response =
                             new OpenBlobForReadResponse(resultBuilder.build());
                     try {
-                        callback.onResult(AppSearchResultParcelV2
+                            callback.onResultV2(AppSearchResultParcelV2
                                 .fromOpenBlobForReadResponse(response));
                     } catch (RemoteException e) {
                         Log.e(TAG, "Unable to send result to the callback", e);
