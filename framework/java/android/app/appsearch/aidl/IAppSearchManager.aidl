@@ -40,11 +40,13 @@ import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.RemoveBlobAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.ReportUsageAidlRequest;
 import android.app.appsearch.aidl.SearchAidlRequest;
 import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
+import android.app.appsearch.aidl.SetBlobVisibilityAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
@@ -332,7 +334,7 @@ interface IAppSearchManager {
      *
      * @param request the request to open blob for writing
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
-     *     AppSearchOpenBlobForWriteResponse
+     *     OpenBlobForWriteResponse
      */
     void openBlobForWrite(
        in OpenBlobForWriteAidlRequest request,
@@ -343,7 +345,7 @@ interface IAppSearchManager {
      *
      * @param request the request to commit blobs
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
-     *     AppSearchCommitBlobResponse
+     *     CommitBlobResponse
      */
     void commitBlob(
        in CommitBlobAidlRequest request,
@@ -354,11 +356,33 @@ interface IAppSearchManager {
      *
      * @param request the request to open blob for reading
      * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
-     *     AppSearchOpenBlobForReadResponse
+     *    OpenBlobForReadResponse
      */
    void openBlobForRead(
        in OpenBlobForReadAidlRequest request,
        in IAppSearchResultCallback callback) = 23;
 
-    // next function transaction ID = 24;
+   /**
+     * Removes a batch of blobs from AppSearch
+     *
+     * @param request the request to remove blobs
+     * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
+     *     RemoveBlobResponse
+     */
+   void removeBlob(
+       in RemoveBlobAidlRequest request,
+       in IAppSearchResultCallback callback) = 24;
+
+   /**
+     * Set blob visibility for a specific database to AppSearch
+     *
+     * @param request the request to set blob visibility settings.
+     * @param callback {@link IAppSearchResultCallback#onResult} will be called with an
+     *     {@link AppSearchResult}&lt;{@link Void}&gt;.
+     */
+   void setBlobVisibility(
+       in SetBlobVisibilityAidlRequest request,
+       in IAppSearchResultCallback callback) = 25;
+
+    // next function transaction ID = 26;
 }
