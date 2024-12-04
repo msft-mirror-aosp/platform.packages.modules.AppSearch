@@ -16,6 +16,7 @@
 package com.android.server.appsearch;
 
 import static android.app.appsearch.AppSearchResult.RESULT_DENIED;
+import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
 import static android.app.appsearch.AppSearchResult.RESULT_NOT_FOUND;
 import static android.app.appsearch.AppSearchResult.RESULT_OK;
 import static android.app.appsearch.AppSearchResult.RESULT_RATE_LIMITED;
@@ -43,8 +44,10 @@ import android.app.appsearch.CommitBlobResponse;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
 import android.app.appsearch.InternalSetSchemaResponse;
+import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.OpenBlobForReadResponse;
 import android.app.appsearch.OpenBlobForWriteResponse;
+import android.app.appsearch.RemoveBlobResponse;
 import android.app.appsearch.SearchResultPage;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SearchSuggestionResult;
@@ -73,11 +76,13 @@ import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsFromFileAidlRequest;
 import android.app.appsearch.aidl.RegisterObserverCallbackAidlRequest;
+import android.app.appsearch.aidl.RemoveBlobAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.ReportUsageAidlRequest;
 import android.app.appsearch.aidl.SearchAidlRequest;
 import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
+import android.app.appsearch.aidl.SetBlobVisibilityAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
@@ -112,6 +117,7 @@ import com.android.server.appsearch.external.localstorage.stats.OptimizeStats;
 import com.android.server.appsearch.external.localstorage.stats.SearchStats;
 import com.android.server.appsearch.external.localstorage.stats.SetSchemaStats;
 import com.android.server.appsearch.external.localstorage.usagereporting.SearchSessionStatsExtractor;
+import com.android.server.appsearch.external.localstorage.visibilitystore.CallerAccess;
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityStore;
 import com.android.server.appsearch.observer.AppSearchObserverProxy;
 import com.android.server.appsearch.stats.StatsCollector;
@@ -1024,8 +1030,15 @@ public class AppSearchManagerService extends SystemService {
                             request.getUserHandle(),
                             callback);
             String callingPackageName = request.getCallerAttributionSource().getPackageName();
+            String callingDatabaseName = request.getCallingDatabaseName();
             if (targetUser == null) {
                 return; // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, callingDatabaseName,
+                    CallStats.CALL_TYPE_OPEN_WRITE_BLOB, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ request.getBlobHandles().size())) {
+                return;
             }
             boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser, callback,
                     callingPackageName, CallStats.CALL_TYPE_OPEN_WRITE_BLOB, () -> {
@@ -1044,7 +1057,7 @@ public class AppSearchManagerService extends SystemService {
                             ParcelFileDescriptor pfd = instance.getAppSearchImpl()
                                     .openWriteBlob(
                                             callingPackageName,
-                                            request.getCallingDatabaseName(),
+                                            callingDatabaseName,
                                             blobHandle);
                             resultBuilder.setSuccess(blobHandle, pfd);
                         } catch (AppSearchException | IOException e) {
@@ -1057,12 +1070,8 @@ public class AppSearchManagerService extends SystemService {
                     }
                     OpenBlobForWriteResponse response =
                             new OpenBlobForWriteResponse(resultBuilder.build());
-                    try {
-                            callback.onResultV2(AppSearchResultParcelV2
-                                .fromOpenBlobForWriteResponse(response));
-                    } catch (RemoteException e) {
-                        Log.e(TAG, "Unable to send result to the callback", e);
-                    }
+                    invokeCallbackOnResult(callback,
+                            AppSearchResultParcelV2.fromOpenBlobForWriteResponse(response));
                 } catch (RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -1108,6 +1117,103 @@ public class AppSearchManagerService extends SystemService {
         }
 
         @Override
+        public void removeBlob(
+                RemoveBlobAidlRequest request, @NonNull IAppSearchResultCallback callback) {
+            Objects.requireNonNull(request);
+            Objects.requireNonNull(callback);
+            long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
+            UserHandle targetUser =
+                    mServiceImplHelper.verifyIncomingCallWithCallback(
+                            request.getCallerAttributionSource(),
+                            request.getUserHandle(),
+                            callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
+            String callingDatabaseName = request.getCallingDatabaseName();
+            if (targetUser == null) {
+                return; // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, callingDatabaseName,
+                    CallStats.CALL_TYPE_REMOVE_BLOB, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ request.getBlobHandles().size())) {
+                return;
+            }
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser, callback,
+                    callingPackageName, CallStats.CALL_TYPE_REMOVE_BLOB, () -> {
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
+                AppSearchUserInstance instance = null;
+                int operationSuccessCount = 0;
+                int operationFailureCount = 0;
+                try {
+                    AppSearchBatchResult.Builder<AppSearchBlobHandle, Void>
+                            resultBuilder = new AppSearchBatchResult.Builder<>();
+                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    List<AppSearchBlobHandle> blobHandles = request.getBlobHandles();
+                    for (int i = 0; i < blobHandles.size(); i++) {
+                        AppSearchBlobHandle blobHandle = blobHandles.get(i);
+                        try {
+                            instance.getAppSearchImpl()
+                                    .removeBlob(
+                                            callingPackageName,
+                                            callingDatabaseName,
+                                            blobHandle);
+                            resultBuilder.setSuccess(blobHandle, null);
+                        } catch (AppSearchException | IOException e) {
+                            AppSearchResult<Void> result =
+                                    throwableToFailedResult(e);
+                            resultBuilder.setResult(blobHandle, result);
+                            statusCode = result.getResultCode();
+                            ++operationFailureCount;
+                        }
+                    }
+                    RemoveBlobResponse response = new RemoveBlobResponse(resultBuilder.build());
+                    invokeCallbackOnResult(callback,
+                            AppSearchResultParcelV2.fromRemoveBlobResponseParcel(response));
+                } catch (RuntimeException e) {
+                    ++operationFailureCount;
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
+                    statusCode = failedResult.getResultCode();
+                    invokeCallbackOnResult(callback,
+                            AppSearchResultParcelV2.fromFailedResult(failedResult));
+                } finally {
+                    if (instance != null) {
+                        int estimatedBinderLatencyMillis =
+                                2 * (int) (totalLatencyStartTimeMillis -
+                                        request.getBinderCallStartTimeMillis());
+                        int totalLatencyMillis =
+                                (int) (SystemClock.elapsedRealtime()
+                                        - totalLatencyStartTimeMillis);
+                        instance.getLogger().logStats(new CallStats.Builder()
+                                .setPackageName(callingPackageName)
+                                .setDatabase(request.getCallingDatabaseName())
+                                .setCallType(CallStats.CALL_TYPE_REMOVE_BLOB)
+                                .setStatusCode(statusCode)
+                                .setTotalLatencyMillis(totalLatencyMillis)
+                                // TODO(b/173532925) check the existing binder call latency chart
+                                // is good enough for us:
+                                // http://dashboards/view/_72c98f9a_91d9_41d4_ab9a_bc14f79742b4
+                                .setEstimatedBinderLatencyMillis(
+                                        estimatedBinderLatencyMillis)
+                                .setNumOperationsSucceeded(operationSuccessCount)
+                                .setNumOperationsFailed(operationFailureCount)
+                                .build());
+                    }
+                }
+            });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(
+                        callingPackageName,
+                        /* callingDatabaseName= */ null,
+                        CallStats.CALL_TYPE_REMOVE_BLOB,
+                        targetUser,
+                        request.getBinderCallStartTimeMillis(),
+                        totalLatencyStartTimeMillis,
+                        request.getBlobHandles().size(),
+                        RESULT_RATE_LIMITED);
+            }
+        }
+
+        @Override
         public void commitBlob(
                 CommitBlobAidlRequest request, @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
@@ -1119,8 +1225,15 @@ public class AppSearchManagerService extends SystemService {
                             request.getUserHandle(),
                             callback);
             String callingPackageName = request.getCallerAttributionSource().getPackageName();
+            String callingDatabaseName = request.getCallingDatabaseName();
             if (targetUser == null) {
                 return; // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, callingDatabaseName,
+                    CallStats.CALL_TYPE_COMMIT_BLOB, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ request.getBlobHandles().size())) {
+                return;
             }
             boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser, callback,
                     callingPackageName, CallStats.CALL_TYPE_COMMIT_BLOB, () -> {
@@ -1139,7 +1252,7 @@ public class AppSearchManagerService extends SystemService {
                             instance.getAppSearchImpl()
                                     .commitBlob(
                                             callingPackageName,
-                                            request.getCallingDatabaseName(),
+                                            callingDatabaseName,
                                             blobHandle);
                             resultBuilder.setSuccess(blobHandle, null);
                         } catch (AppSearchException e) {
@@ -1152,12 +1265,8 @@ public class AppSearchManagerService extends SystemService {
                     }
                     CommitBlobResponse response =
                             new CommitBlobResponse(resultBuilder.build());
-                    try {
-                            callback.onResultV2(AppSearchResultParcelV2
-                                .fromCommitBlobResponseParcel(response));
-                    } catch (RemoteException e) {
-                        Log.e(TAG, "Unable to send result to the callback", e);
-                    }
+                    invokeCallbackOnResult(callback,
+                            AppSearchResultParcelV2.fromCommitBlobResponseParcel(response));
                 } catch (RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -1215,11 +1324,20 @@ public class AppSearchManagerService extends SystemService {
                             request.getUserHandle(),
                             callback);
             String callingPackageName = request.getCallerAttributionSource().getPackageName();
+            String callingDatabaseName = request.getCallingDatabaseName();
+            boolean global = callingDatabaseName == null;
+            int callType = global ? CallStats.CALL_TYPE_GLOBAL_OPEN_READ_BLOB
+                    : CallStats.CALL_TYPE_OPEN_READ_BLOB;
             if (targetUser == null) {
                 return; // Verification failed; verifyIncomingCall triggered callback.
             }
+            if (checkCallDenied(callingPackageName, callingDatabaseName, callType, callback,
+                    targetUser, request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ request.getBlobHandles().size())) {
+                return;
+            }
             boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser, callback,
-                    callingPackageName, CallStats.CALL_TYPE_OPEN_READ_BLOB, () -> {
+                    callingPackageName, callType, () -> {
                 @AppSearchResult.ResultCode int statusCode = RESULT_OK;
                 AppSearchUserInstance instance = null;
                 int operationSuccessCount = 0;
@@ -1232,10 +1350,20 @@ public class AppSearchManagerService extends SystemService {
                     for (int i = 0; i < blobHandles.size(); i++) {
                         AppSearchBlobHandle blobHandle = blobHandles.get(i);
                         try {
-                            ParcelFileDescriptor pfd = instance.getAppSearchImpl()
-                                    .openReadBlob(callingPackageName,
-                                            request.getCallingDatabaseName(),
-                                            blobHandle);
+                            ParcelFileDescriptor pfd;
+                            if (global) {
+                                boolean callerHasSystemAccess = instance.getVisibilityChecker()
+                                        .doesCallerHaveSystemAccess(callingPackageName);
+                                CallerAccess callerAccess = new FrameworkCallerAccess(
+                                        request.getCallerAttributionSource(),
+                                        callerHasSystemAccess,
+                                        /*isForEnterprise=*/ false);
+                                pfd = instance.getAppSearchImpl().globalOpenReadBlob(
+                                        blobHandle, callerAccess);
+                            } else {
+                                pfd = instance.getAppSearchImpl().openReadBlob(callingPackageName,
+                                        callingDatabaseName, blobHandle);
+                            }
                             resultBuilder.setSuccess(blobHandle, pfd);
                         } catch (AppSearchException | IOException e) {
                             AppSearchResult<ParcelFileDescriptor> result =
@@ -1247,12 +1375,8 @@ public class AppSearchManagerService extends SystemService {
                     }
                     OpenBlobForReadResponse response =
                             new OpenBlobForReadResponse(resultBuilder.build());
-                    try {
-                            callback.onResultV2(AppSearchResultParcelV2
-                                .fromOpenBlobForReadResponse(response));
-                    } catch (RemoteException e) {
-                        Log.e(TAG, "Unable to send result to the callback", e);
-                    }
+                    invokeCallbackOnResult(callback,
+                            AppSearchResultParcelV2.fromOpenBlobForReadResponse(response));
                 } catch (RuntimeException e) {
                     ++operationFailureCount;
                     AppSearchResult<Void> failedResult = throwableToFailedResult(e);
@@ -1271,7 +1395,7 @@ public class AppSearchManagerService extends SystemService {
                                 .setPackageName(callingPackageName)
                                 .setDatabase(request.getCallingDatabaseName())
                                 .setStatusCode(statusCode)
-                                .setCallType(CallStats.CALL_TYPE_OPEN_READ_BLOB)
+                                .setCallType(callType)
                                 .setTotalLatencyMillis(totalLatencyMillis)
                                 // TODO(b/173532925) check the existing binder call latency chart
                                 // is good enough for us:
@@ -1288,11 +1412,93 @@ public class AppSearchManagerService extends SystemService {
                 logRateLimitedOrCallDeniedCallStats(
                         callingPackageName,
                         /* callingDatabaseName= */ null,
-                        CallStats.CALL_TYPE_OPEN_READ_BLOB,
+                        callType,
                         targetUser,
                         request.getBinderCallStartTimeMillis(),
                         totalLatencyStartTimeMillis,
                         request.getBlobHandles().size(),
+                        RESULT_RATE_LIMITED);
+            }
+        }
+
+        @Override
+        public void setBlobVisibility(
+                SetBlobVisibilityAidlRequest request, @NonNull IAppSearchResultCallback callback) {
+            Objects.requireNonNull(request);
+            Objects.requireNonNull(callback);
+            long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
+            UserHandle targetUser =
+                    mServiceImplHelper.verifyIncomingCallWithCallback(
+                            request.getCallerAttributionSource(),
+                            request.getUserHandle(),
+                            callback);
+            String callingPackageName = request.getCallerAttributionSource().getPackageName();
+            String callingDatabaseName = request.getCallingDatabaseName();
+            if (targetUser == null) {
+                return; // Verification failed; verifyIncomingCall triggered callback.
+            }
+            if (checkCallDenied(callingPackageName, callingDatabaseName,
+                    CallStats.CALL_TYPE_SET_BLOB_VISIBILITY, callback, targetUser,
+                    request.getBinderCallStartTimeMillis(), totalLatencyStartTimeMillis,
+                    /* numOperations= */ 1)) {
+                return;
+            }
+            boolean callAccepted = mExecutorManager.executeLambdaForUserAsync(targetUser, callback,
+                    callingPackageName, CallStats.CALL_TYPE_SET_BLOB_VISIBILITY, () -> {
+                @AppSearchResult.ResultCode int statusCode = RESULT_OK;
+                AppSearchUserInstance instance = null;
+                int operationSuccessCount = 0;
+                int operationFailureCount = 0;
+                try {
+                    instance = mAppSearchUserInstanceManager.getUserInstance(targetUser);
+                    List<InternalVisibilityConfig> visibilityConfigs =
+                            request.getVisibilityConfigs();
+                    instance.getAppSearchImpl().setBlobNamespaceVisibility(
+                            callingPackageName,
+                            callingDatabaseName,
+                            visibilityConfigs);
+                    ++operationSuccessCount;
+                    invokeCallbackOnResult(callback, AppSearchResultParcelV2.fromVoid());
+                } catch (AppSearchException | RuntimeException e) {
+                    ++operationFailureCount;
+                    AppSearchResult<Void> failedResult = throwableToFailedResult(e);
+                    statusCode = failedResult.getResultCode();
+                    invokeCallbackOnResult(callback,
+                            AppSearchResultParcelV2.fromFailedResult(failedResult));
+                } finally {
+                    if (instance != null) {
+                        int estimatedBinderLatencyMillis =
+                                2 * (int) (totalLatencyStartTimeMillis -
+                                        request.getBinderCallStartTimeMillis());
+                        int totalLatencyMillis =
+                                (int) (SystemClock.elapsedRealtime()
+                                        - totalLatencyStartTimeMillis);
+                        instance.getLogger().logStats(new CallStats.Builder()
+                                .setPackageName(callingPackageName)
+                                .setDatabase(request.getCallingDatabaseName())
+                                .setCallType(CallStats.CALL_TYPE_SET_BLOB_VISIBILITY)
+                                .setStatusCode(statusCode)
+                                .setTotalLatencyMillis(totalLatencyMillis)
+                                // TODO(b/173532925) check the existing binder call latency chart
+                                // is good enough for us:
+                                // http://dashboards/view/_72c98f9a_91d9_41d4_ab9a_bc14f79742b4
+                                .setEstimatedBinderLatencyMillis(
+                                        estimatedBinderLatencyMillis)
+                                .setNumOperationsSucceeded(operationSuccessCount)
+                                .setNumOperationsFailed(operationFailureCount)
+                                .build());
+                    }
+                }
+            });
+            if (!callAccepted) {
+                logRateLimitedOrCallDeniedCallStats(
+                        callingPackageName,
+                        /* callingDatabaseName= */ null,
+                        CallStats.CALL_TYPE_SET_BLOB_VISIBILITY,
+                        targetUser,
+                        request.getBinderCallStartTimeMillis(),
+                        totalLatencyStartTimeMillis,
+                        /* numOperations= */ 1,
                         RESULT_RATE_LIMITED);
             }
         }
