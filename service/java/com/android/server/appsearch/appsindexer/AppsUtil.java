@@ -220,6 +220,8 @@ public final class AppsUtil {
         return mobileApplications;
     }
 
+    // TODO(b/367410454): Remove this method once enable_apps_indexer_incremental_put flag is
+    //  rolled out
     /**
      * Uses {@link PackageManager} and a Map of {@link PackageInfo}s to {@link ResolveInfos}s to
      * build AppSearch {@link AppFunctionStaticMetadata} documents. Info from both are required to
@@ -241,6 +243,8 @@ public final class AppsUtil {
         return buildAppFunctionStaticMetadata(packageManager, packageInfos, parser);
     }
 
+    // TODO(b/367410454): Remove this method once enable_apps_indexer_incremental_put flag is
+    //  rolled out
     /**
      * Similar to the above {@link #buildAppFunctionStaticMetadata}, but allows the caller to
      * provide a custom parser. This is for testing purposes.
@@ -284,18 +288,90 @@ public final class AppsUtil {
     }
 
     /**
-     * Gets a map of package name to a list of app open timestamps within a specific time range.
+     * Uses {@link PackageManager} and a Map of {@link PackageInfo}s to {@link ResolveInfos}s to
+     * build AppSearch {@link AppFunctionStaticMetadata} documents. Info from both are required to
+     * build app documents.
+     *
+     * <p>App documents will be returned as a mapping of packages to a mapping of function ids to
+     * AppFunctionStaticMetadata documents. This is useful for determining what has changed during
+     * an update.
+     *
+     * @param packageInfos a mapping of {@link PackageInfo}s and their corresponding {@link
+     *     ResolveInfo} for the packages launch activity.
+     * @param indexerPackageName the name of the package performing the indexing. This should be the
+     *     same as the package running the apps indexer so that qualified ids are correctly created.
+     * @param maxAppFunctions the max number of app functions to be indexed per package.
+     * @return A mapping of packages to a mapping of function ids to AppFunctionStaticMetadata
+     *     documents
+     */
+    public static Map<String, Map<String, AppFunctionStaticMetadata>>
+            buildAppFunctionStaticMetadataIntoMap(
+                    @NonNull PackageManager packageManager,
+                    @NonNull Map<PackageInfo, ResolveInfos> packageInfos,
+                    @NonNull String indexerPackageName,
+                    int maxAppFunctions) {
+        AppFunctionStaticMetadataParser parser =
+                new AppFunctionStaticMetadataParserImpl(indexerPackageName, maxAppFunctions);
+        return buildAppFunctionStaticMetadataIntoMap(packageManager, packageInfos, parser);
+    }
+
+    /**
+     * Similar to the above {@link #buildAppFunctionStaticMetadata}, but allows the caller to
+     * provide a custom parser. This is for testing purposes.
+     */
+    @VisibleForTesting
+    static Map<String, Map<String, AppFunctionStaticMetadata>>
+            buildAppFunctionStaticMetadataIntoMap(
+                    @NonNull PackageManager packageManager,
+                    @NonNull Map<PackageInfo, ResolveInfos> packageInfos,
+                    @NonNull AppFunctionStaticMetadataParser parser) {
+        Objects.requireNonNull(packageManager);
+        Objects.requireNonNull(packageInfos);
+        Objects.requireNonNull(parser);
+        Map<String, Map<String, AppFunctionStaticMetadata>> appFunctions = new ArrayMap<>();
+        for (Map.Entry<PackageInfo, ResolveInfos> entry : packageInfos.entrySet()) {
+            PackageInfo packageInfo = entry.getKey();
+            ResolveInfo resolveInfo = entry.getValue().getAppFunctionServiceInfo();
+            if (resolveInfo == null) {
+                continue;
+            }
+
+            String assetFilePath;
+            try {
+                PackageManager.Property property =
+                        packageManager.getProperty(
+                                "android.app.appfunctions",
+                                new ComponentName(
+                                        resolveInfo.serviceInfo.packageName,
+                                        resolveInfo.serviceInfo.name));
+                assetFilePath = property.getString();
+            } catch (PackageManager.NameNotFoundException e) {
+                Log.w(TAG, "buildAppFunctionMetadataFromPackageInfo: Failed to get property", e);
+                continue;
+            }
+            if (assetFilePath != null) {
+                appFunctions.put(
+                        packageInfo.packageName,
+                        parser.parseIntoMap(
+                                packageManager, packageInfo.packageName, assetFilePath));
+            }
+        }
+        return appFunctions;
+    }
+
+    /**
+     * Gets a list of app open events (package name and timestamp) within a specific time range.
      *
      * @param usageStatsManager the {@link UsageStatsManager} to query for app open events.
      * @param startTime the start time in milliseconds since the epoch.
      * @param endTime the end time in milliseconds since the epoch.
-     * @return a map of package name to a list of app open timestamps.
+     * @return a list of {@link AppOpenEvent} representing the app open events.
      */
     @NonNull
-    public static Map<String, List<Long>> getAppOpenTimestamps(
+    public static List<AppOpenEvent> getAppOpenEvents(
             @NonNull UsageStatsManager usageStatsManager, long startTime, long endTime) {
 
-        Map<String, List<Long>> appOpenTimestamps = new ArrayMap<>();
+        List<AppOpenEvent> appOpenEvents = new ArrayList<>();
 
         UsageEvents usageEvents = usageStatsManager.queryEvents(startTime, endTime);
         while (usageEvents.hasNextEvent()) {
@@ -305,85 +381,14 @@ public final class AppsUtil {
             if (event.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND
                     || event.getEventType() == UsageEvents.Event.ACTIVITY_RESUMED) {
                 String packageName = event.getPackageName();
+                long timestamp = event.getTimeStamp();
 
-                List<Long> timestamps = appOpenTimestamps.get(packageName);
-                if (timestamps == null) {
-                    timestamps = new ArrayList<>();
-                    appOpenTimestamps.put(packageName, timestamps);
-                }
-                timestamps.add(event.getTimeStamp());
+                AppOpenEvent appOpenEvent = AppOpenEvent.create(packageName, timestamp);
+                appOpenEvents.add(appOpenEvent);
             }
         }
 
-        return appOpenTimestamps;
-    }
-
-    /**
-     * Converts a map of package name to a list of app open timestamps to a list of {@link
-     * AppOpenEvent} documents. It's a less compact representation of the data, but it's directly
-     * writeable to AppSearch.
-     *
-     * @param appOpenEvents a map of package name to a list of app open timestamps.
-     * @return a list of {@link AppOpenEvent} documents.
-     */
-    public static List<AppOpenEvent> convertMapToAppOpenEvents(
-            @NonNull Map<String, List<Long>> appOpenEvents) {
-        Objects.requireNonNull(appOpenEvents);
-        List<AppOpenEvent> documents = new ArrayList<>();
-
-        for (Map.Entry<String, List<Long>> entry : appOpenEvents.entrySet()) {
-            String packageName = entry.getKey();
-            List<Long> eventTimes = entry.getValue();
-
-            for (int i = 0; i < eventTimes.size(); i++) {
-                Long eventTimeObj = eventTimes.get(i);
-                if (eventTimeObj != null) {
-                    long eventTimeMillis = eventTimeObj;
-                    AppOpenEvent event =
-                            new AppOpenEvent.Builder(packageName, eventTimeMillis)
-                                    .setCreationTimestampMillis(eventTimeMillis)
-                                    .setTtlMillis(APP_OPEN_EVENT_TTL_MILLIS)
-                                    .build();
-                    documents.add(event);
-                } else {
-                    Log.w(
-                            TAG,
-                            "convertMapToAppOpenEvents: eventTimeObj is unexpectedly null.  This"
-                                    + " should never happen.");
-                }
-            }
-        }
-
-        return documents;
-    }
-
-    /**
-     * Converts a list of {@link AppOpenEvent} documents into a map of package names to their
-     * corresponding app open timestamps. This provides a more compact representation of the data,
-     * potentially useful for further processing.
-     *
-     * @param appOpenEvents a list of {@link AppOpenEvent} documents.
-     * @return a map of package names to lists of their app open timestamps
-     */
-    public static Map<String, List<Long>> convertAppOpenEventsToMap(
-            @NonNull List<AppOpenEvent> appOpenEvents) {
-        Objects.requireNonNull(appOpenEvents);
-        Map<String, List<Long>> appOpenEventsMap = new ArrayMap<>();
-
-        for (int i = 0; i < appOpenEvents.size(); i++) {
-            AppOpenEvent event = appOpenEvents.get(i);
-            String packageName = event.getPackageName();
-            long timestamp = event.getAppOpenEventTimestampMillis();
-
-            List<Long> timestamps = appOpenEventsMap.get(packageName);
-            if (timestamps == null) {
-                timestamps = new ArrayList<>();
-                appOpenEventsMap.put(packageName, timestamps);
-            }
-            timestamps.add(timestamp);
-        }
-
-        return appOpenEventsMap;
+        return appOpenEvents;
     }
 
     /** Gets the SHA-256 certificate from a {@link PackageManager}, or null if it is not found */
