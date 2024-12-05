@@ -40,6 +40,7 @@ import android.app.appsearch.AppSearchEnvironment;
 import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.AppSearchMigrationHelper;
 import android.app.appsearch.AppSearchResult;
+import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.CommitBlobResponse;
 import android.app.appsearch.GenericDocument;
 import android.app.appsearch.GetSchemaResponse;
@@ -101,6 +102,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageStats;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -423,6 +425,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
+            checkUnsupportedEmbeddingUse(request.getSchemas());
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             long verifyIncomingCallLatencyStartTimeMillis = SystemClock.elapsedRealtime();
@@ -1509,6 +1512,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
+            checkUnsupportedEmbeddingUse(request.getSearchSpec());
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
@@ -1583,6 +1587,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
+            checkUnsupportedEmbeddingUse(request.getSearchSpec());
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
@@ -1850,6 +1855,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
+            checkUnsupportedEmbeddingUse(request.getSearchSpec());
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
@@ -2344,6 +2350,7 @@ public class AppSearchManagerService extends SystemService {
                 @NonNull IAppSearchResultCallback callback) {
             Objects.requireNonNull(request);
             Objects.requireNonNull(callback);
+            checkUnsupportedEmbeddingUse(request.getSearchSpec());
 
             long totalLatencyStartTimeMillis = SystemClock.elapsedRealtime();
             UserHandle targetUser = mServiceImplHelper.verifyIncomingCallWithCallback(
@@ -3130,6 +3137,46 @@ public class AppSearchManagerService extends SystemService {
                         .setEstimatedBinderLatencyMillis(estimatedBinderLatencyMillis)
                         .setNumOperationsFailed(numOperations)
                         .build());
+    }
+
+    private void checkUnsupportedEmbeddingUse(@NonNull List<AppSearchSchema> schemas) {
+        // Embedding support currently only allowed on W+. This is because embedding properties are
+        // a rollback compatibility issue. Therefore, we cannot allow it to be used on devices that
+        // could be rolled back to a pre-Embedding binary until we have landed rollback
+        // compatibility work.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            return;
+        }
+        for (int i = 0; i < schemas.size(); ++i) {
+            AppSearchSchema schema = schemas.get(i);
+            List<AppSearchSchema.PropertyConfig> properties = schema.getProperties();
+            for (int j = 0; j < properties.size(); ++j) {
+                AppSearchSchema.PropertyConfig property = properties.get(j);
+                if (property instanceof AppSearchSchema.EmbeddingPropertyConfig) {
+                    throw new UnsupportedOperationException(
+                            "SCHEMA_EMBEDDING_PROPERTY_CONFIG is not available on this AppSearch "
+                                    + "implementation.");
+                }
+            }
+        }
+    }
+
+    private void checkUnsupportedEmbeddingUse(@NonNull SearchSpec spec) {
+        // Embedding support currently only allowed on W+. This is because embedding properties are
+        // a rollback compatibility issue. Therefore, we cannot allow it to be used on devices that
+        // could be rolled back to a pre-Embedding binary until we have landed rollback
+        // compatibility work.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            return;
+        }
+        if (!spec.getEmbeddingParameters().isEmpty()) {
+            throw new UnsupportedOperationException(
+                    "SCHEMA_EMBEDDING_PROPERTY_CONFIG is not available on this AppSearch "
+                            + "implementation.");
+        }
+        if (spec.getJoinSpec() != null) {
+            checkUnsupportedEmbeddingUse(spec.getJoinSpec().getNestedSearchSpec());
+        }
     }
 
     /**
