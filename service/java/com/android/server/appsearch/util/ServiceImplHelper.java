@@ -27,6 +27,7 @@ import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
 import android.app.appsearch.aidl.AppSearchBatchResultParcel;
 import android.app.appsearch.aidl.AppSearchResultParcel;
+import android.app.appsearch.aidl.AppSearchResultParcelV2;
 import android.app.appsearch.aidl.IAppSearchBatchResultCallback;
 import android.app.appsearch.aidl.IAppSearchResultCallback;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
@@ -370,6 +371,16 @@ public class ServiceImplHelper {
 
     /** Invokes the {@link IAppSearchResultCallback} with the result parcel. */
     public static void invokeCallbackOnResult(
+            IAppSearchResultCallback callback, AppSearchResultParcelV2<?> resultParcel) {
+        try {
+            callback.onResultV2(resultParcel);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Unable to send result to the callback", e);
+        }
+    }
+
+    /** Invokes the {@link IAppSearchResultCallback} with the result parcel. */
+    public static void invokeCallbackOnResult(
             IAppSearchResultCallback callback, AppSearchResultParcel<?> resultParcel) {
         try {
             callback.onResult(resultParcel);
@@ -377,6 +388,7 @@ public class ServiceImplHelper {
             Log.e(TAG, "Unable to send result to the callback", e);
         }
     }
+
 
     /** Invokes the {@link IAppSearchBatchResultCallback} with the result. */
     public static void invokeCallbackOnResult(
