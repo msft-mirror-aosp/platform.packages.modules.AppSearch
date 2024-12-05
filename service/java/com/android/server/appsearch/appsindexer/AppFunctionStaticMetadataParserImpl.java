@@ -328,7 +328,9 @@ public class AppFunctionStaticMetadataParserImpl implements AppFunctionStaticMet
 
         while (eventType != XmlPullParser.END_DOCUMENT) {
             String tagName = parser.getName();
-            if (eventType == XmlPullParser.START_TAG && schemas.containsKey(tagName)) {
+            String schemaName =
+                    AppFunctionStaticMetadata.getSchemaNameForPackage(packageName, tagName);
+            if (eventType == XmlPullParser.START_TAG && schemas.containsKey(schemaName)) {
                 GenericDocument appFnMetadata =
                         parseXmlElementToGenericDocument(
                                 parser,
@@ -401,7 +403,9 @@ public class AppFunctionStaticMetadataParserImpl implements AppFunctionStaticMet
                                 parseXmlElementToGenericDocument(
                                         parser,
                                         packageName,
-                                        ((DocumentPropertyConfig) propertyConfig).getSchemaType(),
+                                        getSchemaTypeWithoutPackage(
+                                                ((DocumentPropertyConfig) propertyConfig)
+                                                        .getSchemaType()),
                                         qualifiedPropertyNamesToPropertyConfig);
                         nestedDocumentValues
                                 .computeIfAbsent(currentPropertyPath, k -> new ArrayList<>())
@@ -463,7 +467,7 @@ public class AppFunctionStaticMetadataParserImpl implements AppFunctionStaticMet
         Map<String, PropertyConfig> propertyMap = new ArrayMap<>();
 
         for (Map.Entry<String, AppSearchSchema> entry : schemaMap.entrySet()) {
-            String schemaType = entry.getKey();
+            String schemaType = getSchemaTypeWithoutPackage(entry.getKey());
             AppSearchSchema schema = entry.getValue();
 
             List<AppSearchSchema.PropertyConfig> properties = schema.getProperties();
@@ -485,6 +489,17 @@ public class AppFunctionStaticMetadataParserImpl implements AppFunctionStaticMet
     private static String createQualifiedPropertyName(
             @NonNull String schemaType, @NonNull String propertyName) {
         return Objects.requireNonNull(schemaType) + "#" + Objects.requireNonNull(propertyName);
+    }
+
+    /**
+     * Returns the schema type without the package name suffix.
+     *
+     * <p>For example, if the schema name is "Person-com.example.app", this method will return
+     * "Person".
+     */
+    @NonNull
+    private static String getSchemaTypeWithoutPackage(@NonNull String schemaName) {
+        return Objects.requireNonNull(schemaName).substring(0, schemaName.indexOf('-'));
     }
 
     /**
