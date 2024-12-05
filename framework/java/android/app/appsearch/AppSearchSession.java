@@ -40,10 +40,12 @@ import android.app.appsearch.aidl.OpenBlobForReadAidlRequest;
 import android.app.appsearch.aidl.OpenBlobForWriteAidlRequest;
 import android.app.appsearch.aidl.PersistToDiskAidlRequest;
 import android.app.appsearch.aidl.PutDocumentsAidlRequest;
+import android.app.appsearch.aidl.RemoveBlobAidlRequest;
 import android.app.appsearch.aidl.RemoveByDocumentIdAidlRequest;
 import android.app.appsearch.aidl.RemoveByQueryAidlRequest;
 import android.app.appsearch.aidl.ReportUsageAidlRequest;
 import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
+import android.app.appsearch.aidl.SetBlobVisibilityAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.exceptions.AppSearchException;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
@@ -484,22 +486,53 @@ public final class AppSearchSession implements Closeable {
                         @Override
                         public void onResult(
                                 @NonNull AppSearchResult<OpenBlobForWriteResponse> result) {
-                            safeExecute(
-                                    executor,
-                                    callback,
-                                    () -> {
-                                        if (result.isSuccess()) {
-                                            OpenBlobForWriteResponse response =
-                                                    Objects.requireNonNull(result.getResultValue());
-                                            callback.accept(
-                                                    AppSearchResult.newSuccessfulResult(response));
-                                        } else {
-                                            // TODO(b/261897334) save SDK errors/crashes and
-                                            // send to server for logging.
-                                            callback.accept(
-                                                    AppSearchResult.newFailedResult(result));
-                                        }
-                                    });
+                            safeExecute(executor, callback, () -> callback.accept(result));
+                        }
+                    });
+        } catch (RemoteException e) {
+            ExceptionUtil.handleRemoteException(e);
+        }
+    }
+
+    /**
+     * Removes the blob data from AppSearch.
+     *
+     * <p>After this call, the blob data is removed immediately and cannot be recovered. It will not
+     * accessible via {@link #openBlobForRead}. {@link #openBlobForWrite} could reopen and rewrite
+     * it.
+     *
+     * <p>This API can be used to remove pending blob data and committed blob data.
+     *
+     * <p class="caution">Removing a committed blob data that is still referenced by documents will
+     * leave those documents with no readable blob content. It is highly recommended to let
+     * AppSearch control the blob data's life cycle. AppSearch automatically recycles orphaned and
+     * pending blob data. The default time to recycle pending and orphan blob file is 1 week. A blob
+     * file will be considered as an orphan if no {@link GenericDocument} references it. If you want
+     * to remove a committed blob data, you should remove the reference documents first.
+     *
+     * @param handles The {@link AppSearchBlobHandle}s that identifies the blobs.
+     * @param executor Executor on which to invoke the callback.
+     * @param callback Callback to receive the {@link CommitBlobResponse}.
+     * @see GenericDocument.Builder#setPropertyBlobHandle
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_BLOB_STORE)
+    public void removeBlob(
+            @NonNull Set<AppSearchBlobHandle> handles,
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull Consumer<AppSearchResult<RemoveBlobResponse>> callback) {
+        Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
+        try {
+            mService.removeBlob(
+                    new RemoveBlobAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            new ArrayList<>(handles),
+                            mUserHandle,
+                            /* binderCallStartTimeMillis= */ SystemClock.elapsedRealtime()),
+                    new AppSearchResultCallback<RemoveBlobResponse>() {
+                        @Override
+                        public void onResult(@NonNull AppSearchResult<RemoveBlobResponse> result) {
+                            safeExecute(executor, callback, () -> callback.accept(result));
                         }
                     });
         } catch (RemoteException e) {
@@ -510,8 +543,8 @@ public final class AppSearchSession implements Closeable {
     /**
      * Commits the blobs to make it retrievable and immutable.
      *
-     * <p>After this call, the blob is readable via {@link #openBlobForReadAsync}. Any change to the
-     * content or rewrite via {@link #openBlobForWriteAsync} of this blob won't be allowed.
+     * <p>After this call, the blob is readable via {@link #openBlobForRead}. Any change to the
+     * content or rewrite via {@link #openBlobForWrite} of this blob won't be allowed.
      *
      * <p>If the blob is already stored in AppSearch and committed. A failed {@link AppSearchResult}
      * with error code {@link AppSearchResult#I} will be associated with the {@link
@@ -551,22 +584,7 @@ public final class AppSearchSession implements Closeable {
                     new AppSearchResultCallback<CommitBlobResponse>() {
                         @Override
                         public void onResult(@NonNull AppSearchResult<CommitBlobResponse> result) {
-                            safeExecute(
-                                    executor,
-                                    callback,
-                                    () -> {
-                                        if (result.isSuccess()) {
-                                            CommitBlobResponse response =
-                                                    Objects.requireNonNull(result.getResultValue());
-                                            callback.accept(
-                                                    AppSearchResult.newSuccessfulResult(response));
-                                        } else {
-                                            // TODO(b/261897334) save SDK errors/crashes and
-                                            // send to server for logging.
-                                            callback.accept(
-                                                    AppSearchResult.newFailedResult(result));
-                                        }
-                                    });
+                            safeExecute(executor, callback, () -> callback.accept(result));
                         }
                     });
         } catch (RemoteException e) {
@@ -605,22 +623,51 @@ public final class AppSearchSession implements Closeable {
                         @Override
                         public void onResult(
                                 @NonNull AppSearchResult<OpenBlobForReadResponse> result) {
-                            safeExecute(
-                                    executor,
-                                    callback,
-                                    () -> {
-                                        if (result.isSuccess()) {
-                                            OpenBlobForReadResponse response =
-                                                    Objects.requireNonNull(result.getResultValue());
-                                            callback.accept(
-                                                    AppSearchResult.newSuccessfulResult(response));
-                                        } else {
-                                            // TODO(b/261897334) save SDK errors/crashes and
-                                            // send to server for logging.
-                                            callback.accept(
-                                                    AppSearchResult.newFailedResult(result));
-                                        }
-                                    });
+                            safeExecute(executor, callback, () -> callback.accept(result));
+                        }
+                    });
+        } catch (RemoteException e) {
+            ExceptionUtil.handleRemoteException(e);
+        }
+    }
+
+    /**
+     * Sets the visibility configuration for all blob namespaces within an appsearch database.
+     *
+     * <p>Blobs under the same namespace will share same visibility settings.
+     *
+     * <p>The default setting is blobs will be only visible to the owner package and System. To
+     * configure other kinds of sharing, set {@link SchemaVisibilityConfig} via {@link
+     * SetBlobVisibilityRequest}.
+     *
+     * @param request The request holds visibility settings for all blob namespaces
+     * @param executor Executor on which to invoke the callback.
+     * @param callback Callback to receive the pending result of performing this operation which
+     *     resolves to {@code null} on success.
+     */
+    @FlaggedApi(Flags.FLAG_ENABLE_BLOB_STORE)
+    public void setBlobVisibility(
+            @NonNull SetBlobVisibilityRequest request,
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull Consumer<AppSearchResult<Void>> callback) {
+        Preconditions.checkState(!mIsClosed, "AppSearchSession has already been closed");
+        try {
+
+            // Extract a List<VisibilityConfig> from the request
+            List<InternalVisibilityConfig> visibilityConfigs =
+                    InternalVisibilityConfig.toInternalVisibilityConfigs(request);
+
+            mService.setBlobVisibility(
+                    new SetBlobVisibilityAidlRequest(
+                            mCallerAttributionSource,
+                            mDatabaseName,
+                            new ArrayList<>(visibilityConfigs),
+                            mUserHandle,
+                            /* binderCallStartTimeMillis= */ SystemClock.elapsedRealtime()),
+                    new AppSearchResultCallback<Void>() {
+                        @Override
+                        public void onResult(@NonNull AppSearchResult<Void> result) {
+                            safeExecute(executor, callback, () -> callback.accept(result));
                         }
                     });
         } catch (RemoteException e) {
