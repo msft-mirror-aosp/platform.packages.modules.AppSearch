@@ -131,8 +131,9 @@ public class VisibilityCheckerImplTest {
                         new FakeAppSearchConfig(),
                         /* initStatsBuilder= */ null,
                         mVisibilityChecker,
+                        /* revocableFileDescriptorStore= */ null,
                         ALWAYS_OPTIMIZE);
-        mVisibilityStore = new VisibilityStore(appSearchImpl);
+        mVisibilityStore = VisibilityStore.createDocumentVisibilityStore(appSearchImpl);
     }
 
     @Test
