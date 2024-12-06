@@ -48,7 +48,7 @@ public class AppFunctionStaticMetadataParserImplTest {
     private static final String TEST_XML_ASSET_FILE_PATH = "app_functions.xml";
     private static final Map<String, AppSearchSchema> TEST_SCHEMAS =
             Map.of(
-                    "AppFunctionStaticMetadata",
+                    "AppFunctionStaticMetadata-com.example.app",
                     new AppSearchSchema.Builder("AppFunctionStaticMetadata-com.example.app")
                             .addProperty(
                                     new AppSearchSchema.StringPropertyConfig.Builder("functionId")
@@ -63,10 +63,10 @@ public class AppFunctionStaticMetadataParserImplTest {
                             .addProperty(
                                     new AppSearchSchema.DocumentPropertyConfig.Builder(
                                                     "appFunctionParameterMetadata",
-                                                    "AppFunctionParameterMetadata")
+                                                    "AppFunctionParameterMetadata-com.example.app")
                                             .build())
                             .build(),
-                    "AppFunctionParameterMetadata",
+                    "AppFunctionParameterMetadata-com.example.app",
                     new AppSearchSchema.Builder("AppFunctionParameterMetadata-com.example.app")
                             .addProperty(
                                     new AppSearchSchema.StringPropertyConfig.Builder(
