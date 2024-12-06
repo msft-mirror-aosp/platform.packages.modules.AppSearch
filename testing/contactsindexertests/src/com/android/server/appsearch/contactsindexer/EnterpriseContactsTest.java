@@ -19,6 +19,8 @@ package com.android.server.appsearch.contactsindexer;
 import static android.app.appsearch.testutil.AppSearchTestUtils.checkIsBatchResultSuccess;
 import static android.app.appsearch.testutil.AppSearchTestUtils.convertSearchResultsToDocuments;
 
+import static com.android.bedstead.enterprise.EnterpriseDeviceStateExtensionsKt.profileOwner;
+import static com.android.bedstead.enterprise.EnterpriseDeviceStateExtensionsKt.workProfile;
 import static com.android.bedstead.harrier.UserType.WORK_PROFILE;
 import static com.android.bedstead.permissions.CommonPermissions.INTERACT_ACROSS_USERS_FULL;
 import static com.android.bedstead.permissions.CommonPermissions.WRITE_CONTACTS;
@@ -145,11 +147,11 @@ public class EnterpriseContactsTest {
         // Install the test package for the work profile, otherwise the test will fail while
         // performing any operations with the enterprise profile context.
         TestApis.packages().find(ApplicationProvider.getApplicationContext().getPackageName())
-                .installExisting(sDeviceState.workProfile());
+                .installExisting(workProfile(sDeviceState));
 
         // This is a context for the testing package under the work profile; it's not actually
         // possible to get a context for the "android" package in this way
-        mContext = TestApis.context().androidContextAsUser(sDeviceState.workProfile());
+        mContext = TestApis.context().androidContextAsUser(workProfile(sDeviceState));
 
         // Set up AppSearch contacts in the managed profile
         mAppSearchHelper = AppSearchHelper.createAppSearchHelper(mContext, mSingleThreadedExecutor);
@@ -407,7 +409,7 @@ public class EnterpriseContactsTest {
         // Allowlist blocks all packages by default; blocklist allows all packages by default
         PackagePolicy allowlist = new PackagePolicy(PackagePolicy.PACKAGE_POLICY_ALLOWLIST);
         PackagePolicy blocklist = new PackagePolicy(PackagePolicy.PACKAGE_POLICY_BLOCKLIST);
-        try (RemoteDpc remoteDpc = sDeviceState.profileOwner(WORK_PROFILE)) {
+        try (RemoteDpc remoteDpc = profileOwner(sDeviceState, WORK_PROFILE)) {
             remoteDpc.devicePolicyManager().setManagedProfileCallerIdAccessPolicy(allowlist);
             remoteDpc.devicePolicyManager().setManagedProfileContactsAccessPolicy(blocklist);
 
@@ -433,7 +435,7 @@ public class EnterpriseContactsTest {
     public void testEnterpriseContacts_canNotAccessWithoutContactsAccess() throws Exception {
         // Allowlist blocks all packages by default
         PackagePolicy allowlist = new PackagePolicy(PackagePolicy.PACKAGE_POLICY_ALLOWLIST);
-        try (RemoteDpc remoteDpc = sDeviceState.profileOwner(WORK_PROFILE)) {
+        try (RemoteDpc remoteDpc = profileOwner(sDeviceState, WORK_PROFILE)) {
             remoteDpc.devicePolicyManager().setManagedProfileContactsAccessPolicy(allowlist);
 
             // Verify we can't get the Person schema
@@ -460,7 +462,7 @@ public class EnterpriseContactsTest {
         // Allowlist blocks all packages by default; blocklist allows all packages by default
         PackagePolicy allowlist = new PackagePolicy(PackagePolicy.PACKAGE_POLICY_ALLOWLIST);
         PackagePolicy blocklist = new PackagePolicy(PackagePolicy.PACKAGE_POLICY_BLOCKLIST);
-        try (RemoteDpc remoteDpc = sDeviceState.profileOwner(WORK_PROFILE)) {
+        try (RemoteDpc remoteDpc = profileOwner(sDeviceState, WORK_PROFILE)) {
             remoteDpc.devicePolicyManager().setManagedProfileCallerIdAccessPolicy(blocklist);
             remoteDpc.devicePolicyManager().setManagedProfileContactsAccessPolicy(allowlist);
 
@@ -649,27 +651,50 @@ public class EnterpriseContactsTest {
     private String getCorpLookupUri(long contactId) {
         ContentResolver resolver = ApplicationProvider.getApplicationContext().getContentResolver();
         long enterpriseId = ENTERPRISE_CONTACT_ID_BASE + contactId;
-        String[] projection = new String[] { ContactsContract.Data.LOOKUP_KEY };
+        String[] projection =
+                new String[]{ContactsContract.Contacts._ID, ContactsContract.Data.LOOKUP_KEY};
         String selection = ContactsContract.Contacts._ID + " = " + contactId;
         try (Cursor cursor = resolver.query(ContactsContract.Contacts.ENTERPRISE_CONTENT_URI,
                 projection, selection, /*selectionArgs=*/ null, /*sortOrder=*/ null)) {
             assertThat(cursor).isNotNull();
-            assertThat(cursor.moveToNext()).isTrue();
+            int contactIdIndex = cursor.getColumnIndex(ContactsContract.Data._ID);
+            int lookupKeyIndex = cursor.getColumnIndex(ContactsContract.Data.LOOKUP_KEY);
+            // Querying the enterprise contact uri by contact id can potentially return a matching
+            // main profile contact and an enterprise profile contact but the enterprise profile
+            // contact will have an enterprise id
+            while (cursor.moveToNext()) {
+                if (cursor.getLong(contactIdIndex) == enterpriseId) {
+                    break;
+                }
+            }
+            assertThat(cursor.isAfterLast()).isFalse();
             return ContactsContract.Contacts.getLookupUri(enterpriseId,
-                    cursor.getString(0)).toString();
+                    cursor.getString(lookupKeyIndex)).toString();
         }
     }
 
     /** Returns the corp image uri of the given contact through enterprise contacts CP2. */
     private String getCorpImageUri(long contactId) {
         ContentResolver resolver = ApplicationProvider.getApplicationContext().getContentResolver();
-        String[] projection = new String[] { ContactsContract.Data.PHOTO_THUMBNAIL_URI };
+        long enterpriseId = ENTERPRISE_CONTACT_ID_BASE + contactId;
+        String[] projection = new String[]{ContactsContract.Contacts._ID,
+                ContactsContract.Data.PHOTO_THUMBNAIL_URI};
         String selection = ContactsContract.Contacts._ID + " = " + contactId;
         try (Cursor cursor = resolver.query(ContactsContract.Contacts.ENTERPRISE_CONTENT_URI,
                 projection, selection, /*selectionArgs=*/ null, /*sortOrder=*/ null)) {
             assertThat(cursor).isNotNull();
-            assertThat(cursor.moveToNext()).isTrue();
-            return cursor.getString(0);
+            int contactIdIndex = cursor.getColumnIndex(ContactsContract.Data._ID);
+            int photoUriIndex = cursor.getColumnIndex(ContactsContract.Data.PHOTO_THUMBNAIL_URI);
+            // Querying the enterprise contact uri by contact id can potentially return a matching
+            // main profile contact and an enterprise profile contact but the enterprise profile
+            // contact will have an enterprise id
+            while (cursor.moveToNext()) {
+                if (cursor.getLong(contactIdIndex) == enterpriseId) {
+                    break;
+                }
+            }
+            assertThat(cursor.isAfterLast()).isFalse();
+            return cursor.getString(photoUriIndex);
         }
     }
 }
