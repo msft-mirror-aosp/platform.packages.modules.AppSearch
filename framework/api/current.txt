@@ -359,8 +359,11 @@ package android.app.appsearch {
     method @NonNull public android.app.appsearch.GetSchemaResponse.Builder addSchema(@NonNull android.app.appsearch.AppSearchSchema);
     method @NonNull public android.app.appsearch.GetSchemaResponse.Builder addSchemaTypeNotDisplayedBySystem(@NonNull String);
     method @NonNull public android.app.appsearch.GetSchemaResponse build();
-    method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.GetSchemaResponse.Builder clearSchemaTypeVisibilityConfig(@NonNull String);
-    method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.GetSchemaResponse.Builder clearSchemaTypeVisibilityConfigs();
+    method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.GetSchemaResponse.Builder clearPubliclyVisibleSchema(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.GetSchemaResponse.Builder clearRequiredPermissionsForSchemaTypeVisibility(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.GetSchemaResponse.Builder clearSchemaTypeNotDisplayedBySystem(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.GetSchemaResponse.Builder clearSchemaTypeVisibleToConfigs(@NonNull String);
+    method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.GetSchemaResponse.Builder clearSchemaTypeVisibleToPackages(@NonNull String);
     method @FlaggedApi("com.android.appsearch.flags.enable_additional_builder_copy_constructors") @NonNull public android.app.appsearch.GetSchemaResponse.Builder clearSchemas();
     method @FlaggedApi("com.android.appsearch.flags.enable_set_publicly_visible_schema") @NonNull public android.app.appsearch.GetSchemaResponse.Builder setPubliclyVisibleSchema(@NonNull String, @NonNull android.app.appsearch.PackageIdentifier);
     method @NonNull public android.app.appsearch.GetSchemaResponse.Builder setRequiredPermissionsForSchemaTypeVisibility(@NonNull String, @NonNull java.util.Set<java.util.Set<java.lang.Integer>>);
@@ -911,7 +914,8 @@ package android.app.appsearch.ast.operators {
     ctor public AndNode(@NonNull android.app.appsearch.ast.Node, @NonNull android.app.appsearch.ast.Node, @NonNull android.app.appsearch.ast.Node...);
     method public void addChild(@NonNull android.app.appsearch.ast.Node);
     method @NonNull public java.util.List<android.app.appsearch.ast.Node> getChildren();
-    method public void removeChild(int);
+    method public int getIndexOfChild(@NonNull android.app.appsearch.ast.Node);
+    method public boolean removeChild(@NonNull android.app.appsearch.ast.Node);
     method public void setChild(int, @NonNull android.app.appsearch.ast.Node);
     method public void setChildren(@NonNull java.util.List<android.app.appsearch.ast.Node>);
   }
@@ -936,7 +940,8 @@ package android.app.appsearch.ast.operators {
     ctor public OrNode(@NonNull android.app.appsearch.ast.Node, @NonNull android.app.appsearch.ast.Node, @NonNull android.app.appsearch.ast.Node...);
     method public void addChild(@NonNull android.app.appsearch.ast.Node);
     method @NonNull public java.util.List<android.app.appsearch.ast.Node> getChildren();
-    method public void removeChild(int);
+    method public int getIndexOfChild(@NonNull android.app.appsearch.ast.Node);
+    method public boolean removeChild(@NonNull android.app.appsearch.ast.Node);
     method public void setChild(int, @NonNull android.app.appsearch.ast.Node);
     method public void setChildren(@NonNull java.util.List<android.app.appsearch.ast.Node>);
   }
