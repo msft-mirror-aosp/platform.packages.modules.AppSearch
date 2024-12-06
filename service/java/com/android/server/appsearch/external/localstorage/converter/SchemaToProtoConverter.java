@@ -96,6 +96,9 @@ public final class SchemaToProtoConverter {
         if (property instanceof AppSearchSchema.StringPropertyConfig) {
             AppSearchSchema.StringPropertyConfig stringProperty =
                     (AppSearchSchema.StringPropertyConfig) property;
+            // No need to check against delete propagation type vs joinable value type here, because
+            // the builder has already enforced the restriction.
+
             // Set JoinableConfig only if it is joinable (i.e. joinableValueType is not NONE).
             if (stringProperty.getJoinableValueType()
                     != AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE) {
@@ -104,6 +107,9 @@ public final class SchemaToProtoConverter {
                                 .setValueType(
                                         convertJoinableValueTypeToProto(
                                                 stringProperty.getJoinableValueType()))
+                                .setDeletePropagationType(
+                                        convertDeletePropagationTypeToProto(
+                                                stringProperty.getDeletePropagationType()))
                                 .build();
                 builder.setJoinableConfig(joinableConfig);
             }
@@ -227,6 +233,11 @@ public final class SchemaToProtoConverter {
                 return toDocumentPropertyConfig(proto);
             case VECTOR:
                 return toEmbeddingPropertyConfig(proto);
+            case BLOB_HANDLE:
+                return new AppSearchSchema.BlobHandlePropertyConfig.Builder(proto.getPropertyName())
+                        .setDescription(proto.getDescription())
+                        .setCardinality(proto.getCardinality().getNumber())
+                        .build();
             default:
                 throw new IllegalArgumentException(
                         "Invalid dataType code: " + proto.getDataType().getNumber());
@@ -243,6 +254,9 @@ public final class SchemaToProtoConverter {
                         .setJoinableValueType(
                                 convertJoinableValueTypeFromProto(
                                         proto.getJoinableConfig().getValueType()))
+                        .setDeletePropagationType(
+                                convertDeletePropagationTypeFromProto(
+                                        proto.getJoinableConfig().getDeletePropagationType()))
                         .setTokenizerType(
                                 proto.getStringIndexingConfig().getTokenizerType().getNumber());
 
@@ -337,6 +351,35 @@ public final class SchemaToProtoConverter {
         // extent possible.
         Log.w(TAG, "Invalid joinableValueType: " + joinableValueType.getNumber());
         return AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE;
+    }
+
+    @NonNull
+    private static JoinableConfig.DeletePropagationType.Code convertDeletePropagationTypeToProto(
+            @AppSearchSchema.StringPropertyConfig.DeletePropagationType int deletePropagationType) {
+        switch (deletePropagationType) {
+            case AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_NONE:
+                return JoinableConfig.DeletePropagationType.Code.NONE;
+            case AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_PROPAGATE_FROM:
+                return JoinableConfig.DeletePropagationType.Code.PROPAGATE_FROM;
+            default:
+                throw new IllegalArgumentException(
+                        "Invalid deletePropagationType: " + deletePropagationType);
+        }
+    }
+
+    @AppSearchSchema.StringPropertyConfig.DeletePropagationType
+    private static int convertDeletePropagationTypeFromProto(
+            @NonNull JoinableConfig.DeletePropagationType.Code deletePropagationType) {
+        switch (deletePropagationType) {
+            case NONE:
+                return AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_NONE;
+            case PROPAGATE_FROM:
+                return AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_PROPAGATE_FROM;
+        }
+        // Avoid crashing in the 'read' path; we should try to interpret the schema to the
+        // extent possible.
+        Log.w(TAG, "Invalid deletePropagationType: " + deletePropagationType.getNumber());
+        return AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_NONE;
     }
 
     @NonNull

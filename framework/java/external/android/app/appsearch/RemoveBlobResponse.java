@@ -17,7 +17,7 @@ package android.app.appsearch;
 
 import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
-import android.app.appsearch.aidl.AppSearchBatchResultGeneralKeyParcel;
+import android.app.appsearch.aidl.AppSearchBatchResultParcelV2;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
@@ -28,42 +28,42 @@ import com.android.appsearch.flags.Flags;
 import java.util.Objects;
 
 /**
- * The response to provide batch operation results of {@link AppSearchSession#commitBlob}.
+ * Results of {@link AppSearchSession#removeBlob}, containing the outcome of the removal of each
+ * handles.
  *
- * <p>This class is used to retrieve the result of a batch commit operation on a collection of blob
+ * <p>This class is used to retrieve the result of a batch removal operation on a collection of blob
  * handles.
  */
 @FlaggedApi(Flags.FLAG_ENABLE_BLOB_STORE)
 @SuppressWarnings("HiddenSuperclass")
-@SafeParcelable.Class(creator = "CommitBlobResponseCreator")
-public final class AppSearchCommitBlobResponse extends AbstractSafeParcelable {
+@SafeParcelable.Class(creator = "RemoveBlobResponseCreator")
+public final class RemoveBlobResponse extends AbstractSafeParcelable {
 
     @NonNull
-    public static final Parcelable.Creator<AppSearchCommitBlobResponse> CREATOR =
-            new CommitBlobResponseCreator();
+    public static final Parcelable.Creator<RemoveBlobResponse> CREATOR =
+            new RemoveBlobResponseCreator();
 
     @Field(id = 1, getter = "getResponseParcel")
-    private final AppSearchBatchResultGeneralKeyParcel<AppSearchBlobHandle, Void> mResultParcel;
+    private final AppSearchBatchResultParcelV2<AppSearchBlobHandle, Void> mResultParcel;
 
-    /** Creates a {@link AppSearchCommitBlobResponse} with given {@link AppSearchBatchResult}. */
-    public AppSearchCommitBlobResponse(
-            @NonNull AppSearchBatchResult<AppSearchBlobHandle, Void> result) {
-        this(AppSearchBatchResultGeneralKeyParcel.fromBlobHandleToVoid(result));
+    /** Creates a {@link RemoveBlobResponse} with given {@link AppSearchBatchResult}. */
+    public RemoveBlobResponse(@NonNull AppSearchBatchResult<AppSearchBlobHandle, Void> result) {
+        this(AppSearchBatchResultParcelV2.fromBlobHandleToVoid(result));
     }
 
     @Constructor
-    AppSearchCommitBlobResponse(
+    RemoveBlobResponse(
             @Param(id = 1) @NonNull
-                    AppSearchBatchResultGeneralKeyParcel<AppSearchBlobHandle, Void> resultParcel) {
+                    AppSearchBatchResultParcelV2<AppSearchBlobHandle, Void> resultParcel) {
         mResultParcel = Objects.requireNonNull(resultParcel);
     }
 
     /**
-     * Returns the {@link AppSearchBatchResult} object containing the results of the commit
+     * Returns the {@link AppSearchBatchResult} object containing the results of the removal
      * operation for each {@link AppSearchBlobHandle}.
      *
      * @return A {@link AppSearchBatchResult} maps {@link AppSearchBlobHandle}s which is a unique
-     *     identifier for a specific blob being committed to the outcome of that commit. If the
+     *     identifier for a specific blob being removed to the outcome of that commit. If the
      *     operation was successful, the result for that handle is {@code null}; if there was an
      *     error, the result contains an {@link AppSearchResult} with details of the failure.
      */
@@ -78,12 +78,12 @@ public final class AppSearchCommitBlobResponse extends AbstractSafeParcelable {
      * @hide
      */
     @NonNull
-    public AppSearchBatchResultGeneralKeyParcel<AppSearchBlobHandle, Void> getResponseParcel() {
+    public AppSearchBatchResultParcelV2<AppSearchBlobHandle, Void> getResponseParcel() {
         return mResultParcel;
     }
 
     @Override
     public void writeToParcel(@NonNull Parcel dest, int flags) {
-        CommitBlobResponseCreator.writeToParcel(this, dest, flags);
+        RemoveBlobResponseCreator.writeToParcel(this, dest, flags);
     }
 }

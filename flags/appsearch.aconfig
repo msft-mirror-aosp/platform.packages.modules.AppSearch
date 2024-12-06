@@ -293,3 +293,30 @@ flag {
     is_fixed_read_only: true
     is_exported: true
 }
+
+flag {
+     name: "enable_search_result_parent_types"
+     namespace: "appsearch"
+     description: "Enables wrapping the parent types of a document in the SearchResult instead of GenericDocument."
+     bug: "371610934"
+     is_fixed_read_only: true
+     is_exported: true
+ }
+
+flag {
+    name: "enable_delete_propagation_type"
+    namespace: "appsearch"
+    description: "Enables delete propagation type related APIs."
+    bug: "376913014"
+    is_fixed_read_only: true
+    is_exported: true
+}
+
+flag {
+    name: "enable_app_functions_schema_parser"
+    namespace: "appsearch"
+    description: "Enables the AppFunctionSchemaParser for dynamic schema parsing."
+    bug: "380729091"
+    is_fixed_read_only: true
+    is_exported: true
+}

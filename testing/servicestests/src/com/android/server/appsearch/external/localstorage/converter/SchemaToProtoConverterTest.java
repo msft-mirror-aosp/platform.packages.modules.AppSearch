@@ -331,12 +331,17 @@ public class SchemaToProtoConverterTest {
                                         .setJoinableValueType(
                                                 AppSearchSchema.StringPropertyConfig
                                                         .JOINABLE_VALUE_TYPE_QUALIFIED_ID)
+                                        .setDeletePropagationType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .DELETE_PROPAGATION_TYPE_PROPAGATE_FROM)
                                         .build())
                         .build();
 
         JoinableConfig joinableConfig =
                 JoinableConfig.newBuilder()
                         .setValueType(JoinableConfig.ValueType.Code.QUALIFIED_ID)
+                        .setDeletePropagationType(
+                                JoinableConfig.DeletePropagationType.Code.PROPAGATE_FROM)
                         .build();
 
         SchemaTypeConfigProto expectedAlbumProto =
@@ -591,6 +596,65 @@ public class SchemaToProtoConverterTest {
                                                                 EmbeddingIndexingConfig
                                                                         .QuantizationType.Code
                                                                         .QUANTIZE_8_BIT)))
+                        .build();
+
+        assertThat(
+                        SchemaToProtoConverter.toSchemaTypeConfigProto(
+                                emailSchema, /* version= */ 12345))
+                .isEqualTo(expectedEmailProto);
+        assertThat(SchemaToProtoConverter.toAppSearchSchema(expectedEmailProto))
+                .isEqualTo(emailSchema);
+    }
+
+    @Test
+    public void testGetProto_BlobHandleProperty() {
+        AppSearchSchema emailSchema =
+                new AppSearchSchema.Builder("Email")
+                        .addProperty(
+                                new AppSearchSchema.StringPropertyConfig.Builder("subject")
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setIndexingType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(
+                                                AppSearchSchema.StringPropertyConfig
+                                                        .TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .addProperty(
+                                new AppSearchSchema.BlobHandlePropertyConfig.Builder("blob")
+                                        .setCardinality(
+                                                AppSearchSchema.PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setDescription("The blob property")
+                                        .build())
+                        .build();
+
+        SchemaTypeConfigProto expectedEmailProto =
+                SchemaTypeConfigProto.newBuilder()
+                        .setSchemaType("Email")
+                        .setDescription("")
+                        .setVersion(12345)
+                        .addProperties(
+                                PropertyConfigProto.newBuilder()
+                                        .setPropertyName("subject")
+                                        .setDescription("")
+                                        .setDataType(PropertyConfigProto.DataType.Code.STRING)
+                                        .setCardinality(
+                                                PropertyConfigProto.Cardinality.Code.OPTIONAL)
+                                        .setStringIndexingConfig(
+                                                StringIndexingConfig.newBuilder()
+                                                        .setTokenizerType(
+                                                                StringIndexingConfig.TokenizerType
+                                                                        .Code.PLAIN)
+                                                        .setTermMatchType(
+                                                                TermMatchType.Code.PREFIX)))
+                        .addProperties(
+                                PropertyConfigProto.newBuilder()
+                                        .setPropertyName("blob")
+                                        .setDataType(PropertyConfigProto.DataType.Code.BLOB_HANDLE)
+                                        .setCardinality(
+                                                PropertyConfigProto.Cardinality.Code.OPTIONAL)
+                                        .setDescription("The blob property"))
                         .build();
 
         assertThat(
