@@ -21,11 +21,15 @@ import android.annotation.FlaggedApi;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.RequiresApi;
 import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.safeparcel.PropertyParcel;
 import android.app.appsearch.util.IndentingStringBuilder;
+import android.os.Build;
+import android.os.Parcel;
 import android.util.Log;
 
 import com.android.appsearch.flags.Flags;
@@ -106,6 +110,43 @@ public class GenericDocument {
      */
     protected GenericDocument(@NonNull GenericDocument document) {
         this(document.mDocumentParcel);
+    }
+
+    /**
+     * Writes the {@link GenericDocument} to the given {@link Parcel}.
+     *
+     * @param dest The {@link Parcel} to write to.
+     * @param flags The flags to use for parceling.
+     * @hide
+     */
+    // GenericDocument is an open class that can be extended, whereas parcelable classes must be
+    // final in those methods. Thus, we make this a system api to avoid 3p apps depending on it
+    // and getting confused by the inheritability.
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_OVER_IPC)
+    public final void writeToParcel(@NonNull Parcel dest, int flags) {
+        Objects.requireNonNull(dest);
+        dest.writeParcelable(mDocumentParcel, flags);
+    }
+
+    /**
+     * Creates a {@link GenericDocument} from a {@link Parcel}.
+     *
+     * @param parcel The {@link Parcel} to read from.
+     * @hide
+     */
+    // GenericDocument is an open class that can be extended, whereas parcelable classes must be
+    // final in those methods. Thus, we make this a system api to avoid 3p apps depending on it
+    // and getting confused by the inheritability.
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
+    @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_OVER_IPC)
+    @NonNull
+    public static GenericDocument createFromParcel(@NonNull Parcel parcel) {
+        Objects.requireNonNull(parcel);
+        GenericDocumentParcel documentParcel =
+                parcel.readParcelable(GenericDocumentParcel.class.getClassLoader());
+        return new GenericDocument(documentParcel);
     }
 
     /**
