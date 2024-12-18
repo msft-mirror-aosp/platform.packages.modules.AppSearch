@@ -16,10 +16,12 @@
 package com.android.server.appsearch.appsindexer;
 
 import android.annotation.NonNull;
+import android.annotation.WorkerThread;
 import android.app.appsearch.AppSearchBatchResult;
 import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.AppSearchSession;
 import android.app.appsearch.PutDocumentsRequest;
+import android.app.appsearch.RemoveByDocumentIdRequest;
 import android.app.appsearch.SearchResults;
 import android.app.appsearch.SearchSpec;
 import android.app.appsearch.SetSchemaRequest;
@@ -32,8 +34,11 @@ import java.io.Closeable;
  * A synchronous wrapper around {@link AppSearchSession}. This allows us to perform operations in
  * AppSearch without needing to handle async calls.
  *
+ * <p>Note that calling the methods in this class will park the calling thread.
+ *
  * @see AppSearchSession
  */
+// TODO(b/275592563): Sort methods so that they match the order in AppSearchSession
 public interface SyncAppSearchSession extends Closeable {
     /**
      * Synchronously sets an {@link AppSearchSchema}.
@@ -41,6 +46,7 @@ public interface SyncAppSearchSession extends Closeable {
      * @see AppSearchSession#setSchema
      */
     @NonNull
+    @WorkerThread
     SetSchemaResponse setSchema(@NonNull SetSchemaRequest setSchemaRequest)
             throws AppSearchException;
 
@@ -50,7 +56,28 @@ public interface SyncAppSearchSession extends Closeable {
      * @see AppSearchSession#put
      */
     @NonNull
+    @WorkerThread
     AppSearchBatchResult<String, Void> put(@NonNull PutDocumentsRequest request)
+            throws AppSearchException;
+
+    /**
+     * Synchronously removes documents from AppSearch using a query and {@link SearchSpec}.
+     *
+     * @see AppSearchSession#remove
+     */
+    @NonNull
+    @WorkerThread
+    Void remove(@NonNull String queryExpression, @NonNull SearchSpec searchSpec)
+            throws AppSearchException;
+
+    /**
+     * Synchronously removes documents from AppSearch using a list of document IDs.
+     *
+     * @see AppSearchSession#remove
+     */
+    @NonNull
+    @WorkerThread
+    AppSearchBatchResult<String, Void> remove(@NonNull RemoveByDocumentIdRequest request)
             throws AppSearchException;
 
     /**
@@ -62,7 +89,9 @@ public interface SyncAppSearchSession extends Closeable {
      * @see AppSearchSession#search
      */
     @NonNull
-    SyncSearchResults search(@NonNull String query, @NonNull SearchSpec searchSpec);
+    @WorkerThread
+    SyncSearchResults search(@NonNull String query, @NonNull SearchSpec searchSpec)
+            throws AppSearchException;
 
     /**
      * Closes the session.
