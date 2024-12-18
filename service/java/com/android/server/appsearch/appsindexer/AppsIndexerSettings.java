@@ -17,12 +17,10 @@
 package com.android.server.appsearch.appsindexer;
 
 import android.annotation.NonNull;
-import android.os.PersistableBundle;
 
 import com.android.server.appsearch.indexer.IndexerSettings;
 
 import java.io.File;
-import java.util.Objects;
 
 /**
  * Apps indexer settings backed by a PersistableBundle.
@@ -30,22 +28,16 @@ import java.util.Objects;
  * <p>Holds settings such as:
  *
  * <ul>
- *   <li>the last time a full update was performed
- *   <li>the time of the last apps update
- *   <li>the time of the last apps deletion
+ *   <li>the timestamp of the last full update
+ *   <li>the timestamp of the last apps update
  * </ul>
- *
- * <p>This class is NOT thread safe (similar to {@link PersistableBundle} which it wraps).
- *
- * @hide
  */
 public class AppsIndexerSettings extends IndexerSettings {
     static final String SETTINGS_FILE_NAME = "apps_indexer_settings.pb";
-    static final String LAST_UPDATE_TIMESTAMP_KEY = "last_update_timestamp_millis";
     static final String LAST_APP_UPDATE_TIMESTAMP_KEY = "last_app_update_timestamp_millis";
 
     public AppsIndexerSettings(@NonNull File baseDir) {
-        super(Objects.requireNonNull(baseDir));
+        super(baseDir);
     }
 
     @Override
@@ -53,30 +45,19 @@ public class AppsIndexerSettings extends IndexerSettings {
         return SETTINGS_FILE_NAME;
     }
 
-    /** Returns the timestamp of when the last full update occurred in milliseconds. */
-    public long getLastUpdateTimestampMillis() {
-        return mBundle.getLong(LAST_UPDATE_TIMESTAMP_KEY);
-    }
-
-    /** Sets the timestamp of when the last full update occurred in milliseconds. */
-    public void setLastUpdateTimestampMillis(long timestampMillis) {
-        mBundle.putLong(LAST_UPDATE_TIMESTAMP_KEY, timestampMillis);
-    }
-
     /** Returns the timestamp of when the last app was updated in milliseconds. */
     public long getLastAppUpdateTimestampMillis() {
         return mBundle.getLong(LAST_APP_UPDATE_TIMESTAMP_KEY);
     }
 
-    /** Sets the timestamp of when the last apps was updated in milliseconds. */
+    /** Sets the timestamp of when the last app was updated in milliseconds. */
     public void setLastAppUpdateTimestampMillis(long timestampMillis) {
         mBundle.putLong(LAST_APP_UPDATE_TIMESTAMP_KEY, timestampMillis);
     }
 
-    /** Resets all the settings to default values. */
     @Override
     public void reset() {
-        setLastUpdateTimestampMillis(0);
+        super.reset();
         setLastAppUpdateTimestampMillis(0);
     }
 }

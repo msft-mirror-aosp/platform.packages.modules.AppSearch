@@ -28,8 +28,10 @@ java_library_host {
     ],
     java_resource_dirs: ["resources/"],
     static_libs: [
-        "jsilver",
         "androidx.annotation_annotation",
+        "guava",
+        "javapoet",
+        "jsilver",
     ],
     use_tools_jar: true,
 }

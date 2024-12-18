@@ -13,6 +13,7 @@
 // limitations under the License.
 
 package {
+    default_team: "trendy_team_appsearch",
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
@@ -24,6 +25,7 @@ android_test {
         "android.app.appfunctions.flags-aconfig-java",
         "androidx.test.ext.junit",
         "androidx.test.rules",
+        "appsearch_flags_java_lib",
         "compatibility-device-util-axt",
         "flag-junit",
         "framework-appsearch.impl",
@@ -32,9 +34,9 @@ android_test {
         "truth",
     ],
     libs: [
-        "android.test.base",
-        "android.test.mock",
-        "android.test.runner",
+        "android.test.base.stubs.system",
+        "android.test.mock.stubs.system",
+        "android.test.runner.stubs.system",
     ],
     // jni libs are not normally accessible from apps so they must be explicitly included.
     jni_libs: ["libicing"],
