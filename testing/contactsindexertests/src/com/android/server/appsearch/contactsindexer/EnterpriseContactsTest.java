@@ -20,8 +20,8 @@ import static android.app.appsearch.testutil.AppSearchTestUtils.checkIsBatchResu
 import static android.app.appsearch.testutil.AppSearchTestUtils.convertSearchResultsToDocuments;
 
 import static com.android.bedstead.harrier.UserType.WORK_PROFILE;
-import static com.android.bedstead.nene.permissions.CommonPermissions.INTERACT_ACROSS_USERS_FULL;
-import static com.android.bedstead.nene.permissions.CommonPermissions.WRITE_CONTACTS;
+import static com.android.bedstead.permissions.CommonPermissions.INTERACT_ACROSS_USERS_FULL;
+import static com.android.bedstead.permissions.CommonPermissions.WRITE_CONTACTS;
 import static com.android.server.appsearch.contactsindexer.appsearchtypes.ContactPoint.CONTACT_POINT_PROPERTY_ADDRESS;
 import static com.android.server.appsearch.contactsindexer.appsearchtypes.ContactPoint.CONTACT_POINT_PROPERTY_EMAIL;
 import static com.android.server.appsearch.contactsindexer.appsearchtypes.ContactPoint.CONTACT_POINT_PROPERTY_LABEL;
@@ -65,7 +65,6 @@ import android.app.appsearch.observer.SchemaChangeInfo;
 import android.app.appsearch.testutil.AppSearchSessionShimImpl;
 import android.app.appsearch.testutil.EnterpriseGlobalSearchSessionShimImpl;
 import android.app.appsearch.testutil.GlobalSearchSessionShimImpl;
-import android.app.appsearch.testutil.TestContactsIndexerConfig;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderResult;
 import android.content.ContentResolver;
@@ -79,11 +78,11 @@ import android.provider.ContactsContract;
 import androidx.annotation.NonNull;
 import androidx.test.core.app.ApplicationProvider;
 
+import com.android.bedstead.enterprise.annotations.EnsureHasWorkProfile;
 import com.android.bedstead.harrier.BedsteadJUnit4;
 import com.android.bedstead.harrier.DeviceState;
-import com.android.bedstead.harrier.annotations.EnsureHasPermission;
-import com.android.bedstead.harrier.annotations.EnsureHasWorkProfile;
 import com.android.bedstead.nene.TestApis;
+import com.android.bedstead.permissions.annotations.EnsureHasPermission;
 import com.android.bedstead.remotedpc.RemoteDpc;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.ContactPoint;
 import com.android.server.appsearch.contactsindexer.appsearchtypes.Person;
@@ -133,7 +132,6 @@ public class EnterpriseContactsTest {
     private Context mContext;
     private AppSearchHelper mAppSearchHelper;
     private AppSearchSessionShim mDb;
-    private ContactsIndexerConfig mConfigForTest = new TestContactsIndexerConfig();
 
     // Main profile
     private EnterpriseGlobalSearchSessionShim mEnterpriseSession;
@@ -154,8 +152,7 @@ public class EnterpriseContactsTest {
         mContext = TestApis.context().androidContextAsUser(sDeviceState.workProfile());
 
         // Set up AppSearch contacts in the managed profile
-        mAppSearchHelper = AppSearchHelper.createAppSearchHelper(mContext, mSingleThreadedExecutor,
-                mConfigForTest);
+        mAppSearchHelper = AppSearchHelper.createAppSearchHelper(mContext, mSingleThreadedExecutor);
         // Call getSession() to ensure mAppSearchHelper has finished initializing
         AppSearchSession unused = mAppSearchHelper.getSession();
         AppSearchManager.SearchContext searchContext = new AppSearchManager.SearchContext.Builder(
@@ -172,10 +169,12 @@ public class EnterpriseContactsTest {
 
     @After
     public void tearDown() throws Exception {
-        // Wipe the data in AppSearchHelper.DATABASE_NAME.
-        SetSchemaRequest setSchemaRequest = new SetSchemaRequest.Builder()
-                .setForceOverride(true).build();
-        mDb.setSchemaAsync(setSchemaRequest).get();
+        if (mDb != null) {
+            // Wipe the data in AppSearchHelper.DATABASE_NAME.
+            SetSchemaRequest setSchemaRequest = new SetSchemaRequest.Builder()
+                    .setForceOverride(true).build();
+            mDb.setSchemaAsync(setSchemaRequest).get();
+        }
     }
 
     private Person.Builder createPersonBuilder(String namespace, String id, String name) {

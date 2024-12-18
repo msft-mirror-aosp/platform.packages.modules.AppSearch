@@ -1,0 +1,58 @@
+/*
+ * Copyright (C) 2024 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.android.server.appsearch.appsindexer;
+
+import android.annotation.NonNull;
+import android.annotation.WorkerThread;
+import android.app.appsearch.GlobalSearchSession;
+import android.app.appsearch.SearchResults;
+import android.app.appsearch.SearchSpec;
+import android.app.appsearch.exceptions.AppSearchException;
+
+import java.io.Closeable;
+
+/**
+ * A synchronous wrapper around {@link GlobalSearchSession}. This allows us to call globalSearch
+ * synchronously.
+ *
+ * <p>Note that while calling the methods in this class will park the calling thread, and only one
+ * {@link GlobalSearchSession} wil be created, multiple threads may call {@link #search} at the same
+ * time. It is up to the caller of this class to ensure this does not cause issues.
+ *
+ * @see GlobalSearchSession
+ */
+public interface SyncGlobalSearchSession extends Closeable {
+    /**
+     * Returns a synchronous version of {@link SearchResults}.
+     *
+     * <p>While the underlying method is not asynchronous, this method allows for convenience while
+     * synchronously searching globally.
+     *
+     * @see GlobalSearchSession#search
+     */
+    @NonNull
+    @WorkerThread
+    SyncSearchResults search(@NonNull String query, @NonNull SearchSpec searchSpec)
+            throws AppSearchException;
+
+    /**
+     * Closes the global session.
+     *
+     * @see GlobalSearchSession#close
+     */
+    @Override
+    void close();
+}

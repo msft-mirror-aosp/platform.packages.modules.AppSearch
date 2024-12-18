@@ -18,6 +18,8 @@ package android.app.appsearch.flags;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.android.appsearch.flags.Flags;
+
 import org.junit.Test;
 
 public class FlagsTest {
@@ -90,5 +92,57 @@ public class FlagsTest {
     public void testFlagValue_enableEnterpriseGlobalSearchSession() {
         assertThat(Flags.FLAG_ENABLE_ENTERPRISE_GLOBAL_SEARCH_SESSION)
                 .isEqualTo("com.android.appsearch.flags.enable_enterprise_global_search_session");
+    }
+
+    @Test
+    public void testFlagValue_enableResultDeniedAndResultRateLimited() {
+        assertThat(Flags.FLAG_ENABLE_RESULT_DENIED_AND_RESULT_RATE_LIMITED)
+                .isEqualTo(
+                        "com.android.appsearch.flags.enable_result_denied_and_result_rate_limited");
+    }
+
+    @Test
+    public void testFlagValue_enableGetParentTypesAndIndexableNestedProperties() {
+        assertThat(Flags.FLAG_ENABLE_GET_PARENT_TYPES_AND_INDEXABLE_NESTED_PROPERTIES)
+                .isEqualTo(
+                        "com.android.appsearch.flags"
+                                + ".enable_get_parent_types_and_indexable_nested_properties");
+    }
+
+    @Test
+    public void testFlagValue_enableSchemaEmbeddingPropertyConfig() {
+        assertThat(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_PROPERTY_CONFIG)
+                .isEqualTo("com.android.appsearch.flags.enable_schema_embedding_property_config");
+    }
+
+    @Test
+    public void testFlagValue_enableSearchSpecSearchStringParameters() {
+        assertThat(Flags.FLAG_ENABLE_SEARCH_SPEC_SEARCH_STRING_PARAMETERS)
+                .isEqualTo(
+                        "com.android.appsearch.flags.enable_search_spec_search_string_parameters");
+    }
+
+    @Test
+    public void testFlagValue_enableInformationalRankingExpressions() {
+        assertThat(Flags.FLAG_ENABLE_INFORMATIONAL_RANKING_EXPRESSIONS)
+                .isEqualTo("com.android.appsearch.flags.enable_informational_ranking_expressions");
+    }
+
+    @Test
+    public void testFlagValue_enableResultAlreadyExists() {
+        assertThat(Flags.FLAG_ENABLE_RESULT_ALREADY_EXISTS)
+                .isEqualTo("com.android.appsearch.flags.enable_result_already_exists");
+    }
+
+    @Test
+    public void testFlagValue_enableBlobStore() {
+        assertThat(Flags.FLAG_ENABLE_BLOB_STORE)
+                .isEqualTo("com.android.appsearch.flags.enable_blob_store");
+    }
+
+    @Test
+    public void testFlagValue_enableEnterpriseEmptyBatchResultFix() {
+        assertThat(Flags.FLAG_ENABLE_ENTERPRISE_EMPTY_BATCH_RESULT_FIX)
+                .isEqualTo("com.android.appsearch.flags.enable_enterprise_empty_batch_result_fix");
     }
 }

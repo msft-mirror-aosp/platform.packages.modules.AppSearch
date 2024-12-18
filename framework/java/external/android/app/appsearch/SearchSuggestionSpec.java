@@ -20,9 +20,9 @@ import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.app.appsearch.util.BundleUtil;
@@ -32,6 +32,7 @@ import android.os.Parcelable;
 import android.util.ArrayMap;
 import android.util.ArraySet;
 
+import com.android.appsearch.flags.Flags;
 import com.android.internal.util.Preconditions;
 
 import java.lang.annotation.Retention;
@@ -52,6 +53,7 @@ import java.util.Set;
  * @see AppSearchSession#searchSuggestion
  */
 @SafeParcelable.Class(creator = "SearchSuggestionSpecCreator")
+@SuppressWarnings("HiddenSuperclass")
 public final class SearchSuggestionSpec extends AbstractSafeParcelable {
 
     @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)
@@ -59,17 +61,23 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
     public static final Parcelable.Creator<SearchSuggestionSpec> CREATOR =
             new SearchSuggestionSpecCreator();
 
+    @NonNull
     @Field(id = 1, getter = "getFilterNamespaces")
     private final List<String> mFilterNamespaces;
 
+    @NonNull
     @Field(id = 2, getter = "getFilterSchemas")
     private final List<String> mFilterSchemas;
+
     // Maps are not supported by SafeParcelable fields, using Bundle instead. Here the key is
     // schema type and value is a list of target property paths in that schema to search over.
+    @NonNull
     @Field(id = 3)
     final Bundle mFilterProperties;
+
     // Maps are not supported by SafeParcelable fields, using Bundle instead. Here the key is
     // namespace and value is a list of target document ids in that namespace to search over.
+    @NonNull
     @Field(id = 4)
     final Bundle mFilterDocumentIds;
 
@@ -79,6 +87,10 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
     @Field(id = 6, getter = "getMaximumResultCount")
     private final int mMaximumResultCount;
 
+    @NonNull
+    @Field(id = 7, getter = "getSearchStringParameters")
+    private final List<String> mSearchStringParameters;
+
     /** @hide */
     @Constructor
     public SearchSuggestionSpec(
@@ -87,7 +99,8 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
             @Param(id = 3) @NonNull Bundle filterProperties,
             @Param(id = 4) @NonNull Bundle filterDocumentIds,
             @Param(id = 5) @SuggestionRankingStrategy int rankingStrategy,
-            @Param(id = 6) int maximumResultCount) {
+            @Param(id = 6) int maximumResultCount,
+            @Param(id = 7) @Nullable List<String> searchStringParameters) {
         Preconditions.checkArgument(
                 maximumResultCount >= 1, "MaximumResultCount must be positive.");
         mFilterNamespaces = Objects.requireNonNull(filterNamespaces);
@@ -96,6 +109,10 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
         mFilterDocumentIds = Objects.requireNonNull(filterDocumentIds);
         mRankingStrategy = rankingStrategy;
         mMaximumResultCount = maximumResultCount;
+        mSearchStringParameters =
+                (searchStringParameters != null)
+                        ? Collections.unmodifiableList(searchStringParameters)
+                        : Collections.emptyList();
     }
 
     /**
@@ -126,6 +143,7 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
      * score and appear in the results first.
      */
     public static final int SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT = 0;
+
     /**
      * Ranked by the term appear frequency.
      *
@@ -231,6 +249,18 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
         return documentIdsMap;
     }
 
+    /**
+     * Returns the list of String parameters that can be referenced in the query through the
+     * "getSearchStringParameter({index})" function.
+     *
+     * @see AppSearchSession#search
+     */
+    @NonNull
+    @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_SEARCH_STRING_PARAMETERS)
+    public List<String> getSearchStringParameters() {
+        return mSearchStringParameters;
+    }
+
     /** Builder for {@link SearchSuggestionSpec objects}. */
     public static final class Builder {
         private ArrayList<String> mNamespaces = new ArrayList<>();
@@ -242,6 +272,7 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
         @SuggestionRankingStrategy
         private int mRankingStrategy = SUGGESTION_RANKING_STRATEGY_DOCUMENT_COUNT;
 
+        private List<String> mSearchStringParameters = new ArrayList<>();
         private boolean mBuilt = false;
 
         /**
@@ -351,6 +382,7 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
          *     of property names indicating which property in the document these snippets correspond
          *     to.
          */
+        @CanIgnoreReturnValue
         @NonNull
         @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_FILTER_PROPERTIES)
         public Builder addFilterProperties(
@@ -382,6 +414,7 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
          * @param schema the {@link AppSearchSchema} that contains the target properties
          * @param propertyPaths The {@link PropertyPath} to search suggestion over
          */
+        @CanIgnoreReturnValue
         @NonNull
         // Getter method is getFilterProperties
         @SuppressLint("MissingGetterMatchingBuilder")
@@ -434,6 +467,37 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
             return this;
         }
 
+        /**
+         * Adds Strings to the list of String parameters that can be referenced in the query through
+         * the "getSearchStringParameter({index})" function.
+         *
+         * @see AppSearchSession#search
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_SEARCH_STRING_PARAMETERS)
+        public Builder addSearchStringParameters(@NonNull String... searchStringParameters) {
+            Objects.requireNonNull(searchStringParameters);
+            resetIfBuilt();
+            return addSearchStringParameters(Arrays.asList(searchStringParameters));
+        }
+
+        /**
+         * Adds Strings to the list of String parameters that can be referenced in the query through
+         * the "getSearchStringParameter({index})" function.
+         *
+         * @see AppSearchSession#search
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SEARCH_SPEC_SEARCH_STRING_PARAMETERS)
+        public Builder addSearchStringParameters(@NonNull List<String> searchStringParameters) {
+            Objects.requireNonNull(searchStringParameters);
+            resetIfBuilt();
+            mSearchStringParameters.addAll(searchStringParameters);
+            return this;
+        }
+
         /** Constructs a new {@link SearchSpec} from the contents of this builder. */
         @NonNull
         public SearchSuggestionSpec build() {
@@ -468,7 +532,8 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
                     mTypePropertyFilters,
                     mDocumentIds,
                     mRankingStrategy,
-                    mTotalResultCount);
+                    mTotalResultCount,
+                    mSearchStringParameters);
         }
 
         private void resetIfBuilt() {
@@ -477,6 +542,7 @@ public final class SearchSuggestionSpec extends AbstractSafeParcelable {
                 mSchemas = new ArrayList<>(mSchemas);
                 mTypePropertyFilters = BundleUtil.deepCopy(mTypePropertyFilters);
                 mDocumentIds = BundleUtil.deepCopy(mDocumentIds);
+                mSearchStringParameters = new ArrayList<>(mSearchStringParameters);
                 mBuilt = false;
             }
         }

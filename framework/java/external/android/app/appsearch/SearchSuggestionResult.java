@@ -20,18 +20,19 @@ import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import com.android.appsearch.flags.Flags;
 import com.android.internal.util.Preconditions;
 
 import java.util.Objects;
 
 /** The result class of the {@link AppSearchSession#searchSuggestion}. */
 @SafeParcelable.Class(creator = "SearchSuggestionResultCreator")
+@SuppressWarnings("HiddenSuperclass")
 public final class SearchSuggestionResult extends AbstractSafeParcelable {
 
     @FlaggedApi(Flags.FLAG_ENABLE_SAFE_PARCELABLE_2)

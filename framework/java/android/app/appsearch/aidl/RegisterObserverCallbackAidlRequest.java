@@ -22,40 +22,47 @@ import android.app.appsearch.observer.ObserverSpec;
 import android.app.appsearch.safeparcel.AbstractSafeParcelable;
 import android.app.appsearch.safeparcel.SafeParcelable;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.UserHandle;
 
 import java.util.Objects;
 
 /**
  * Encapsulates a request to make a binder call to add an observer monitor changes in the database.
+ *
  * @hide
  */
 @SafeParcelable.Class(creator = "RegisterObserverCallbackAidlRequestCreator")
 public class RegisterObserverCallbackAidlRequest extends AbstractSafeParcelable {
     @NonNull
-    public static final RegisterObserverCallbackAidlRequestCreator CREATOR =
+    public static final Parcelable.Creator<RegisterObserverCallbackAidlRequest> CREATOR =
             new RegisterObserverCallbackAidlRequestCreator();
 
     @NonNull
     @Field(id = 1, getter = "getCallerAttributionSource")
     private final AppSearchAttributionSource mCallerAttributionSource;
+
     @NonNull
     @Field(id = 2, getter = "getTargetPackageName")
     private final String mTargetPackageName;
+
     @NonNull
     @Field(id = 3, getter = "getObserverSpec")
     private final ObserverSpec mObserverSpec;
+
     @NonNull
     @Field(id = 4, getter = "getUserHandle")
     private final UserHandle mUserHandle;
+
     @Field(id = 5, getter = "getBinderCallStartTimeMillis")
-    private final @ElapsedRealtimeLong long mBinderCallStartTimeMillis;
+    @ElapsedRealtimeLong
+    private final long mBinderCallStartTimeMillis;
 
     /**
      * Creates and initializes AppSearchImpl for the calling app.
      *
-     * @param callerAttributionSource The permission identity of the package which is registering
-     *     an observer.
+     * @param callerAttributionSource The permission identity of the package which is registering an
+     *     observer.
      * @param targetPackageName Package whose changes to monitor
      * @param observerSpec ObserverSpec showing what types of changes to listen for
      * @param userHandle Handle of the calling user

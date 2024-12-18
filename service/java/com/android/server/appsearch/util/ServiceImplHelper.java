@@ -15,14 +15,13 @@
  */
 package com.android.server.appsearch.util;
 
-import static android.app.appsearch.AppSearchResult.RESULT_RATE_LIMITED;
 import static android.app.appsearch.AppSearchResult.throwableToFailedResult;
 
 import android.Manifest;
 import android.annotation.BinderThread;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.app.appsearch.AppSearchBatchResult;
+import android.app.admin.DevicePolicyManager;
 import android.app.appsearch.AppSearchEnvironmentFactory;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
@@ -42,14 +41,13 @@ import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.server.appsearch.AppSearchUserInstanceManager;
-import com.android.server.appsearch.external.localstorage.stats.CallStats;
 
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.Executor;
 
 /**
  * Utilities to help with implementing AppSearch's services.
+ *
  * @hide
  */
 public class ServiceImplHelper {
@@ -57,7 +55,7 @@ public class ServiceImplHelper {
 
     private final Context mContext;
     private final UserManager mUserManager;
-    private final ExecutorManager mExecutorManager;
+    private final DevicePolicyManager mDevicePolicyManager;
     private final AppSearchUserInstanceManager mAppSearchUserInstanceManager;
 
     // Cache of unlocked users so we don't have to query UserManager service each time. The "locked"
@@ -76,17 +74,16 @@ public class ServiceImplHelper {
     @Nullable
     private UserHandle mEnterpriseUserLocked;
 
-    public ServiceImplHelper(@NonNull Context context, @NonNull ExecutorManager executorManager) {
+    public ServiceImplHelper(@NonNull Context context) {
         mContext = Objects.requireNonNull(context);
         mUserManager = context.getSystemService(UserManager.class);
-        mExecutorManager = Objects.requireNonNull(executorManager);
         mAppSearchUserInstanceManager = AppSearchUserInstanceManager.getInstance();
+        mDevicePolicyManager = context.getSystemService(DevicePolicyManager.class);
     }
 
     public void setUserIsLocked(@NonNull UserHandle userHandle, boolean isLocked) {
         boolean isManagedProfile = mUserManager.isManagedProfile(userHandle.getIdentifier());
-        UserHandle parentUser = isManagedProfile ? mUserManager.getProfileParent(userHandle)
-                : null;
+        UserHandle parentUser = isManagedProfile ? mUserManager.getProfileParent(userHandle) : null;
         synchronized (mUnlockedUsersLocked) {
             if (isLocked) {
                 if (isManagedProfile) {
@@ -145,7 +142,7 @@ public class ServiceImplHelper {
      * <p>This method must be called on the binder thread.
      *
      * @return The result containing the final verified user that the call should run as, if all
-     * checks pass. Otherwise return null.
+     *     checks pass. Otherwise return null.
      */
     @BinderThread
     @Nullable
@@ -156,7 +153,9 @@ public class ServiceImplHelper {
         try {
             return verifyIncomingCall(callerAttributionSource, userHandle);
         } catch (Throwable t) {
-            invokeCallbackOnResult(errorCallback, throwableToFailedResult(t));
+            AppSearchResult failedResult = throwableToFailedResult(t);
+            invokeCallbackOnResult(
+                    errorCallback, AppSearchResultParcel.fromFailedResult(failedResult));
             return null;
         }
     }
@@ -170,7 +169,7 @@ public class ServiceImplHelper {
      * <p>This method must be called on the binder thread.
      *
      * @return The result containing the final verified user that the call should run as, if all
-     * checks pass. Otherwise return null.
+     *     checks pass. Otherwise, return null.
      */
     @BinderThread
     @Nullable
@@ -208,10 +207,9 @@ public class ServiceImplHelper {
         long callingIdentity = Binder.clearCallingIdentity();
         try {
             verifyCaller(callingUid, callerAttributionSource);
-            String callingPackageName =
-                Objects.requireNonNull(callerAttributionSource.getPackageName());
+            String callingPackageName = callerAttributionSource.getPackageName();
             UserHandle targetUser =
-                handleIncomingUser(callingPackageName, userHandle, callingPid, callingUid);
+                    handleIncomingUser(callingPackageName, userHandle, callingPid, callingUid);
             verifyUserUnlocked(targetUser);
             return targetUser;
         } finally {
@@ -221,20 +219,20 @@ public class ServiceImplHelper {
 
     /**
      * Verify various aspects of the calling user.
+     *
      * @param callingUid Uid of the caller, usually retrieved from Binder for authenticity.
      * @param callerAttributionSource The permission identity of the caller
      */
     // enforceCallingUidAndPid is called on AttributionSource during deserialization.
-    private void verifyCaller(int callingUid,
-            @NonNull AppSearchAttributionSource callerAttributionSource) {
+    private void verifyCaller(
+            int callingUid, @NonNull AppSearchAttributionSource callerAttributionSource) {
         // Obtain the user where the client is running in. Note that this could be different from
         // the userHandle where the client wants to run the AppSearch operation in.
         UserHandle callingUserHandle = UserHandle.getUserHandleForUid(callingUid);
-        Context callingUserContext = AppSearchEnvironmentFactory
-            .getEnvironmentInstance()
-            .createContextAsUser(mContext, callingUserHandle);
-        String callingPackageName =
-            Objects.requireNonNull(callerAttributionSource.getPackageName());
+        Context callingUserContext =
+                AppSearchEnvironmentFactory.getEnvironmentInstance()
+                        .createContextAsUser(mContext, callingUserHandle);
+        String callingPackageName = callerAttributionSource.getPackageName();
         verifyCallingPackage(callingUserContext, callingUid, callingPackageName);
         verifyNotInstantApp(callingUserContext, callingPackageName);
     }
@@ -248,8 +246,8 @@ public class ServiceImplHelper {
             @NonNull Context actualCallingUserContext,
             int actualCallingUid,
             @NonNull String claimedCallingPackage) {
-        int claimedCallingUid = PackageUtil.getPackageUid(
-                actualCallingUserContext, claimedCallingPackage);
+        int claimedCallingUid =
+                PackageUtil.getPackageUid(actualCallingUserContext, claimedCallingPackage);
         if (claimedCallingUid != actualCallingUid) {
             throw new SecurityException(
                     "Specified calling package ["
@@ -267,8 +265,12 @@ public class ServiceImplHelper {
     private void verifyNotInstantApp(@NonNull Context userContext, @NonNull String packageName) {
         PackageManager callingPackageManager = userContext.getPackageManager();
         if (callingPackageManager.isInstantApp(packageName)) {
-            throw new SecurityException("Caller not allowed to create AppSearch session"
-                    + "; userHandle=" + userContext.getUser() + ", callingPackage=" + packageName);
+            throw new SecurityException(
+                    "Caller not allowed to create AppSearch session"
+                            + "; userHandle="
+                            + userContext.getUser()
+                            + ", callingPackage="
+                            + packageName);
         }
     }
 
@@ -282,16 +284,18 @@ public class ServiceImplHelper {
      * @param targetUserHandle The user which the caller is requesting to execute as.
      * @param callingPid The actual pid of the caller as determined by Binder.
      * @param callingUid The actual uid of the caller as determined by Binder.
-     *
      * @return the user handle that the call should run as. Will always be a concrete user.
-     *
      * @throws IllegalArgumentException if the target user is a special user.
-     * @throws SecurityException if caller trying to interact across user without
-     * {@link Manifest.permission#INTERACT_ACROSS_USERS_FULL}
+     * @throws SecurityException if caller trying to interact across user without {@link
+     *     Manifest.permission#INTERACT_ACROSS_USERS_FULL}
      */
+    @CanIgnoreReturnValue
     @NonNull
-    private UserHandle handleIncomingUser(@NonNull String callingPackageName,
-            @NonNull UserHandle targetUserHandle, int callingPid, int callingUid) {
+    private UserHandle handleIncomingUser(
+            @NonNull String callingPackageName,
+            @NonNull UserHandle targetUserHandle,
+            int callingPid,
+            int callingUid) {
         UserHandle callingUserHandle = UserHandle.getUserHandleForUid(callingUid);
         if (callingUserHandle.equals(targetUserHandle)) {
             return targetUserHandle;
@@ -304,155 +308,32 @@ public class ServiceImplHelper {
         }
 
         if (mContext.checkPermission(
-                Manifest.permission.INTERACT_ACROSS_USERS_FULL,
-                callingPid,
-                callingUid) == PackageManager.PERMISSION_GRANTED) {try {
-            // Normally if the calling package doesn't exist in the target user, user cannot
-            // call AppSearch. But since the SDK side cannot be trusted, we still need to verify
-            // the calling package exists in the target user.
-            // We need to create the package context for the targetUser, and this call will fail
-            // if the calling package doesn't exist in the target user.
-            mContext.createPackageContextAsUser(callingPackageName, /*flags=*/0,
-                    targetUserHandle);
-        } catch (PackageManager.NameNotFoundException e) {
-            throw new SecurityException(
-                    "Package: " + callingPackageName + " haven't installed for user "
-                            + targetUserHandle.getIdentifier());
-        }
+                        Manifest.permission.INTERACT_ACROSS_USERS_FULL, callingPid, callingUid)
+                == PackageManager.PERMISSION_GRANTED) {
+            try {
+                // Normally if the calling package doesn't exist in the target user, user cannot
+                // call AppSearch. But since the SDK side cannot be trusted, we still need to verify
+                // the calling package exists in the target user.
+                // We need to create the package context for the targetUser, and this call will fail
+                // if the calling package doesn't exist in the target user.
+                mContext.createPackageContextAsUser(
+                        callingPackageName, /* flags= */ 0, targetUserHandle);
+            } catch (PackageManager.NameNotFoundException e) {
+                throw new SecurityException(
+                        "Package: "
+                                + callingPackageName
+                                + " haven't installed for user "
+                                + targetUserHandle.getIdentifier());
+            }
             return targetUserHandle;
         }
         throw new SecurityException(
-                "Permission denied while calling from uid " + callingUid
-                        + " with " + targetUserHandle + "; Requires permission: "
+                "Permission denied while calling from uid "
+                        + callingUid
+                        + " with "
+                        + targetUserHandle
+                        + "; Requires permission: "
                         + Manifest.permission.INTERACT_ACROSS_USERS_FULL);
-    }
-
-    /**
-     * Helper to execute the implementation of some AppSearch functionality on the executor for that
-     * user.
-     *
-     * <p>You should first make sure the call is allowed to run using {@link #verifyCaller}.
-     *
-     * @param targetUser            The verified user the call should run as, as determined by
-     *                              {@link #verifyCaller}.
-     * @param errorCallback         Callback to complete with an error if starting the lambda fails.
-     *                              Otherwise this callback is not triggered.
-     * @param callingPackageName    Package making this lambda call.
-     * @param apiType               Api type of this lambda call.
-     * @param lambda                The lambda to execute on the user-provided executor.
-     *
-     * @return true if the call is accepted by the executor and false otherwise.
-     */
-    @BinderThread
-    @CanIgnoreReturnValue
-    public boolean executeLambdaForUserAsync(
-            @NonNull UserHandle targetUser,
-            @NonNull IAppSearchResultCallback errorCallback,
-            @NonNull String callingPackageName,
-            @CallStats.CallType int apiType,
-            @NonNull Runnable lambda) {
-        Objects.requireNonNull(targetUser);
-        Objects.requireNonNull(errorCallback);
-        Objects.requireNonNull(callingPackageName);
-        Objects.requireNonNull(lambda);
-        try {
-            Executor executor = mExecutorManager.getOrCreateUserExecutor(targetUser);
-            if (executor instanceof RateLimitedExecutor) {
-                boolean callAccepted = ((RateLimitedExecutor) executor).execute(lambda,
-                        callingPackageName, apiType);
-                if (!callAccepted) {
-                    invokeCallbackOnResult(errorCallback,
-                            AppSearchResult.newFailedResult(RESULT_RATE_LIMITED,
-                                    "AppSearch rate limit reached."));
-                    return false;
-                }
-            } else {
-                executor.execute(lambda);
-            }
-        } catch (RuntimeException e) {
-            invokeCallbackOnResult(errorCallback, throwableToFailedResult(e));
-        }
-        return true;
-    }
-
-    /**
-     * Helper to execute the implementation of some AppSearch functionality on the executor for that
-     * user.
-     *
-     * <p>You should first make sure the call is allowed to run using {@link #verifyCaller}.
-     *
-     * @param targetUser            The verified user the call should run as, as determined by
-     *                              {@link #verifyCaller}.
-     * @param errorCallback         Callback to complete with an error if starting the lambda fails.
-     *                              Otherwise this callback is not triggered.
-     * @param callingPackageName    Package making this lambda call.
-     * @param apiType               Api type of this lambda call.
-     * @param lambda                The lambda to execute on the user-provided executor.
-     *
-     * @return true if the call is accepted by the executor and false otherwise.
-     */
-    @BinderThread
-    public boolean executeLambdaForUserAsync(
-            @NonNull UserHandle targetUser,
-            @NonNull IAppSearchBatchResultCallback errorCallback,
-            @NonNull String callingPackageName,
-            @CallStats.CallType int apiType,
-            @NonNull Runnable lambda) {
-        Objects.requireNonNull(targetUser);
-        Objects.requireNonNull(errorCallback);
-        Objects.requireNonNull(callingPackageName);
-        Objects.requireNonNull(lambda);
-        try {
-            Executor executor = mExecutorManager.getOrCreateUserExecutor(targetUser);
-            if (executor instanceof RateLimitedExecutor) {
-                boolean callAccepted = ((RateLimitedExecutor) executor).execute(lambda,
-                        callingPackageName, apiType);
-                if (!callAccepted) {
-                    invokeCallbackOnError(errorCallback,
-                            AppSearchResult.newFailedResult(RESULT_RATE_LIMITED,
-                                    "AppSearch rate limit reached."));
-                    return false;
-                }
-            } else {
-                executor.execute(lambda);
-            }
-        } catch (RuntimeException e) {
-            invokeCallbackOnError(errorCallback, e);
-        }
-        return true;
-    }
-
-    /**
-     * Helper to execute the implementation of some AppSearch functionality on the executor for that
-     * user, without invoking callback for the user.
-     *
-     * <p>You should first make sure the call is allowed to run using {@link #verifyCaller}.
-     *
-     * @param targetUser         The verified user the call should run as, as determined by
-     *                           {@link #verifyCaller}.
-     * @param callingPackageName Package making this lambda call.
-     * @param apiType            Api type of this lambda call.
-     * @param lambda             The lambda to execute on the user-provided executor.
-     *
-     * @return true if the call is accepted by the executor and false otherwise.
-     */
-    @BinderThread
-    public boolean executeLambdaForUserNoCallbackAsync(
-            @NonNull UserHandle targetUser,
-            @NonNull String callingPackageName,
-            @CallStats.CallType int apiType,
-            @NonNull Runnable lambda) {
-        Objects.requireNonNull(targetUser);
-        Objects.requireNonNull(callingPackageName);
-        Objects.requireNonNull(lambda);
-        Executor executor = mExecutorManager.getOrCreateUserExecutor(targetUser);
-        if (executor instanceof RateLimitedExecutor) {
-            return ((RateLimitedExecutor) executor).execute(lambda, callingPackageName,
-                    apiType);
-        } else {
-            executor.execute(lambda);
-            return true;
-        }
     }
 
     /**
@@ -467,18 +348,31 @@ public class ServiceImplHelper {
         }
         UserHandle enterpriseUser = getEnterpriseUser(targetUser);
         // Do not return the enterprise user if its AppSearch instance does not exist
-        if (enterpriseUser == null ||
-                mAppSearchUserInstanceManager.getUserInstanceOrNull(enterpriseUser) == null) {
+        if (enterpriseUser == null
+                || mAppSearchUserInstanceManager.getUserInstanceOrNull(enterpriseUser) == null) {
             return null;
         }
         return enterpriseUser;
     }
 
-    /** Invokes the {@link IAppSearchResultCallback} with the result. */
-    public static void invokeCallbackOnResult(
-            IAppSearchResultCallback callback, AppSearchResult<?> result) {
+    /** Returns whether the given user is managed by an organization. */
+    public boolean isUserOrganizationManaged(@NonNull UserHandle targetUser) {
+        long token = Binder.clearCallingIdentity();
         try {
-            callback.onResult(new AppSearchResultParcel<>(result));
+            if (mDevicePolicyManager.isDeviceManaged()) {
+                return true;
+            }
+            return mUserManager.isManagedProfile(targetUser.getIdentifier());
+        } finally {
+            Binder.restoreCallingIdentity(token);
+        }
+    }
+
+    /** Invokes the {@link IAppSearchResultCallback} with the result parcel. */
+    public static void invokeCallbackOnResult(
+            IAppSearchResultCallback callback, AppSearchResultParcel<?> resultParcel) {
+        try {
+            callback.onResult(resultParcel);
         } catch (RemoteException e) {
             Log.e(TAG, "Unable to send result to the callback", e);
         }
@@ -486,9 +380,9 @@ public class ServiceImplHelper {
 
     /** Invokes the {@link IAppSearchBatchResultCallback} with the result. */
     public static void invokeCallbackOnResult(
-            IAppSearchBatchResultCallback callback, AppSearchBatchResult<String, ?> result) {
+            IAppSearchBatchResultCallback callback, AppSearchBatchResultParcel<?> resultParcel) {
         try {
-            callback.onResult(new AppSearchBatchResultParcel<>(result));
+            callback.onResult(resultParcel);
         } catch (RemoteException e) {
             Log.e(TAG, "Unable to send result to the callback", e);
         }
@@ -504,13 +398,11 @@ public class ServiceImplHelper {
         invokeCallbackOnError(callback, throwableToFailedResult(throwable));
     }
 
-    /**
-     * Invokes the {@link IAppSearchBatchResultCallback} with the error result.
-     */
+    /** Invokes the {@link IAppSearchBatchResultCallback} with the error result. */
     public static void invokeCallbackOnError(
             @NonNull IAppSearchBatchResultCallback callback, @NonNull AppSearchResult<?> result) {
         try {
-            callback.onSystemError(new AppSearchResultParcel<>(result));
+            callback.onSystemError(AppSearchResultParcel.fromFailedResult(result));
         } catch (RemoteException e) {
             Log.e(TAG, "Unable to send error to the callback", e);
         }

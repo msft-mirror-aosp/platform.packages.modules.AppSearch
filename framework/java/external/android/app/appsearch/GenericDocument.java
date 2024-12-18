@@ -21,13 +21,18 @@ import android.annotation.FlaggedApi;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.RequiresApi;
 import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.app.appsearch.safeparcel.GenericDocumentParcel;
 import android.app.appsearch.safeparcel.PropertyParcel;
 import android.app.appsearch.util.IndentingStringBuilder;
+import android.os.Build;
+import android.os.Parcel;
 import android.util.Log;
+
+import com.android.appsearch.flags.Flags;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
@@ -56,8 +61,19 @@ public class GenericDocument {
     /** The maximum number of indexed properties a document can have. */
     private static final int MAX_INDEXED_PROPERTIES = 16;
 
-    /** @hide */
+    /**
+     * Fixed constant synthetic property for parent types.
+     *
+     * @hide
+     */
     public static final String PARENT_TYPES_SYNTHETIC_PROPERTY = "$$__AppSearch__parentTypes";
+
+    /**
+     * An immutable empty {@link GenericDocument}.
+     *
+     * @hide
+     */
+    public static final GenericDocument EMPTY = new GenericDocument.Builder<>("", "", "").build();
 
     /**
      * The maximum number of indexed properties a document can have.
@@ -94,6 +110,43 @@ public class GenericDocument {
      */
     protected GenericDocument(@NonNull GenericDocument document) {
         this(document.mDocumentParcel);
+    }
+
+    /**
+     * Writes the {@link GenericDocument} to the given {@link Parcel}.
+     *
+     * @param dest The {@link Parcel} to write to.
+     * @param flags The flags to use for parceling.
+     * @hide
+     */
+    // GenericDocument is an open class that can be extended, whereas parcelable classes must be
+    // final in those methods. Thus, we make this a system api to avoid 3p apps depending on it
+    // and getting confused by the inheritability.
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_OVER_IPC)
+    public final void writeToParcel(@NonNull Parcel dest, int flags) {
+        Objects.requireNonNull(dest);
+        dest.writeParcelable(mDocumentParcel, flags);
+    }
+
+    /**
+     * Creates a {@link GenericDocument} from a {@link Parcel}.
+     *
+     * @param parcel The {@link Parcel} to read from.
+     * @hide
+     */
+    // GenericDocument is an open class that can be extended, whereas parcelable classes must be
+    // final in those methods. Thus, we make this a system api to avoid 3p apps depending on it
+    // and getting confused by the inheritability.
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
+    @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_OVER_IPC)
+    @NonNull
+    public static GenericDocument createFromParcel(@NonNull Parcel parcel) {
+        Objects.requireNonNull(parcel);
+        GenericDocumentParcel documentParcel =
+                parcel.readParcelable(GenericDocumentParcel.class.getClassLoader());
+        return new GenericDocument(documentParcel);
     }
 
     /**
@@ -252,7 +305,9 @@ public class GenericDocument {
         Objects.requireNonNull(path);
         Object rawValue =
                 getRawPropertyFromRawDocument(
-                        new PropertyPath(path), /*pathIndex=*/ 0, mDocumentParcel.getPropertyMap());
+                        new PropertyPath(path),
+                        /* pathIndex= */ 0,
+                        mDocumentParcel.getPropertyMap());
 
         // Unpack the raw value into the types the user expects, if required.
         if (rawValue instanceof GenericDocumentParcel) {
@@ -325,35 +380,40 @@ public class GenericDocument {
                 Object extractedValue = null;
                 if (propertyParcel.getStringValues() != null) {
                     String[] stringValues = propertyParcel.getStringValues();
-                    if (index < stringValues.length) {
+                    if (stringValues != null && index < stringValues.length) {
                         extractedValue = Arrays.copyOfRange(stringValues, index, index + 1);
                     }
                 } else if (propertyParcel.getLongValues() != null) {
                     long[] longValues = propertyParcel.getLongValues();
-                    if (index < longValues.length) {
+                    if (longValues != null && index < longValues.length) {
                         extractedValue = Arrays.copyOfRange(longValues, index, index + 1);
                     }
                 } else if (propertyParcel.getDoubleValues() != null) {
                     double[] doubleValues = propertyParcel.getDoubleValues();
-                    if (index < doubleValues.length) {
+                    if (doubleValues != null && index < doubleValues.length) {
                         extractedValue = Arrays.copyOfRange(doubleValues, index, index + 1);
                     }
                 } else if (propertyParcel.getBooleanValues() != null) {
                     boolean[] booleanValues = propertyParcel.getBooleanValues();
-                    if (index < booleanValues.length) {
+                    if (booleanValues != null && index < booleanValues.length) {
                         extractedValue = Arrays.copyOfRange(booleanValues, index, index + 1);
                     }
                 } else if (propertyParcel.getBytesValues() != null) {
                     byte[][] bytesValues = propertyParcel.getBytesValues();
-                    if (index < bytesValues.length) {
+                    if (bytesValues != null && index < bytesValues.length) {
                         extractedValue = Arrays.copyOfRange(bytesValues, index, index + 1);
                     }
                 } else if (propertyParcel.getDocumentValues() != null) {
                     // Special optimization: to avoid creating new singleton arrays for traversing
                     // paths we return the bare document parcel in this particular case.
                     GenericDocumentParcel[] docValues = propertyParcel.getDocumentValues();
-                    if (index < docValues.length) {
+                    if (docValues != null && index < docValues.length) {
                         extractedValue = docValues[index];
+                    }
+                } else if (propertyParcel.getEmbeddingValues() != null) {
+                    EmbeddingVector[] embeddingValues = propertyParcel.getEmbeddingValues();
+                    if (embeddingValues != null && index < embeddingValues.length) {
+                        extractedValue = Arrays.copyOfRange(embeddingValues, index, index + 1);
                     }
                 } else {
                     throw new IllegalStateException(
@@ -381,7 +441,7 @@ public class GenericDocument {
                     && ((PropertyParcel) currentElementValue).getDocumentValues() != null) {
                 GenericDocumentParcel[] docParcels =
                         ((PropertyParcel) currentElementValue).getDocumentValues();
-                if (docParcels.length == 1) {
+                if (docParcels != null && docParcels.length == 1) {
                     propertyMap = docParcels[0].getPropertyMap();
                     continue;
                 }
@@ -409,20 +469,22 @@ public class GenericDocument {
                 // repeated values. The implementation is optimized for these two cases, requiring
                 // no additional allocations. So we've decided that the above performance
                 // characteristics are OK for the less used path.
-                List<Object> accumulator = new ArrayList<>(docParcels.length);
-                for (GenericDocumentParcel docParcel : docParcels) {
-                    // recurse as we need to branch
-                    Object value =
-                            getRawPropertyFromRawDocument(
-                                    path,
-                                    /*pathIndex=*/ i + 1,
-                                    ((GenericDocumentParcel) docParcel).getPropertyMap());
-                    if (value != null) {
-                        accumulator.add(value);
+                if (docParcels != null) {
+                    List<Object> accumulator = new ArrayList<>(docParcels.length);
+                    for (GenericDocumentParcel docParcel : docParcels) {
+                        // recurse as we need to branch
+                        Object value =
+                                getRawPropertyFromRawDocument(
+                                        path,
+                                        /* pathIndex= */ i + 1,
+                                        ((GenericDocumentParcel) docParcel).getPropertyMap());
+                        if (value != null) {
+                            accumulator.add(value);
+                        }
                     }
+                    // Break the path traversing loop
+                    return flattenAccumulator(accumulator);
                 }
-                // Break the path traversing loop
-                return flattenAccumulator(accumulator);
             } else {
                 Log.e(TAG, "Failed to apply path to document; no nested value found: " + path);
                 return null;
@@ -651,6 +713,27 @@ public class GenericDocument {
         return propertyArray[0];
     }
 
+    /**
+     * Retrieves an {@code EmbeddingVector} property by path.
+     *
+     * <p>See {@link #getProperty} for a detailed description of the path syntax.
+     *
+     * @param path The path to look for.
+     * @return The first {@code EmbeddingVector[]} associated with the given path or {@code null} if
+     *     there is no such value or the value is of a different type.
+     */
+    @Nullable
+    @FlaggedApi(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_PROPERTY_CONFIG)
+    public EmbeddingVector getPropertyEmbedding(@NonNull String path) {
+        Objects.requireNonNull(path);
+        EmbeddingVector[] propertyArray = getPropertyEmbeddingArray(path);
+        if (propertyArray == null || propertyArray.length == 0) {
+            return null;
+        }
+        warnIfSinglePropertyTooLong("Embedding", path, propertyArray.length);
+        return propertyArray[0];
+    }
+
     /** Prints a warning to logcat if the given propertyLength is greater than 1. */
     private static void warnIfSinglePropertyTooLong(
             @NonNull String propertyType, @NonNull String path, int propertyLength) {
@@ -809,6 +892,30 @@ public class GenericDocument {
     }
 
     /**
+     * Retrieves a repeated {@code EmbeddingVector[]} property by path.
+     *
+     * <p>See {@link #getProperty} for a detailed description of the path syntax.
+     *
+     * <p>If the property has not been set via {@link Builder#setPropertyEmbedding}, this method
+     * returns {@code null}.
+     *
+     * <p>If it has been set via {@link Builder#setPropertyEmbedding} to an empty {@code
+     * EmbeddingVector[]}, this method returns an empty {@code EmbeddingVector[]}.
+     *
+     * @param path The path to look for.
+     * @return The {@code EmbeddingVector[]} associated with the given path, or {@code null} if no
+     *     value is set or the value is of a different type.
+     */
+    @SuppressLint({"ArrayReturn", "NullableCollection"})
+    @Nullable
+    @FlaggedApi(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_PROPERTY_CONFIG)
+    public EmbeddingVector[] getPropertyEmbeddingArray(@NonNull String path) {
+        Objects.requireNonNull(path);
+        Object value = getProperty(path);
+        return safeCastProperty(path, value, EmbeddingVector[].class);
+    }
+
+    /**
      * Casts a repeated property to the provided type, logging an error and returning {@code null}
      * if the cast fails.
      *
@@ -955,7 +1062,7 @@ public class GenericDocument {
                     builder.append("\"").append((String) propertyElement).append("\"");
                 } else if (propertyElement instanceof byte[]) {
                     builder.append(Arrays.toString((byte[]) propertyElement));
-                } else {
+                } else if (propertyElement != null) {
                     builder.append(propertyElement.toString());
                 }
                 if (i != propertyArrLength - 1) {
@@ -974,8 +1081,9 @@ public class GenericDocument {
     // This builder is specifically designed to be extended by classes deriving from
     // GenericDocument.
     @SuppressLint("StaticFinalBuilder")
+    @SuppressWarnings("rawtypes")
     public static class Builder<BuilderType extends Builder> {
-        private GenericDocumentParcel.Builder mDocumentParcelBuilder;
+        private final GenericDocumentParcel.Builder mDocumentParcelBuilder;
         private final BuilderType mBuilderTypeInstance;
 
         /**
@@ -1019,8 +1127,8 @@ public class GenericDocument {
         /**
          * Creates a new {@link GenericDocument.Builder} from the given GenericDocument.
          *
-         * <p>The GenericDocument is deep copied, i.e. changes to the new GenericDocument returned
-         * by this function will NOT affect the original GenericDocument.
+         * <p>The GenericDocument is deep copied, that is, it changes to a new GenericDocument
+         * returned by this function and will NOT affect the original GenericDocument.
          */
         @FlaggedApi(Flags.FLAG_ENABLE_GENERIC_DOCUMENT_COPY_CONSTRUCTOR)
         public Builder(@NonNull GenericDocument document) {
@@ -1285,6 +1393,32 @@ public class GenericDocument {
                 documentParcels[i] = values[i].getDocumentParcel();
             }
             mDocumentParcelBuilder.putInPropertyMap(name, documentParcels);
+            return mBuilderTypeInstance;
+        }
+
+        /**
+         * Sets one or multiple {@code EmbeddingVector} values for a property, replacing its
+         * previous values.
+         *
+         * @param name the name associated with the {@code values}. Must match the name for this
+         *     property as given in {@link AppSearchSchema.PropertyConfig#getName}.
+         * @param values the {@code EmbeddingVector} values of the property.
+         * @throws IllegalArgumentException if the name is empty or {@code null}.
+         */
+        @CanIgnoreReturnValue
+        @NonNull
+        @FlaggedApi(Flags.FLAG_ENABLE_SCHEMA_EMBEDDING_PROPERTY_CONFIG)
+        public BuilderType setPropertyEmbedding(
+                @NonNull String name, @NonNull EmbeddingVector... values) {
+            Objects.requireNonNull(name);
+            Objects.requireNonNull(values);
+            validatePropertyName(name);
+            for (int i = 0; i < values.length; i++) {
+                if (values[i] == null) {
+                    throw new IllegalArgumentException("The EmbeddingVector at " + i + " is null.");
+                }
+            }
+            mDocumentParcelBuilder.putInPropertyMap(name, values);
             return mBuilderTypeInstance;
         }
 

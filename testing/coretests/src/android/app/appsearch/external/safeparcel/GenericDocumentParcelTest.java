@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertThrows;
 
+import android.app.appsearch.EmbeddingVector;
 import android.os.Parcel;
 
 import org.junit.Test;
@@ -38,6 +39,7 @@ public class GenericDocumentParcelTest {
         double[] doubleValues = {1.0, 2.0};
         boolean[] booleanValues = {true, false};
         byte[][] bytesValues = {new byte[1]};
+        EmbeddingVector[] embeddingValues = {new EmbeddingVector(new float[1], "my_model")};
         GenericDocumentParcel[] docValues = {
             (new GenericDocumentParcel.Builder("namespace", "id", "schemaType")).build()
         };
@@ -74,6 +76,12 @@ public class GenericDocumentParcelTest {
                 .isEqualTo(Arrays.copyOf(bytesValues, bytesValues.length));
         assertThat(
                         new PropertyParcel.Builder("name")
+                                .setEmbeddingValues(embeddingValues)
+                                .build()
+                                .getEmbeddingValues())
+                .isEqualTo(Arrays.copyOf(embeddingValues, embeddingValues.length));
+        assertThat(
+                        new PropertyParcel.Builder("name")
                                 .setDocumentValues(docValues)
                                 .build()
                                 .getDocumentValues())
@@ -99,19 +107,23 @@ public class GenericDocumentParcelTest {
     public void testGenericDocumentParcel_propertiesGeneratedCorrectly() {
         GenericDocumentParcel.Builder builder =
                 new GenericDocumentParcel.Builder(
-                        /*namespace=*/ "namespace", /*id=*/ "id", /*schemaType=*/ "schemaType");
+                        /* namespace= */ "namespace",
+                        /* id= */ "id",
+                        /* schemaType= */ "schemaType");
         long[] longArray = new long[] {1L, 2L, 3L};
         String[] stringArray = new String[] {"hello", "world", "!"};
-        builder.putInPropertyMap(/*name=*/ "longArray", /*values=*/ longArray);
-        builder.putInPropertyMap(/*name=*/ "stringArray", /*values=*/ stringArray);
+        builder.putInPropertyMap(/* name= */ "longArray", /* values= */ longArray);
+        builder.putInPropertyMap(/* name= */ "stringArray", /* values= */ stringArray);
         GenericDocumentParcel genericDocumentParcel = builder.build();
 
         List<PropertyParcel> properties = genericDocumentParcel.getProperties();
         Map<String, PropertyParcel> propertyMap = genericDocumentParcel.getPropertyMap();
         PropertyParcel longArrayProperty =
-                new PropertyParcel.Builder(/*name=*/ "longArray").setLongValues(longArray).build();
+                new PropertyParcel.Builder(/* name= */ "longArray")
+                        .setLongValues(longArray)
+                        .build();
         PropertyParcel stringArrayProperty =
-                new PropertyParcel.Builder(/*name=*/ "stringArray")
+                new PropertyParcel.Builder(/* name= */ "stringArray")
                         .setStringValues(stringArray)
                         .build();
 
@@ -125,12 +137,14 @@ public class GenericDocumentParcelTest {
     public void testGenericDocumentParcel_buildFromAnotherDocumentParcelCorrectly() {
         GenericDocumentParcel.Builder builder =
                 new GenericDocumentParcel.Builder(
-                        /*namespace=*/ "namespace", /*id=*/ "id", /*schemaType=*/ "schemaType");
+                        /* namespace= */ "namespace",
+                        /* id= */ "id",
+                        /* schemaType= */ "schemaType");
         long[] longArray = new long[] {1L, 2L, 3L};
         String[] stringArray = new String[] {"hello", "world", "!"};
         List<String> parentTypes = new ArrayList<>(Arrays.asList("parentType1", "parentType2"));
-        builder.putInPropertyMap(/*name=*/ "longArray", /*values=*/ longArray);
-        builder.putInPropertyMap(/*name=*/ "stringArray", /*values=*/ stringArray);
+        builder.putInPropertyMap(/* name= */ "longArray", /* values= */ longArray);
+        builder.putInPropertyMap(/* name= */ "stringArray", /* values= */ stringArray);
         builder.setParentTypes(parentTypes);
         GenericDocumentParcel genericDocumentParcel = builder.build();
 
@@ -161,7 +175,9 @@ public class GenericDocumentParcelTest {
     public void testGenericDocumentParcelWithParentTypes() {
         GenericDocumentParcel.Builder builder =
                 new GenericDocumentParcel.Builder(
-                        /*namespace=*/ "namespace", /*id=*/ "id", /*schemaType=*/ "schemaType");
+                        /* namespace= */ "namespace",
+                        /* id= */ "id",
+                        /* schemaType= */ "schemaType");
         List<String> parentTypes = new ArrayList<>(Arrays.asList("parentType1", "parentType2"));
 
         builder.setParentTypes(parentTypes);
@@ -174,23 +190,27 @@ public class GenericDocumentParcelTest {
     public void testGenericDocumentParcel_builderCanBeReused() {
         GenericDocumentParcel.Builder builder =
                 new GenericDocumentParcel.Builder(
-                        /*namespace=*/ "namespace", /*id=*/ "id", /*schemaType=*/ "schemaType");
+                        /* namespace= */ "namespace",
+                        /* id= */ "id",
+                        /* schemaType= */ "schemaType");
         long[] longArray = new long[] {1L, 2L, 3L};
         String[] stringArray = new String[] {"hello", "world", "!"};
         List<String> parentTypes = new ArrayList<>(Arrays.asList("parentType1", "parentType2"));
-        builder.putInPropertyMap(/*name=*/ "longArray", /*values=*/ longArray);
-        builder.putInPropertyMap(/*name=*/ "stringArray", /*values=*/ stringArray);
+        builder.putInPropertyMap(/* name= */ "longArray", /* values= */ longArray);
+        builder.putInPropertyMap(/* name= */ "stringArray", /* values= */ stringArray);
         builder.setParentTypes(parentTypes);
 
         GenericDocumentParcel genericDocumentParcel = builder.build();
         builder.setParentTypes(new ArrayList<>(Arrays.asList("parentType3", "parentType4")));
         builder.clearProperty("longArray");
-        builder.putInPropertyMap(/*name=*/ "stringArray", /*values=*/ new String[] {""});
+        builder.putInPropertyMap(/* name= */ "stringArray", /* values= */ new String[] {""});
 
         PropertyParcel longArrayProperty =
-                new PropertyParcel.Builder(/*name=*/ "longArray").setLongValues(longArray).build();
+                new PropertyParcel.Builder(/* name= */ "longArray")
+                        .setLongValues(longArray)
+                        .build();
         PropertyParcel stringArrayProperty =
-                new PropertyParcel.Builder(/*name=*/ "stringArray")
+                new PropertyParcel.Builder(/* name= */ "stringArray")
                         .setStringValues(stringArray)
                         .build();
         assertThat(genericDocumentParcel.getParentTypes()).isEqualTo(parentTypes);
@@ -231,7 +251,7 @@ public class GenericDocumentParcelTest {
 
         // Serialize the document
         Parcel inParcel = Parcel.obtain();
-        inParcel.writeParcelable(inDoc, /*flags=*/ 0);
+        inParcel.writeParcelable(inDoc, /* flags= */ 0);
         byte[] data = inParcel.marshall();
         inParcel.recycle();
 

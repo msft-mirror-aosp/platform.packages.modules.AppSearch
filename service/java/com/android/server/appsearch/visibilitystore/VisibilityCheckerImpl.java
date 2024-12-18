@@ -15,6 +15,8 @@
  */
 package com.android.server.appsearch.visibilitystore;
 
+import static android.Manifest.permission.EXECUTE_APP_FUNCTIONS;
+import static android.Manifest.permission.EXECUTE_APP_FUNCTIONS_TRUSTED;
 import static android.Manifest.permission.READ_ASSISTANT_APP_SEARCH_DATA;
 import static android.Manifest.permission.READ_CALENDAR;
 import static android.Manifest.permission.READ_CONTACTS;
@@ -31,6 +33,7 @@ import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SchemaVisibilityConfig;
 import android.app.appsearch.SetSchemaRequest;
 import android.app.appsearch.aidl.AppSearchAttributionSource;
+import android.content.AttributionSource;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.UserHandle;
@@ -89,10 +92,11 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         // If caller requires enterprise access, the given schema is only visible if caller has all
         // required permissions.
         if (frameworkCallerAccess.isForEnterprise()) {
-            return internalVisibilityConfig != null && isSchemaVisibleToPermission(
-                    internalVisibilityConfig.getVisibilityConfig(),
-                    frameworkCallerAccess.getCallingAttributionSource(),
-                    /*checkEnterpriseAccess=*/ true);
+            return internalVisibilityConfig != null
+                    && isSchemaVisibleToPermission(
+                            internalVisibilityConfig.getVisibilityConfig(),
+                            frameworkCallerAccess.getCallingAttributionSource(),
+                            /* checkEnterpriseAccess= */ true);
         }
 
         if (internalVisibilityConfig == null) {
@@ -103,16 +107,15 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
 
         // Check whether the calling package has system access and the target schema is visible to
         // the system.
-        if (frameworkCallerAccess.doesCallerHaveSystemAccess() &&
-                !internalVisibilityConfig.isNotDisplayedBySystem()) {
+        if (frameworkCallerAccess.doesCallerHaveSystemAccess()
+                && !internalVisibilityConfig.isNotDisplayedBySystem()) {
             return true;
         }
 
         // Check OR visibility settings. Caller could access if they match ANY of the requirements
         // in the visibilityConfig.
         SchemaVisibilityConfig visibilityConfig = internalVisibilityConfig.getVisibilityConfig();
-        if (checkMatchAnyVisibilityConfig(
-                frameworkCallerAccess, visibilityConfig)) {
+        if (checkMatchAnyVisibilityConfig(frameworkCallerAccess, visibilityConfig)) {
             return true;
         }
 
@@ -121,28 +124,28 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         Set<SchemaVisibilityConfig> visibleToConfigs =
                 internalVisibilityConfig.getVisibleToConfigs();
         for (SchemaVisibilityConfig visibleToConfig : visibleToConfigs) {
-            if (checkMatchAllVisibilityConfig(
-                    frameworkCallerAccess, visibleToConfig)) {
+            if (checkMatchAllVisibilityConfig(frameworkCallerAccess, visibleToConfig)) {
                 return true;
             }
         }
         return false;
     }
 
-    /**  Check whether the caller math ANY of the visibility requirements.     */
+    /** Check whether the caller math ANY of the visibility requirements. */
     private boolean checkMatchAnyVisibilityConfig(
-        @NonNull FrameworkCallerAccess frameworkCallerAccess,
-        @NonNull SchemaVisibilityConfig visibilityConfig) {
-        if (isSchemaVisibleToPackages(visibilityConfig,
-            frameworkCallerAccess.getCallingAttributionSource().getUid())) {
+            @NonNull FrameworkCallerAccess frameworkCallerAccess,
+            @NonNull SchemaVisibilityConfig visibilityConfig) {
+        if (isSchemaVisibleToPackages(
+                visibilityConfig, frameworkCallerAccess.getCallingAttributionSource().getUid())) {
             // The caller is in the allow list and has access to the given schema.
             return true;
         }
 
         // Check whether caller has all required permissions for the given schema.
-        if(isSchemaVisibleToPermission(visibilityConfig,
+        if (isSchemaVisibleToPermission(
+                visibilityConfig,
                 frameworkCallerAccess.getCallingAttributionSource(),
-                /*checkEnterpriseAccess=*/ false)) {
+                /* checkEnterpriseAccess= */ false)) {
             return true;
         }
 
@@ -150,10 +153,10 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         return isSchemaPubliclyVisibleFromPackage(visibilityConfig, frameworkCallerAccess);
     }
 
-    /**  Check whether the caller math ALL of the visibility requirements.     */
+    /** Check whether the caller math ALL of the visibility requirements. */
     private boolean checkMatchAllVisibilityConfig(
-        @NonNull FrameworkCallerAccess frameworkCallerAccess,
-        @NonNull SchemaVisibilityConfig visibilityConfig) {
+            @NonNull FrameworkCallerAccess frameworkCallerAccess,
+            @NonNull SchemaVisibilityConfig visibilityConfig) {
 
         // We will skip following checks if user never specific them. But the caller should has
         // passed at least one check to get the access.
@@ -161,9 +164,10 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
 
         // Check whether the caller is in the allow list and has access to the given schema.
         if (!visibilityConfig.getAllowedPackages().isEmpty()) {
-            if (!isSchemaVisibleToPackages(visibilityConfig,
-                frameworkCallerAccess.getCallingAttributionSource().getUid())) {
-                return false;// Return early for the 'ALL' case.
+            if (!isSchemaVisibleToPackages(
+                    visibilityConfig,
+                    frameworkCallerAccess.getCallingAttributionSource().getUid())) {
+                return false; // Return early for the 'ALL' case.
             }
             hasPassedCheck = true;
         }
@@ -171,10 +175,11 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         // Check whether caller has all required permissions for the given schema.
         // We could directly return the boolean results since it is the last checking.
         if (!visibilityConfig.getRequiredPermissions().isEmpty()) {
-            if (!isSchemaVisibleToPermission(visibilityConfig,
-                frameworkCallerAccess.getCallingAttributionSource(),
-                /*checkEnterpriseAccess=*/ false)) {
-                return false;// Return early for the 'ALL' case.
+            if (!isSchemaVisibleToPermission(
+                    visibilityConfig,
+                    frameworkCallerAccess.getCallingAttributionSource(),
+                    /* checkEnterpriseAccess= */ false)) {
+                return false; // Return early for the 'ALL' case.
             }
             hasPassedCheck = true;
         }
@@ -200,8 +205,10 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
 
         // Ensure the sha 256 certificate matches the certificate of the actual publicly visible
         // target package.
-        if (!PackageManagerUtil.hasSigningCertificate(mUserContext,
-                targetPackage.getPackageName(), targetPackage.getSha256Certificate())) {
+        if (!PackageManagerUtil.hasSigningCertificate(
+                mUserContext,
+                targetPackage.getPackageName(),
+                targetPackage.getSha256Certificate())) {
             return false;
         }
 
@@ -211,9 +218,11 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         // the publicly visible target package for that schema could be the timer app package.
         try {
             // The call that opens up documents to "public" access
-            if (mUserContext.getPackageManager().canPackageQuery(
-                    frameworkCallerAccess.getCallingPackageName(),
-                    targetPackage.getPackageName())) {
+            if (mUserContext
+                    .getPackageManager()
+                    .canPackageQuery(
+                            frameworkCallerAccess.getCallingPackageName(),
+                            targetPackage.getPackageName())) {
                 return true;
             }
         } catch (PackageManager.NameNotFoundException e) {
@@ -232,8 +241,8 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
      * certificate was once used to sign the package, the package will still be granted access. This
      * does not handle packages that have been signed by multiple certificates.
      */
-    private boolean isSchemaVisibleToPackages(@NonNull SchemaVisibilityConfig visibilityConfig,
-            int callerUid) {
+    private boolean isSchemaVisibleToPackages(
+            @NonNull SchemaVisibilityConfig visibilityConfig, int callerUid) {
         List<PackageIdentifier> visibleToPackages = visibilityConfig.getAllowedPackages();
         for (int i = 0; i < visibleToPackages.size(); i++) {
             PackageIdentifier visibleToPackage = visibleToPackages.get(i);
@@ -247,8 +256,8 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
             // make calls to us. So just check if the appId portion of the uid is the same. This is
             // essentially UserHandle.isSameApp, but that's not a system API for us to use.
             int callerAppId = UserHandle.getAppId(callerUid);
-            int packageUid = PackageUtil.getPackageUid(
-                    mUserContext, visibleToPackage.getPackageName());
+            int packageUid =
+                    PackageUtil.getPackageUid(mUserContext, visibleToPackage.getPackageName());
             int userAppId = UserHandle.getAppId(packageUid);
             if (callerAppId != userAppId) {
                 continue;
@@ -267,9 +276,7 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         return false;
     }
 
-    /**
-     * Returns whether the caller holds required permissions for the given schema.
-     */
+    /** Returns whether the caller holds required permissions for the given schema. */
     private boolean isSchemaVisibleToPermission(
             @NonNull SchemaVisibilityConfig visibilityConfig,
             @Nullable AppSearchAttributionSource callerAttributionSource,
@@ -283,8 +290,8 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
         for (Set<Integer> allRequiredPermissions : visibleToPermissions) {
             // User may set multiple required permission sets. Provider need to hold ALL required
             // permission of ANY of the individual value sets.
-            if (doesCallerHoldsAllRequiredPermissions(allRequiredPermissions,
-                    callerAttributionSource, checkEnterpriseAccess)) {
+            if (doesCallerHoldsAllRequiredPermissions(
+                    allRequiredPermissions, callerAttributionSource, checkEnterpriseAccess)) {
                 // The calling package has all required permissions in this set, return true.
                 return true;
             }
@@ -300,8 +307,8 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
             boolean checkEnterpriseAccess) {
         // A permissions set with ENTERPRISE_ACCESS should only be checked by enterprise calls,
         // and enterprise calls should only check permission sets with ENTERPRISE_ACCESS
-        boolean isEnterprisePermissionsSet = allRequiredPermissions.contains(
-                SetSchemaRequest.ENTERPRISE_ACCESS);
+        boolean isEnterprisePermissionsSet =
+                allRequiredPermissions.contains(SetSchemaRequest.ENTERPRISE_ACCESS);
         if (checkEnterpriseAccess != isEnterprisePermissionsSet) {
             return false;
         }
@@ -314,8 +321,10 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
                 case SetSchemaRequest.READ_EXTERNAL_STORAGE:
                 case SetSchemaRequest.READ_HOME_APP_SEARCH_DATA:
                 case SetSchemaRequest.READ_ASSISTANT_APP_SEARCH_DATA:
-                    if (!doesCallerHavePermissionForDataDelivery(requiredPermission,
-                            callerAttributionSource)) {
+                case SetSchemaRequest.EXECUTE_APP_FUNCTIONS:
+                case SetSchemaRequest.EXECUTE_APP_FUNCTIONS_TRUSTED:
+                    if (!doesCallerHavePermissionForDataDelivery(
+                            requiredPermission, callerAttributionSource)) {
                         // The calling package doesn't have this required permission, return false.
                         return false;
                     }
@@ -328,7 +337,7 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
                     callingPackageName = callerAttributionSource.getPackageName();
                     if (callingPackageName == null
                             || !mPolicyChecker.doesCallerHaveManagedProfileContactsAccess(
-                            callingPackageName)) {
+                                    callingPackageName)) {
                         return false;
                     }
                     break;
@@ -350,6 +359,10 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
      * Checks whether the calling package has the corresponding Android permission to the specified
      * {@code requiredPermission}.
      */
+    // Suppressing warning about not guarding by SDK level check since this method is manually
+    // tested to work on older devices that don't have permissions declared in higher SDKs
+    // (returning false by default if permission does not exist).
+    @SuppressWarnings("InlinedApi")
     private boolean doesCallerHavePermissionForDataDelivery(
             @SetSchemaRequest.AppSearchSupportedPermission int requiredPermission,
             @NonNull AppSearchAttributionSource callerAttributionSource) {
@@ -373,14 +386,36 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
             case SetSchemaRequest.READ_ASSISTANT_APP_SEARCH_DATA:
                 permission = READ_ASSISTANT_APP_SEARCH_DATA;
                 break;
+            case SetSchemaRequest.EXECUTE_APP_FUNCTIONS:
+                permission = EXECUTE_APP_FUNCTIONS;
+                break;
+            case SetSchemaRequest.EXECUTE_APP_FUNCTIONS_TRUSTED:
+                permission = EXECUTE_APP_FUNCTIONS_TRUSTED;
+                break;
             default:
                 return false;
         }
         // getAttributionSource can be safely called and the returned value will only be
         // null on Android R-
-        return PERMISSION_GRANTED == mPermissionManager.checkPermissionForDataDelivery(
-                permission, callerAttributionSource.getAttributionSource(),
-                /*message=*/"appsearch");
+        return checkPermissionForDataDeliveryGranted(
+                permission,
+                callerAttributionSource.getAttributionSource(),
+                /* message= */ "appsearch");
+    }
+
+    /**
+     * Checks whether permission for data delivery with {@link PermissionManager} is granted.
+     *
+     * @hide
+     */
+    @VisibleForTesting
+    public boolean checkPermissionForDataDeliveryGranted(
+            @NonNull String permission,
+            @NonNull AttributionSource attributionSource,
+            @Nullable String message) {
+        return PERMISSION_GRANTED
+                == mPermissionManager.checkPermissionForDataDelivery(
+                        permission, attributionSource, message);
     }
 
     /**
@@ -391,8 +426,9 @@ public class VisibilityCheckerImpl implements VisibilityChecker {
     @Override
     public boolean doesCallerHaveSystemAccess(@NonNull String callerPackageName) {
         Objects.requireNonNull(callerPackageName);
-        return mUserContext.getPackageManager()
-                .checkPermission(READ_GLOBAL_APP_SEARCH_DATA, callerPackageName)
+        return mUserContext
+                        .getPackageManager()
+                        .checkPermission(READ_GLOBAL_APP_SEARCH_DATA, callerPackageName)
                 == PackageManager.PERMISSION_GRANTED;
     }
 }

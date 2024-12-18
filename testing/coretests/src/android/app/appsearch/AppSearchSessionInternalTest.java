@@ -22,10 +22,10 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assume.assumeTrue;
 
-import android.app.appsearch.testutil.AppSearchSessionShimImpl;
 import android.app.appsearch.AppSearchSchema.PropertyConfig;
 import android.app.appsearch.AppSearchSchema.StringPropertyConfig;
 import android.app.appsearch.testutil.AppSearchEmail;
+import android.app.appsearch.testutil.AppSearchSessionShimImpl;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
@@ -421,5 +421,337 @@ public class AppSearchSessionInternalTest extends AppSearchSessionInternalTestBa
         List<GenericDocument> documents = convertSearchResultsToDocuments(searchResults);
         assertThat(documents).hasSize(4);
         assertThat(documents).containsExactly(expectedDocA, expectedDocB, expectedDocC, docD);
+    }
+
+    // TODO(b/290389974) Remove this override once GenericDocument#getParentTypes is unhidden.
+    @Override
+    @Test
+    public void testQuery_wildcardProjection_polymorphism() throws Exception {
+        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.SCHEMA_ADD_PARENT_TYPE));
+        AppSearchSchema messageSchema =
+                new AppSearchSchema.Builder("Message")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("sender")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("content")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .build();
+        AppSearchSchema textSchema =
+                new AppSearchSchema.Builder("Text")
+                        .addParentType("Message")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("sender")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("content")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .build();
+        AppSearchSchema emailSchema =
+                new AppSearchSchema.Builder("Email")
+                        .addParentType("Message")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("sender")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("content")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .build();
+
+        // Schema registration
+        mDb1.setSchemaAsync(
+                        new SetSchemaRequest.Builder()
+                                .addSchemas(messageSchema, textSchema, emailSchema)
+                                .build())
+                .get();
+
+        // Index two child documents
+        GenericDocument text =
+                new GenericDocument.Builder<>("namespace", "id1", "Text")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString("sender", "Some sender")
+                        .setPropertyString("content", "Some note")
+                        .build();
+        GenericDocument email =
+                new GenericDocument.Builder<>("namespace", "id2", "Email")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString("sender", "Some sender")
+                        .setPropertyString("content", "Some note")
+                        .build();
+        checkIsBatchResultSuccess(
+                mDb1.putAsync(
+                        new PutDocumentsRequest.Builder()
+                                .addGenericDocuments(email, text)
+                                .build()));
+
+        SearchResultsShim searchResults =
+                mDb1.search(
+                        "Some",
+                        new SearchSpec.Builder()
+                                .addFilterSchemas("Message")
+                                .addProjection(
+                                        SearchSpec.SCHEMA_TYPE_WILDCARD, ImmutableList.of("sender"))
+                                .addFilterProperties(
+                                        SearchSpec.SCHEMA_TYPE_WILDCARD,
+                                        ImmutableList.of("content"))
+                                .build());
+        List<GenericDocument> documents = convertSearchResultsToDocuments(searchResults);
+
+        // We specified the parent document in the filter schemas, but only indexed child documents.
+        // As we also specified a wildcard schema type projection, it should apply to the child docs
+        // The content property must not appear. Also emailNoContent should not appear as we are
+        // filter on the content property
+        GenericDocument expectedText =
+                new GenericDocument.Builder<>("namespace", "id1", "Text")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString(PARENT_TYPES_SYNTHETIC_PROPERTY, "Message")
+                        .setPropertyString("sender", "Some sender")
+                        .build();
+        GenericDocument expectedEmail =
+                new GenericDocument.Builder<>("namespace", "id2", "Email")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString(PARENT_TYPES_SYNTHETIC_PROPERTY, "Message")
+                        .setPropertyString("sender", "Some sender")
+                        .build();
+        assertThat(documents).containsExactly(expectedText, expectedEmail);
+    }
+
+    // TODO(b/290389974) Remove this override once GenericDocument#getParentTypes is unhidden.
+    @Override
+    @Test
+    public void testQuery_wildcardFilterSchema_polymorphism() throws Exception {
+        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.SCHEMA_ADD_PARENT_TYPE));
+        AppSearchSchema messageSchema =
+                new AppSearchSchema.Builder("Message")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("content")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .build();
+        AppSearchSchema textSchema =
+                new AppSearchSchema.Builder("Text")
+                        .addParentType("Message")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("content")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("carrier")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .build();
+        AppSearchSchema emailSchema =
+                new AppSearchSchema.Builder("Email")
+                        .addParentType("Message")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("content")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("attachment")
+                                        .setCardinality(PropertyConfig.CARDINALITY_REQUIRED)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .build())
+                        .build();
+
+        // Schema registration
+        mDb1.setSchemaAsync(
+                        new SetSchemaRequest.Builder()
+                                .addSchemas(messageSchema, textSchema, emailSchema)
+                                .build())
+                .get();
+
+        // Index two child documents
+        GenericDocument text =
+                new GenericDocument.Builder<>("namespace", "id1", "Text")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString("content", "Some note")
+                        .setPropertyString("carrier", "Network Inc")
+                        .build();
+        GenericDocument email =
+                new GenericDocument.Builder<>("namespace", "id2", "Email")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString("content", "Some note")
+                        .setPropertyString("attachment", "Network report")
+                        .build();
+
+        checkIsBatchResultSuccess(
+                mDb1.putAsync(
+                        new PutDocumentsRequest.Builder()
+                                .addGenericDocuments(email, text)
+                                .build()));
+
+        // Both email and text would match for "Network", but only text should match as it is in the
+        // right property
+        SearchResultsShim searchResults =
+                mDb1.search(
+                        "Network",
+                        new SearchSpec.Builder()
+                                .addFilterSchemas("Message")
+                                .addFilterProperties(
+                                        SearchSpec.SCHEMA_TYPE_WILDCARD,
+                                        ImmutableList.of("carrier"))
+                                .build());
+        List<GenericDocument> documents = convertSearchResultsToDocuments(searchResults);
+
+        // We specified the parent document in the filter schemas, but only indexed child documents.
+        // As we also specified a wildcard schema type projection, it should apply to the child docs
+        // The content property must not appear. Also emailNoContent should not appear as we are
+        // filter on the content property
+        GenericDocument expectedText =
+                new GenericDocument.Builder<>("namespace", "id1", "Text")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString(PARENT_TYPES_SYNTHETIC_PROPERTY, "Message")
+                        .setPropertyString("content", "Some note")
+                        .setPropertyString("carrier", "Network Inc")
+                        .build();
+        assertThat(documents).containsExactly(expectedText);
+    }
+
+    // TODO(b/290389974) Remove this override once GenericDocument#getParentTypes is unhidden.
+    @Override
+    @Test
+    public void testQuery_projectionWithPolymorphismAndSchemaFilter() throws Exception {
+        assumeTrue(mDb1.getFeatures().isFeatureSupported(Features.SCHEMA_ADD_PARENT_TYPE));
+
+        // Schema registration
+        AppSearchSchema personSchema =
+                new AppSearchSchema.Builder("Person")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("name")
+                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("emailAddress")
+                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .build())
+                        .build();
+        AppSearchSchema artistSchema =
+                new AppSearchSchema.Builder("Artist")
+                        .addParentType("Person")
+                        .addProperty(
+                                new StringPropertyConfig.Builder("name")
+                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("emailAddress")
+                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .build())
+                        .addProperty(
+                                new StringPropertyConfig.Builder("company")
+                                        .setCardinality(PropertyConfig.CARDINALITY_OPTIONAL)
+                                        .setTokenizerType(StringPropertyConfig.TOKENIZER_TYPE_PLAIN)
+                                        .setIndexingType(
+                                                StringPropertyConfig.INDEXING_TYPE_PREFIXES)
+                                        .build())
+                        .build();
+        mDb1.setSchemaAsync(
+                        new SetSchemaRequest.Builder()
+                                .addSchemas(personSchema)
+                                .addSchemas(artistSchema)
+                                .build())
+                .get();
+
+        // Index two documents
+        GenericDocument personDoc =
+                new GenericDocument.Builder<>("namespace", "id1", "Person")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString("name", "Foo Person")
+                        .setPropertyString("emailAddress", "person@gmail.com")
+                        .build();
+        GenericDocument artistDoc =
+                new GenericDocument.Builder<>("namespace", "id2", "Artist")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString("name", "Foo Artist")
+                        .setPropertyString("emailAddress", "artist@gmail.com")
+                        .setPropertyString("company", "Company")
+                        .build();
+        checkIsBatchResultSuccess(
+                mDb1.putAsync(
+                        new PutDocumentsRequest.Builder()
+                                .addGenericDocuments(personDoc, artistDoc)
+                                .build()));
+
+        // Query with type property paths {"Person", ["name"]} and {"Artist", ["emailAddress"]}, and
+        // a schema filter for the "Person".
+        // This will be expanded to paths {"Person", ["name"]} and
+        // {"Artist", ["name", "emailAddress"]}, and filters for both "Person" and "Artist" via
+        // polymorphism.
+        SearchResultsShim searchResults =
+                mDb1.search(
+                        "Foo",
+                        new SearchSpec.Builder()
+                                .setTermMatch(SearchSpec.TERM_MATCH_EXACT_ONLY)
+                                .addFilterSchemas("Person")
+                                .addProjection("Person", ImmutableList.of("name"))
+                                .addProjection("Artist", ImmutableList.of("emailAddress"))
+                                .build());
+        List<GenericDocument> documents = convertSearchResultsToDocuments(searchResults);
+
+        // The person document should have been returned with only the "name" property. The artist
+        // document should have been returned with all of its properties.
+        GenericDocument expectedPerson =
+                new GenericDocument.Builder<>("namespace", "id1", "Person")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString("name", "Foo Person")
+                        .build();
+        GenericDocument expectedArtist =
+                new GenericDocument.Builder<>("namespace", "id2", "Artist")
+                        .setPropertyString(PARENT_TYPES_SYNTHETIC_PROPERTY, "Person")
+                        .setCreationTimestampMillis(1000)
+                        .setPropertyString("name", "Foo Artist")
+                        .setPropertyString("emailAddress", "artist@gmail.com")
+                        .build();
+        assertThat(documents).containsExactly(expectedPerson, expectedArtist);
     }
 }

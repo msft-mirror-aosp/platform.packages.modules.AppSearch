@@ -23,12 +23,10 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.appsearch.annotation.CanIgnoreReturnValue;
-import android.app.appsearch.flags.Flags;
 import android.util.ArrayMap;
 import android.util.ArraySet;
-
+import com.android.appsearch.flags.Flags;
 import com.android.internal.util.Preconditions;
-
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.Arrays;
@@ -106,6 +104,9 @@ public final class SetSchemaRequest {
                 READ_ASSISTANT_APP_SEARCH_DATA,
                 ENTERPRISE_ACCESS,
                 MANAGED_PROFILE_CONTACTS_ACCESS,
+                EXECUTE_APP_FUNCTIONS,
+                EXECUTE_APP_FUNCTIONS_TRUSTED,
+                PACKAGE_USAGE_STATS,
             })
     @Retention(RetentionPolicy.SOURCE)
     public @interface AppSearchSupportedPermission {}
@@ -166,6 +167,43 @@ public final class SetSchemaRequest {
      * @hide
      */
     public static final int MANAGED_PROFILE_CONTACTS_ACCESS = 8;
+
+    /**
+     * The AppSearch enumeration corresponding to {@link
+     * android.Manifest.permission#EXECUTE_APP_FUNCTIONS} Android permission that can be used to
+     * guard AppSearch schema type visibility in {@link
+     * SetSchemaRequest.Builder#addRequiredPermissionsForSchemaTypeVisibility}.
+     *
+     * <p>This is internally used by AppFunctions API to store app functions runtime metadata so it
+     * is visible to packages holding {@link android.Manifest.permission#EXECUTE_APP_FUNCTIONS}
+     * permission (currently associated with system assistant apps).
+     *
+     * @hide
+     */
+    public static final int EXECUTE_APP_FUNCTIONS = 9;
+
+    /**
+     * The AppSearch enumeration corresponding to {@link
+     * android.Manifest.permission#EXECUTE_APP_FUNCTIONS_TRUSTED} Android permission that can be
+     * used to guard AppSearch schema type visibility in {@link
+     * SetSchemaRequest.Builder#addRequiredPermissionsForSchemaTypeVisibility}.
+     *
+     * <p>This is internally used by AppFunctions API to store app functions runtime metadata so it
+     * is visible to packages holding {@link
+     * android.Manifest.permission#EXECUTE_APP_FUNCTIONS_TRUSTED} permission (currently associated
+     * with system packages in the {@link android.app.role.SYSTEM_UI_INTELLIGENCE} role).
+     *
+     * @hide
+     */
+    public static final int EXECUTE_APP_FUNCTIONS_TRUSTED = 10;
+
+    /**
+     * The {@link android.Manifest.permission#PACKAGE_USAGE_STATS} AppSearch supported in {@link
+     * SetSchemaRequest.Builder#addRequiredPermissionsForSchemaTypeVisibility}
+     *
+     * @hide
+     */
+    public static final int PACKAGE_USAGE_STATS = 11;
 
     private final Set<AppSearchSchema> mSchemas;
     private final Set<String> mSchemasNotDisplayedBySystem;
@@ -444,7 +482,7 @@ public final class SetSchemaRequest {
             Objects.requireNonNull(permissions);
             for (int permission : permissions) {
                 Preconditions.checkArgumentInRange(
-                        permission, READ_SMS, MANAGED_PROFILE_CONTACTS_ACCESS, "permission");
+                        permission, READ_SMS, PACKAGE_USAGE_STATS, "permission");
             }
             resetIfBuilt();
             Set<Set<Integer>> visibleToPermissions = mSchemasVisibleToPermissions.get(schemaType);
@@ -549,6 +587,7 @@ public final class SetSchemaRequest {
          *     schema}.
          */
         // Merged list available from getPubliclyVisibleSchemas
+        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @FlaggedApi(Flags.FLAG_ENABLE_SET_PUBLICLY_VISIBLE_SCHEMA)
         @NonNull
@@ -583,6 +622,7 @@ public final class SetSchemaRequest {
          *     that a call must to match to access the schema.
          */
         // Merged list available from getSchemasVisibleToConfigs
+        @CanIgnoreReturnValue
         @SuppressLint("MissingGetterMatchingBuilder")
         @FlaggedApi(Flags.FLAG_ENABLE_SET_SCHEMA_VISIBLE_TO_CONFIGS)
         @NonNull
@@ -602,6 +642,7 @@ public final class SetSchemaRequest {
         }
 
         /** Clears all visible to {@link SchemaVisibilityConfig} for the given schema type. */
+        @CanIgnoreReturnValue
         @FlaggedApi(Flags.FLAG_ENABLE_SET_SCHEMA_VISIBLE_TO_CONFIGS)
         @NonNull
         public Builder clearSchemaTypeVisibleToConfigs(@NonNull String schemaType) {

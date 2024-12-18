@@ -19,8 +19,9 @@ package com.android.server.appsearch.external.localstorage.converter;
 import android.annotation.NonNull;
 import android.app.appsearch.SearchSuggestionSpec;
 
+import com.android.server.appsearch.external.localstorage.SchemaCache;
+
 import com.google.android.icing.proto.NamespaceDocumentUriGroup;
-import com.google.android.icing.proto.SchemaTypeConfigProto;
 import com.google.android.icing.proto.SuggestionScoringSpecProto;
 import com.google.android.icing.proto.SuggestionSpecProto;
 import com.google.android.icing.proto.TermMatchType;
@@ -39,16 +40,19 @@ import java.util.Set;
 public final class SearchSuggestionSpecToProtoConverter {
     private final String mSuggestionQueryExpression;
     private final SearchSuggestionSpec mSearchSuggestionSpec;
+
     /**
      * The client specific packages and databases to search for. For local storage, this always
      * contains a single prefix.
      */
     private final Set<String> mPrefixes;
+
     /**
      * The intersected prefixed namespaces that are existing in AppSearch and also accessible to the
      * client.
      */
     private final Set<String> mTargetPrefixedNamespaceFilters;
+
     /**
      * The intersected prefixed schema types that are existing in AppSearch and also accessible to
      * the client.
@@ -70,7 +74,7 @@ public final class SearchSuggestionSpecToProtoConverter {
             @NonNull SearchSuggestionSpec searchSuggestionSpec,
             @NonNull Set<String> prefixes,
             @NonNull Map<String, Set<String>> namespaceMap,
-            @NonNull Map<String, Map<String, SchemaTypeConfigProto>> schemaMap) {
+            @NonNull SchemaCache schemaCache) {
         mSuggestionQueryExpression = Objects.requireNonNull(suggestionQueryExpression);
         mSearchSuggestionSpec = Objects.requireNonNull(searchSuggestionSpec);
         mPrefixes = Objects.requireNonNull(prefixes);
@@ -80,12 +84,12 @@ public final class SearchSuggestionSpecToProtoConverter {
                         prefixes, namespaceMap, searchSuggestionSpec.getFilterNamespaces());
         mTargetPrefixedSchemaFilters =
                 SearchSpecToProtoConverterUtil.generateTargetSchemaFilters(
-                        prefixes, schemaMap, searchSuggestionSpec.getFilterSchemas());
+                        prefixes, schemaCache, searchSuggestionSpec.getFilterSchemas());
     }
 
     /**
-     * @return whether this search's target filters are empty. If any target filter is empty, we
-     *     should skip send request to Icing.
+     * Returns whether this search's target filters are empty. If any target filter is empty, we
+     * should skip send request to Icing.
      */
     public boolean hasNothingToSearch() {
         return mTargetPrefixedNamespaceFilters.isEmpty() || mTargetPrefixedSchemaFilters.isEmpty();
@@ -102,7 +106,9 @@ public final class SearchSuggestionSpecToProtoConverter {
                         .setPrefix(mSuggestionQueryExpression)
                         .addAllNamespaceFilters(mTargetPrefixedNamespaceFilters)
                         .addAllSchemaTypeFilters(mTargetPrefixedSchemaFilters)
-                        .setNumToReturn(mSearchSuggestionSpec.getMaximumResultCount());
+                        .setNumToReturn(mSearchSuggestionSpec.getMaximumResultCount())
+                        .addAllQueryParameterStrings(
+                                mSearchSuggestionSpec.getSearchStringParameters());
 
         // Convert type property filter map into type property mask proto.
         for (Map.Entry<String, List<String>> entry :

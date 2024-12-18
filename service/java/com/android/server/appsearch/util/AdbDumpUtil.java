@@ -33,10 +33,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
 
-/**
- * A utility class for helper methods to process {@link DebugInfoProto}.
- */
-public class AdbDumpUtil {
+/** A utility class for helper methods to process {@link DebugInfoProto}. */
+public final class AdbDumpUtil {
     private static final String TAG = "AppSearchAdbDumpUtil";
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
 
@@ -124,4 +122,6 @@ public class AdbDumpUtil {
         debugInfoBuilder.setSchemaInfo(schemaInfoBuilder);
         return debugInfoBuilder.build();
     }
+
+    private AdbDumpUtil() {}
 }
