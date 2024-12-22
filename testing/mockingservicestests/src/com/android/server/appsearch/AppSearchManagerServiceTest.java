@@ -17,6 +17,7 @@ package com.android.server.appsearch;
 
 import static android.Manifest.permission.READ_GLOBAL_APP_SEARCH_DATA;
 import static android.app.appsearch.AppSearchResult.RESULT_DENIED;
+import static android.app.appsearch.AppSearchResult.RESULT_NOT_FOUND;
 import static android.app.appsearch.AppSearchResult.RESULT_RATE_LIMITED;
 import static android.system.OsConstants.O_RDONLY;
 import static android.system.OsConstants.O_WRONLY;
@@ -95,7 +96,6 @@ import android.app.appsearch.aidl.SearchSuggestionAidlRequest;
 import android.app.appsearch.aidl.SetSchemaAidlRequest;
 import android.app.appsearch.aidl.UnregisterObserverCallbackAidlRequest;
 import android.app.appsearch.aidl.WriteSearchResultsToFileAidlRequest;
-import android.app.appsearch.functions.AppFunctionManager;
 import android.app.appsearch.functions.ExecuteAppFunctionRequest;
 import android.app.appsearch.functions.ExecuteAppFunctionResponse;
 import android.app.appsearch.functions.ServiceCallHelper;
@@ -119,11 +119,16 @@ import android.os.ServiceManager;
 import android.os.SystemClock;
 import android.os.UserHandle;
 import android.os.UserManager;
+import android.platform.test.annotations.RequiresFlagsDisabled;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
+import android.platform.test.flag.junit.DeviceFlagsValueProvider;
 import android.provider.DeviceConfig;
 
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.appsearch.flags.Flags;
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.dx.mockito.inline.extended.StaticMockitoSessionBuilder;
 import com.android.modules.utils.testing.ExtendedMockitoRule;
@@ -171,6 +176,9 @@ public class AppSearchManagerServiceTest {
     private final MockServiceManager mMockServiceManager = new MockServiceManager();
     private final RoleManager mRoleManager = mock(RoleManager.class);
     private final DevicePolicyManager mDevicePolicyManager = mock(DevicePolicyManager.class);
+
+    @Rule
+    public final CheckFlagsRule mCheckFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule();
 
     @Rule
     public ExtendedMockitoRule mExtendedMockitoRule = new ExtendedMockitoRule.Builder()
@@ -1418,6 +1426,7 @@ public class AppSearchManagerServiceTest {
         verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
 
+    @RequiresFlagsDisabled(Flags.FLAG_ENABLE_ENTERPRISE_EMPTY_BATCH_RESULT_FIX)
     @Test
     public void testEnterpriseGetDocuments_noEnterpriseUser_emptyResult() throws Exception {
         // Even on devices with an enterprise user, this test will run properly, since we haven't
@@ -1427,14 +1436,44 @@ public class AppSearchManagerServiceTest {
                 new GetDocumentsAidlRequest(
                         AppSearchAttributionSource.createAttributionSource(mContext,
                                 mCallingPid),
-                mContext.getPackageName(), DATABASE_NAME, new GetByDocumentIdRequest.Builder(
-                        NAMESPACE)
-                        .addIds(/* ids= */ Collections.emptyList())
-                        .build(),
-                mUserHandle, BINDER_CALL_START_TIME, /* isForEnterprise= */ true),
+                        mContext.getPackageName(), DATABASE_NAME,
+                        new GetByDocumentIdRequest.Builder(
+                                NAMESPACE)
+                                .addIds(/* ids= */ Arrays.asList("123", "456", "789"))
+                                .build(),
+                        mUserHandle, BINDER_CALL_START_TIME, /* isForEnterprise= */ true),
                 callback);
         assertThat(callback.get()).isNull(); // null means there wasn't an error
         assertThat(callback.getBatchResult().getAll()).isEmpty();
+        // No CallStats logged since we returned early
+        verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
+    }
+
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_ENTERPRISE_EMPTY_BATCH_RESULT_FIX)
+    @Test
+    public void testEnterpriseGetDocuments_noEnterpriseUser_notFoundResults() throws Exception {
+        // Even on devices with an enterprise user, this test will run properly, since we haven't
+        // unlocked the enterprise user for our local instance of AppSearchManagerService
+        TestBatchResultErrorCallback callback = new TestBatchResultErrorCallback();
+        mAppSearchManagerServiceStub.getDocuments(
+                new GetDocumentsAidlRequest(
+                        AppSearchAttributionSource.createAttributionSource(mContext,
+                                mCallingPid),
+                        mContext.getPackageName(), DATABASE_NAME,
+                        new GetByDocumentIdRequest.Builder(
+                                NAMESPACE)
+                                .addIds(/* ids= */ Arrays.asList("123", "456", "789"))
+                                .build(),
+                        mUserHandle, BINDER_CALL_START_TIME, /* isForEnterprise= */ true),
+                callback);
+        assertThat(callback.get()).isNull(); // null means there wasn't an error
+        assertThat(callback.getBatchResult().getFailures()).containsExactly("123",
+                AppSearchResult.newFailedResult(RESULT_NOT_FOUND,
+                        "Document (namespace, 123) not found."), "456",
+                AppSearchResult.newFailedResult(RESULT_NOT_FOUND,
+                        "Document (namespace, 456) not found."), "789",
+                AppSearchResult.newFailedResult(RESULT_NOT_FOUND,
+                        "Document (namespace, 789) not found."));
         // No CallStats logged since we returned early
         verify(mLogger, timeout(1000).times(0)).logStats(any(CallStats.class));
     }
@@ -1504,19 +1543,6 @@ public class AppSearchManagerServiceTest {
     public void executeAppFunction_cannotResolveService() throws Exception {
         PackageManager spyPackageManager = mContext.getPackageManager();
         doReturn(null).when(spyPackageManager).resolveService(any(Intent.class), eq(0));
-
-        verifyExecuteAppFunctionCallbackResult(AppSearchResult.RESULT_NOT_FOUND);
-    }
-
-    @Test
-    public void executeAppFunction_serviceNotPermissionProtected() throws Exception {
-        ServiceInfo serviceInfo = new ServiceInfo();
-        serviceInfo.packageName = FOO_PACKAGE_NAME;
-        serviceInfo.name = ".MyAppFunctionService";
-        ResolveInfo resolveInfo = new ResolveInfo();
-        resolveInfo.serviceInfo = serviceInfo;
-        PackageManager spyPackageManager = mContext.getPackageManager();
-        doReturn(resolveInfo).when(spyPackageManager).resolveService(any(Intent.class), eq(0));
 
         verifyExecuteAppFunctionCallbackResult(AppSearchResult.RESULT_NOT_FOUND);
     }
@@ -2020,7 +2046,10 @@ public class AppSearchManagerServiceTest {
         ServiceInfo serviceInfo = new ServiceInfo();
         serviceInfo.packageName = FOO_PACKAGE_NAME;
         serviceInfo.name = ".MyAppFunctionService";
-        serviceInfo.permission = AppFunctionManager.PERMISSION_BIND_APP_FUNCTION_SERVICE;
+        // TODO(b/359911502): Commenting out this permission since the BIND_APP_FUNCTION_SERVICE
+        //   permission is deleted from app search. Th whole app function functionality should be
+        //   removed along with the tests here once the new app function manager is submitted.
+        //   serviceInfo.permission = AppFunctionManager.PERMISSION_BIND_APP_FUNCTION_SERVICE;
         ResolveInfo resolveInfo = new ResolveInfo();
         resolveInfo.serviceInfo = serviceInfo;
         PackageManager spyPackageManager = mContext.getPackageManager();
