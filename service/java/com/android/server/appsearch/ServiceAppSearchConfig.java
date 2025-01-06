@@ -18,7 +18,10 @@ package com.android.server.appsearch;
 
 import static android.text.format.DateUtils.DAY_IN_MILLIS;
 
+import com.android.appsearch.flags.Flags;
 import com.android.server.appsearch.external.localstorage.AppSearchConfig;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * An interface which exposes config flags to AppSearch.
@@ -46,12 +49,14 @@ public interface ServiceAppSearchConfig extends AppSearchConfig, AutoCloseable {
     int DEFAULT_SAMPLING_INTERVAL = 10;
 
     int DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_SIZE_BYTES = 512 * 1024; // 512KiB
-    int DEFAULT_LIMIT_CONFIG_MAX_DOCUMENT_COUNT = 80_000;
+    int DEFAULT_LIMIT_CONFIG_PER_PACKAGE_DOCUMENT_COUNT_LIMIT = 80_000;
+    int DEFAULT_LIMIT_CONFIG_DOCUMENT_COUNT_LIMIT_START_THRESHOLD = 2_000_000;
     int DEFAULT_LIMIT_CONFIG_MAX_SUGGESTION_COUNT = 20_000;
     int DEFAULT_BYTES_OPTIMIZE_THRESHOLD = 10 * 1024 * 1024; // 10 MiB
-    int DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS = 7 * 24 * 60 * 60 * 1000; // 7 days in millis
+    int DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS = (int) TimeUnit.DAYS.toMillis(7);
     int DEFAULT_DOC_COUNT_OPTIMIZE_THRESHOLD = 10_000;
     int DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS = 0;
+    int DEFAULT_FOUR_HOUR_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS = (int) TimeUnit.HOURS.toMillis(4);
     // Cached API Call Stats is disabled by default
     int DEFAULT_API_CALL_STATS_LIMIT = 0;
     boolean DEFAULT_RATE_LIMIT_ENABLED = false;
@@ -85,6 +90,12 @@ public interface ServiceAppSearchConfig extends AppSearchConfig, AutoCloseable {
 
     /** The default interval in millisecond to trigger fully persist job. */
     long DEFAULT_FULLY_PERSIST_JOB_INTERVAL = DAY_IN_MILLIS;
+
+    /**
+     * The default number of active fds an app is allowed to open for read and write blob from
+     * AppSearch.
+     */
+    int DEFAULT_MAX_OPEN_BLOB_COUNT = 250;
 
     /** Returns cached value for minTimeIntervalBetweenSamplesMillis. */
     long getCachedMinTimeIntervalBetweenSamplesMillis();
@@ -202,4 +213,14 @@ public interface ServiceAppSearchConfig extends AppSearchConfig, AutoCloseable {
      */
     @Override
     void close();
+
+    /**
+     * Default min time interval between consecutive optimize calls in millis if there is no value
+     * set for {@link #getCachedMinTimeOptimizeThresholdMs()} in the flag system.
+     */
+    default int defaultMinTimeOptimizeThresholdMillis() {
+        return Flags.enableFourHourMinTimeOptimizeThreshold()
+                ? DEFAULT_FOUR_HOUR_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS
+                : DEFAULT_MIN_TIME_OPTIMIZE_THRESHOLD_MILLIS;
+    }
 }

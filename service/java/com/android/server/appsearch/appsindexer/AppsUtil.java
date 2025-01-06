@@ -18,6 +18,7 @@ package com.android.server.appsearch.appsindexer;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.app.appsearch.AppSearchSchema;
 import android.app.appsearch.util.LogUtil;
 import android.app.usage.UsageEvents;
 import android.app.usage.UsageStatsManager;
@@ -44,6 +45,7 @@ import com.android.server.appsearch.appsindexer.appsearchtypes.MobileApplication
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,10 +53,6 @@ import java.util.Objects;
 /** Utility class for pulling apps details from package manager. */
 public final class AppsUtil {
     public static final String TAG = "AppSearchAppsUtil";
-
-    // App Open events are user's activity, which is both privacy and recency sensitive. 14 days was
-    // chosen as a reasonable duration to maintain this type of user activity.
-    private static final long APP_OPEN_EVENT_TTL_MILLIS = 1000 * 60 * 60 * 24 * 14; // 14 days
 
     private AppsUtil() {}
 
@@ -231,15 +229,15 @@ public final class AppsUtil {
      *     ResolveInfo} for the packages launch activity.
      * @param indexerPackageName the name of the package performing the indexing. This should be the
      *     same as the package running the apps indexer so that qualified ids are correctly created.
-     * @param maxAppFunctions the max number of app functions to be indexed per package.
+     * @param config the app indexer config used to enforce various limits during parsing.
      */
     public static List<AppFunctionStaticMetadata> buildAppFunctionStaticMetadata(
             @NonNull PackageManager packageManager,
             @NonNull Map<PackageInfo, ResolveInfos> packageInfos,
             @NonNull String indexerPackageName,
-            int maxAppFunctions) {
+            AppsIndexerConfig config) {
         AppFunctionStaticMetadataParser parser =
-                new AppFunctionStaticMetadataParserImpl(indexerPackageName, maxAppFunctions);
+                new AppFunctionStaticMetadataParserImpl(indexerPackageName, config);
         return buildAppFunctionStaticMetadata(packageManager, packageInfos, parser);
     }
 
@@ -296,11 +294,19 @@ public final class AppsUtil {
      * AppFunctionStaticMetadata documents. This is useful for determining what has changed during
      * an update.
      *
+     * <p>The parser will parse app functions based on schemas if schemasPerPackage is not null or
+     * the map of schemas for a package is not empty, else it will default to predefined schema
+     * properties created by {@link AppFunctionStaticMetadata#createAppFunctionSchemaForPackage} to
+     * create the {@link AppFunctionStaticMetadata} documents.
+     *
      * @param packageInfos a mapping of {@link PackageInfo}s and their corresponding {@link
      *     ResolveInfo} for the packages launch activity.
      * @param indexerPackageName the name of the package performing the indexing. This should be the
      *     same as the package running the apps indexer so that qualified ids are correctly created.
-     * @param maxAppFunctions the max number of app functions to be indexed per package.
+     * @param config the app indexer config used to enforce various limits during parsing.
+     * @param schemasPerPackage a mapping of packages to a mapping of schema types to their
+     *     corresponding {@link AppSearchSchema} objects, or null if there are no schemas to
+     *     consider.
      * @return A mapping of packages to a mapping of function ids to AppFunctionStaticMetadata
      *     documents
      */
@@ -309,22 +315,27 @@ public final class AppsUtil {
                     @NonNull PackageManager packageManager,
                     @NonNull Map<PackageInfo, ResolveInfos> packageInfos,
                     @NonNull String indexerPackageName,
-                    int maxAppFunctions) {
+                    AppsIndexerConfig config,
+                    @Nullable Map<String, Map<String, AppSearchSchema>> schemasPerPackage) {
         AppFunctionStaticMetadataParser parser =
-                new AppFunctionStaticMetadataParserImpl(indexerPackageName, maxAppFunctions);
-        return buildAppFunctionStaticMetadataIntoMap(packageManager, packageInfos, parser);
+                new AppFunctionStaticMetadataParserImpl(indexerPackageName, config);
+        return buildAppFunctionStaticMetadataIntoMap(
+                packageManager, packageInfos, parser, schemasPerPackage);
     }
 
     /**
      * Similar to the above {@link #buildAppFunctionStaticMetadata}, but allows the caller to
      * provide a custom parser. This is for testing purposes.
+     *
+     * @see #buildAppFunctionStaticMetadataIntoMap(PackageManager, Map, String, int, Map)
      */
     @VisibleForTesting
     static Map<String, Map<String, AppFunctionStaticMetadata>>
             buildAppFunctionStaticMetadataIntoMap(
                     @NonNull PackageManager packageManager,
                     @NonNull Map<PackageInfo, ResolveInfos> packageInfos,
-                    @NonNull AppFunctionStaticMetadataParser parser) {
+                    @NonNull AppFunctionStaticMetadataParser parser,
+                    @Nullable Map<String, Map<String, AppSearchSchema>> schemasPerPackage) {
         Objects.requireNonNull(packageManager);
         Objects.requireNonNull(packageInfos);
         Objects.requireNonNull(parser);
@@ -337,10 +348,26 @@ public final class AppsUtil {
             }
 
             String assetFilePath;
+            boolean isDynamicSchemaDefined =
+                    schemasPerPackage != null
+                            && !schemasPerPackage
+                                    .getOrDefault(packageInfo.packageName, Collections.emptyMap())
+                                    .isEmpty();
+
+            // Currently SDK will generate two files for hardcoded and dynamic schemas respectively
+            // so that devices running older AppSearch versions that are incompatible with new
+            // format can continue to parse app function documents while newer versions can use v2
+            // file for constructing app function documents with dynamic schema and more properties.
+            // TODO(b/386676297) - Merge these two when enough devices have changes to support
+            // dynamic schema.
+            String appFunctionXmlPropertyName =
+                    isDynamicSchemaDefined
+                            ? "android.app.appfunctions.v2"
+                            : "android.app.appfunctions";
             try {
                 PackageManager.Property property =
                         packageManager.getProperty(
-                                "android.app.appfunctions",
+                                appFunctionXmlPropertyName,
                                 new ComponentName(
                                         resolveInfo.serviceInfo.packageName,
                                         resolveInfo.serviceInfo.name));
@@ -349,29 +376,40 @@ public final class AppsUtil {
                 Log.w(TAG, "buildAppFunctionMetadataFromPackageInfo: Failed to get property", e);
                 continue;
             }
+
             if (assetFilePath != null) {
-                appFunctions.put(
-                        packageInfo.packageName,
-                        parser.parseIntoMap(
-                                packageManager, packageInfo.packageName, assetFilePath));
+                if (isDynamicSchemaDefined) {
+                    appFunctions.put(
+                            packageInfo.packageName,
+                            parser.parseIntoMapForGivenSchemas(
+                                    packageManager,
+                                    packageInfo.packageName,
+                                    assetFilePath,
+                                    schemasPerPackage.get(packageInfo.packageName)));
+                } else {
+                    appFunctions.put(
+                            packageInfo.packageName,
+                            parser.parseIntoMap(
+                                    packageManager, packageInfo.packageName, assetFilePath));
+                }
             }
         }
         return appFunctions;
     }
 
     /**
-     * Gets a map of package name to a list of app open timestamps within a specific time range.
+     * Gets a list of app open events (package name and timestamp) within a specific time range.
      *
      * @param usageStatsManager the {@link UsageStatsManager} to query for app open events.
      * @param startTime the start time in milliseconds since the epoch.
      * @param endTime the end time in milliseconds since the epoch.
-     * @return a map of package name to a list of app open timestamps.
+     * @return a list of {@link AppOpenEvent} representing the app open events.
      */
     @NonNull
-    public static Map<String, List<Long>> getAppOpenTimestamps(
+    public static List<AppOpenEvent> getAppOpenEvents(
             @NonNull UsageStatsManager usageStatsManager, long startTime, long endTime) {
 
-        Map<String, List<Long>> appOpenTimestamps = new ArrayMap<>();
+        List<AppOpenEvent> appOpenEvents = new ArrayList<>();
 
         UsageEvents usageEvents = usageStatsManager.queryEvents(startTime, endTime);
         while (usageEvents.hasNextEvent()) {
@@ -381,85 +419,14 @@ public final class AppsUtil {
             if (event.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND
                     || event.getEventType() == UsageEvents.Event.ACTIVITY_RESUMED) {
                 String packageName = event.getPackageName();
+                long timestamp = event.getTimeStamp();
 
-                List<Long> timestamps = appOpenTimestamps.get(packageName);
-                if (timestamps == null) {
-                    timestamps = new ArrayList<>();
-                    appOpenTimestamps.put(packageName, timestamps);
-                }
-                timestamps.add(event.getTimeStamp());
+                AppOpenEvent appOpenEvent = AppOpenEvent.create(packageName, timestamp);
+                appOpenEvents.add(appOpenEvent);
             }
         }
 
-        return appOpenTimestamps;
-    }
-
-    /**
-     * Converts a map of package name to a list of app open timestamps to a list of {@link
-     * AppOpenEvent} documents. It's a less compact representation of the data, but it's directly
-     * writeable to AppSearch.
-     *
-     * @param appOpenEvents a map of package name to a list of app open timestamps.
-     * @return a list of {@link AppOpenEvent} documents.
-     */
-    public static List<AppOpenEvent> convertMapToAppOpenEvents(
-            @NonNull Map<String, List<Long>> appOpenEvents) {
-        Objects.requireNonNull(appOpenEvents);
-        List<AppOpenEvent> documents = new ArrayList<>();
-
-        for (Map.Entry<String, List<Long>> entry : appOpenEvents.entrySet()) {
-            String packageName = entry.getKey();
-            List<Long> eventTimes = entry.getValue();
-
-            for (int i = 0; i < eventTimes.size(); i++) {
-                Long eventTimeObj = eventTimes.get(i);
-                if (eventTimeObj != null) {
-                    long eventTimeMillis = eventTimeObj;
-                    AppOpenEvent event =
-                            new AppOpenEvent.Builder(packageName, eventTimeMillis)
-                                    .setCreationTimestampMillis(eventTimeMillis)
-                                    .setTtlMillis(APP_OPEN_EVENT_TTL_MILLIS)
-                                    .build();
-                    documents.add(event);
-                } else {
-                    Log.w(
-                            TAG,
-                            "convertMapToAppOpenEvents: eventTimeObj is unexpectedly null.  This"
-                                    + " should never happen.");
-                }
-            }
-        }
-
-        return documents;
-    }
-
-    /**
-     * Converts a list of {@link AppOpenEvent} documents into a map of package names to their
-     * corresponding app open timestamps. This provides a more compact representation of the data,
-     * potentially useful for further processing.
-     *
-     * @param appOpenEvents a list of {@link AppOpenEvent} documents.
-     * @return a map of package names to lists of their app open timestamps
-     */
-    public static Map<String, List<Long>> convertAppOpenEventsToMap(
-            @NonNull List<AppOpenEvent> appOpenEvents) {
-        Objects.requireNonNull(appOpenEvents);
-        Map<String, List<Long>> appOpenEventsMap = new ArrayMap<>();
-
-        for (int i = 0; i < appOpenEvents.size(); i++) {
-            AppOpenEvent event = appOpenEvents.get(i);
-            String packageName = event.getPackageName();
-            long timestamp = event.getAppOpenEventTimestampMillis();
-
-            List<Long> timestamps = appOpenEventsMap.get(packageName);
-            if (timestamps == null) {
-                timestamps = new ArrayList<>();
-                appOpenEventsMap.put(packageName, timestamps);
-            }
-            timestamps.add(timestamp);
-        }
-
-        return appOpenEventsMap;
+        return appOpenEvents;
     }
 
     /** Gets the SHA-256 certificate from a {@link PackageManager}, or null if it is not found */
@@ -534,5 +501,67 @@ public final class AppsUtil {
             builder.setClassName(resolveInfo.activityInfo.name);
         }
         return builder.build();
+    }
+
+    /**
+     * Creates dynamic app function schemas defined by the app per package.
+     *
+     * <p>Packages which don't have a AppFunctionService will not have an entry in the returned map.
+     *
+     * @param packageManager the {@link PackageManager} to use to get the schema file path.
+     * @param packageInfos a mapping of {@link PackageInfo}s and their corresponding {@link
+     *     ResolveInfo} for the packages launch activity.
+     * @param maxAllowedAppFunctionSchemasPerPackage the max number of schema definitions allowed
+     *     per package.
+     * @return A mapping of packages to a mapping of schema types to their corresponding {@link
+     *     AppSearchSchema} objects or an empty map for a package if there's an error during parsing
+     *     or no schema file is found.
+     */
+    @NonNull
+    public static Map<String, Map<String, AppSearchSchema>> getDynamicAppFunctionSchemasForPackages(
+            @NonNull PackageManager packageManager,
+            @NonNull Map<PackageInfo, ResolveInfos> packageInfos,
+            int maxAllowedAppFunctionSchemasPerPackage) {
+        Objects.requireNonNull(packageInfos);
+
+        Map<String, Map<String, AppSearchSchema>> schemasPerPackage = new ArrayMap<>();
+        AppFunctionSchemaParser parser =
+                new AppFunctionSchemaParser(maxAllowedAppFunctionSchemasPerPackage);
+        for (Map.Entry<PackageInfo, ResolveInfos> entry : packageInfos.entrySet()) {
+            PackageInfo packageInfo = entry.getKey();
+            ResolveInfo resolveInfo = entry.getValue().getAppFunctionServiceInfo();
+            if (resolveInfo == null) {
+                continue;
+            }
+
+            String assetFilePath = null;
+            try {
+                PackageManager.Property property =
+                        packageManager.getProperty(
+                                /* propertyName= */ "android.app.appfunctions.schema",
+                                new ComponentName(
+                                        resolveInfo.serviceInfo.packageName,
+                                        resolveInfo.serviceInfo.name));
+                assetFilePath = property.getString();
+            } catch (PackageManager.NameNotFoundException e) {
+                Log.w(
+                        TAG,
+                        "getDynamicAppFunctionSchemasForPackages: Failed to get schema "
+                                + "property for package: "
+                                + resolveInfo.serviceInfo.packageName,
+                        e);
+            }
+
+            if (assetFilePath != null) {
+                schemasPerPackage.put(
+                        packageInfo.packageName,
+                        parser.parseAndCreateSchemas(
+                                packageManager, packageInfo.packageName, assetFilePath));
+            } else {
+                schemasPerPackage.put(packageInfo.packageName, Collections.emptyMap());
+            }
+        }
+
+        return schemasPerPackage;
     }
 }

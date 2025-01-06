@@ -16,7 +16,6 @@
 
 package com.android.server.appsearch.external.localstorage.visibilitystore;
 
-import android.annotation.NonNull;
 import android.app.appsearch.AppSearchResult;
 import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
@@ -27,6 +26,8 @@ import android.util.ArraySet;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.util.PrefixUtil;
+
+import org.jspecify.annotations.NonNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,7 +66,7 @@ public class VisibilityStoreMigrationHelperFromV1 {
                         new VisibilityDocumentV1(
                                 appSearchImpl.getDocument(
                                         VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                        VisibilityStore.DOCUMENT_VISIBILITY_DATABASE_NAME,
                                         VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                         allPrefixedSchemaTypes.get(i),
                                         /* typePropertyPaths= */ Collections.emptyMap())));
@@ -89,8 +90,7 @@ public class VisibilityStoreMigrationHelperFromV1 {
      *
      * @param visibilityDocumentV1s The deprecated Visibility Document we found.
      */
-    @NonNull
-    static List<InternalVisibilityConfig> toVisibilityDocumentsV2(
+    static @NonNull List<InternalVisibilityConfig> toVisibilityDocumentsV2(
             @NonNull List<VisibilityDocumentV1> visibilityDocumentV1s) {
         List<InternalVisibilityConfig> latestVisibilityDocuments =
                 new ArrayList<>(visibilityDocumentV1s.size());

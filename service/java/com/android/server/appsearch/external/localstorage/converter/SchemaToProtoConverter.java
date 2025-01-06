@@ -16,7 +16,6 @@
 
 package com.android.server.appsearch.external.localstorage.converter;
 
-import android.annotation.NonNull;
 import android.app.appsearch.AppSearchSchema;
 import android.util.Log;
 
@@ -29,6 +28,8 @@ import com.google.android.icing.proto.SchemaTypeConfigProto;
 import com.google.android.icing.proto.SchemaTypeConfigProtoOrBuilder;
 import com.google.android.icing.proto.StringIndexingConfig;
 import com.google.android.icing.proto.TermMatchType;
+
+import org.jspecify.annotations.NonNull;
 
 import java.util.List;
 import java.util.Objects;
@@ -48,8 +49,8 @@ public final class SchemaToProtoConverter {
      * SchemaTypeConfigProto}.
      */
     // TODO(b/284356266): Consider handling addition of schema name prefixes in this function.
-    @NonNull
-    public static SchemaTypeConfigProto toSchemaTypeConfigProto(
+
+    public static @NonNull SchemaTypeConfigProto toSchemaTypeConfigProto(
             @NonNull AppSearchSchema schema, int version) {
         Objects.requireNonNull(schema);
         SchemaTypeConfigProto.Builder protoBuilder =
@@ -66,9 +67,8 @@ public final class SchemaToProtoConverter {
         return protoBuilder.build();
     }
 
-    @NonNull
-    private static PropertyConfigProto toPropertyConfigProto(
-            @NonNull AppSearchSchema.PropertyConfig property) {
+    private static @NonNull PropertyConfigProto toPropertyConfigProto(
+            AppSearchSchema.@NonNull PropertyConfig property) {
         Objects.requireNonNull(property);
         PropertyConfigProto.Builder builder =
                 PropertyConfigProto.newBuilder()
@@ -96,6 +96,8 @@ public final class SchemaToProtoConverter {
         if (property instanceof AppSearchSchema.StringPropertyConfig) {
             AppSearchSchema.StringPropertyConfig stringProperty =
                     (AppSearchSchema.StringPropertyConfig) property;
+            // No need to check against delete propagation type vs joinable value type here, because
+            // the builder has already enforced the restriction.
 
             // Set JoinableConfig only if it is joinable (i.e. joinableValueType is not NONE).
             if (stringProperty.getJoinableValueType()
@@ -105,10 +107,12 @@ public final class SchemaToProtoConverter {
                                 .setValueType(
                                         convertJoinableValueTypeToProto(
                                                 stringProperty.getJoinableValueType()))
+                                .setDeletePropagationType(
+                                        convertDeletePropagationTypeToProto(
+                                                stringProperty.getDeletePropagationType()))
                                 .build();
                 builder.setJoinableConfig(joinableConfig);
             }
-
             StringIndexingConfig stringIndexingConfig =
                     StringIndexingConfig.newBuilder()
                             .setTermMatchType(
@@ -117,7 +121,6 @@ public final class SchemaToProtoConverter {
                                     convertTokenizerTypeToProto(stringProperty.getTokenizerType()))
                             .build();
             builder.setStringIndexingConfig(stringIndexingConfig);
-
         } else if (property instanceof AppSearchSchema.DocumentPropertyConfig) {
             AppSearchSchema.DocumentPropertyConfig documentProperty =
                     (AppSearchSchema.DocumentPropertyConfig) property;
@@ -142,6 +145,7 @@ public final class SchemaToProtoConverter {
                                 .build();
                 builder.setIntegerIndexingConfig(integerIndexingConfig);
             }
+            builder.setScorableType(toScorableTypeCode(longProperty.isScoringEnabled()));
         } else if (property instanceof AppSearchSchema.EmbeddingPropertyConfig) {
             AppSearchSchema.EmbeddingPropertyConfig embeddingProperty =
                     (AppSearchSchema.EmbeddingPropertyConfig) property;
@@ -155,9 +159,20 @@ public final class SchemaToProtoConverter {
                                 .setEmbeddingIndexingType(
                                         convertEmbeddingIndexingTypeToProto(
                                                 embeddingProperty.getIndexingType()))
+                                .setQuantizationType(
+                                        convertEmbeddingQuantizationTypeToProto(
+                                                embeddingProperty.getQuantizationType()))
                                 .build();
                 builder.setEmbeddingIndexingConfig(embeddingIndexingConfig);
             }
+        } else if (property instanceof AppSearchSchema.DoublePropertyConfig) {
+            AppSearchSchema.DoublePropertyConfig doubleProperty =
+                    (AppSearchSchema.DoublePropertyConfig) property;
+            builder.setScorableType(toScorableTypeCode(doubleProperty.isScoringEnabled()));
+        } else if (property instanceof AppSearchSchema.BooleanPropertyConfig) {
+            AppSearchSchema.BooleanPropertyConfig booleanProperty =
+                    (AppSearchSchema.BooleanPropertyConfig) property;
+            builder.setScorableType(toScorableTypeCode(booleanProperty.isScoringEnabled()));
         }
         return builder.build();
     }
@@ -167,8 +182,9 @@ public final class SchemaToProtoConverter {
      * android.app.appsearch.AppSearchSchema}.
      */
     // TODO(b/284356266): Consider handling removal of schema name prefixes in this function.
-    @NonNull
-    public static AppSearchSchema toAppSearchSchema(@NonNull SchemaTypeConfigProtoOrBuilder proto) {
+
+    public static @NonNull AppSearchSchema toAppSearchSchema(
+            @NonNull SchemaTypeConfigProtoOrBuilder proto) {
         Objects.requireNonNull(proto);
         AppSearchSchema.Builder builder = new AppSearchSchema.Builder(proto.getSchemaType());
         builder.setDescription(proto.getDescription());
@@ -184,8 +200,7 @@ public final class SchemaToProtoConverter {
         return builder.build();
     }
 
-    @NonNull
-    private static AppSearchSchema.PropertyConfig toPropertyConfig(
+    private static AppSearchSchema.@NonNull PropertyConfig toPropertyConfig(
             @NonNull PropertyConfigProto proto) {
         Objects.requireNonNull(proto);
         switch (proto.getDataType()) {
@@ -197,11 +212,17 @@ public final class SchemaToProtoConverter {
                 return new AppSearchSchema.DoublePropertyConfig.Builder(proto.getPropertyName())
                         .setDescription(proto.getDescription())
                         .setCardinality(proto.getCardinality().getNumber())
+                        .setScoringEnabled(
+                                proto.getScorableType()
+                                        == PropertyConfigProto.ScorableType.Code.ENABLED)
                         .build();
             case BOOLEAN:
                 return new AppSearchSchema.BooleanPropertyConfig.Builder(proto.getPropertyName())
                         .setDescription(proto.getDescription())
                         .setCardinality(proto.getCardinality().getNumber())
+                        .setScoringEnabled(
+                                proto.getScorableType()
+                                        == PropertyConfigProto.ScorableType.Code.ENABLED)
                         .build();
             case BYTES:
                 return new AppSearchSchema.BytesPropertyConfig.Builder(proto.getPropertyName())
@@ -212,14 +233,18 @@ public final class SchemaToProtoConverter {
                 return toDocumentPropertyConfig(proto);
             case VECTOR:
                 return toEmbeddingPropertyConfig(proto);
+            case BLOB_HANDLE:
+                return new AppSearchSchema.BlobHandlePropertyConfig.Builder(proto.getPropertyName())
+                        .setDescription(proto.getDescription())
+                        .setCardinality(proto.getCardinality().getNumber())
+                        .build();
             default:
                 throw new IllegalArgumentException(
                         "Invalid dataType code: " + proto.getDataType().getNumber());
         }
     }
 
-    @NonNull
-    private static AppSearchSchema.StringPropertyConfig toStringPropertyConfig(
+    private static AppSearchSchema.@NonNull StringPropertyConfig toStringPropertyConfig(
             @NonNull PropertyConfigProto proto) {
         AppSearchSchema.StringPropertyConfig.Builder builder =
                 new AppSearchSchema.StringPropertyConfig.Builder(proto.getPropertyName())
@@ -228,6 +253,9 @@ public final class SchemaToProtoConverter {
                         .setJoinableValueType(
                                 convertJoinableValueTypeFromProto(
                                         proto.getJoinableConfig().getValueType()))
+                        .setDeletePropagationType(
+                                convertDeletePropagationTypeFromProto(
+                                        proto.getJoinableConfig().getDeletePropagationType()))
                         .setTokenizerType(
                                 proto.getStringIndexingConfig().getTokenizerType().getNumber());
 
@@ -238,8 +266,7 @@ public final class SchemaToProtoConverter {
         return builder.build();
     }
 
-    @NonNull
-    private static AppSearchSchema.DocumentPropertyConfig toDocumentPropertyConfig(
+    private static AppSearchSchema.@NonNull DocumentPropertyConfig toDocumentPropertyConfig(
             @NonNull PropertyConfigProto proto) {
         AppSearchSchema.DocumentPropertyConfig.Builder builder =
                 new AppSearchSchema.DocumentPropertyConfig.Builder(
@@ -253,14 +280,15 @@ public final class SchemaToProtoConverter {
         return builder.build();
     }
 
-    @NonNull
-    private static AppSearchSchema.LongPropertyConfig toLongPropertyConfig(
+    private static AppSearchSchema.@NonNull LongPropertyConfig toLongPropertyConfig(
             @NonNull PropertyConfigProto proto) {
         AppSearchSchema.LongPropertyConfig.Builder builder =
                 new AppSearchSchema.LongPropertyConfig.Builder(proto.getPropertyName())
                         .setDescription(proto.getDescription())
-                        .setCardinality(proto.getCardinality().getNumber());
-
+                        .setCardinality(proto.getCardinality().getNumber())
+                        .setScoringEnabled(
+                                proto.getScorableType()
+                                        == PropertyConfigProto.ScorableType.Code.ENABLED);
         // Set indexingType
         IntegerIndexingConfig.NumericMatchType.Code numericMatchTypeProto =
                 proto.getIntegerIndexingConfig().getNumericMatchType();
@@ -269,11 +297,11 @@ public final class SchemaToProtoConverter {
         return builder.build();
     }
 
-    @NonNull
-    private static AppSearchSchema.EmbeddingPropertyConfig toEmbeddingPropertyConfig(
+    private static AppSearchSchema.@NonNull EmbeddingPropertyConfig toEmbeddingPropertyConfig(
             @NonNull PropertyConfigProto proto) {
         AppSearchSchema.EmbeddingPropertyConfig.Builder builder =
                 new AppSearchSchema.EmbeddingPropertyConfig.Builder(proto.getPropertyName())
+                        .setDescription(proto.getDescription())
                         .setCardinality(proto.getCardinality().getNumber());
 
         // Set indexingType
@@ -281,11 +309,18 @@ public final class SchemaToProtoConverter {
                 proto.getEmbeddingIndexingConfig().getEmbeddingIndexingType();
         builder.setIndexingType(convertEmbeddingIndexingTypeFromProto(embeddingIndexingType));
 
+        // Set quantizationType
+        if (embeddingIndexingType != EmbeddingIndexingConfig.EmbeddingIndexingType.Code.UNKNOWN) {
+            EmbeddingIndexingConfig.QuantizationType.Code embeddingQuantizationType =
+                    proto.getEmbeddingIndexingConfig().getQuantizationType();
+            builder.setQuantizationType(
+                    convertEmbeddingQuantizationTypeTypeFromProto(embeddingQuantizationType));
+        }
+
         return builder.build();
     }
 
-    @NonNull
-    private static JoinableConfig.ValueType.Code convertJoinableValueTypeToProto(
+    private static JoinableConfig.ValueType.@NonNull Code convertJoinableValueTypeToProto(
             @AppSearchSchema.StringPropertyConfig.JoinableValueType int joinableValueType) {
         switch (joinableValueType) {
             case AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE:
@@ -300,7 +335,7 @@ public final class SchemaToProtoConverter {
 
     @AppSearchSchema.StringPropertyConfig.JoinableValueType
     private static int convertJoinableValueTypeFromProto(
-            @NonNull JoinableConfig.ValueType.Code joinableValueType) {
+            JoinableConfig.ValueType.@NonNull Code joinableValueType) {
         switch (joinableValueType) {
             case NONE:
                 return AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE;
@@ -313,8 +348,37 @@ public final class SchemaToProtoConverter {
         return AppSearchSchema.StringPropertyConfig.JOINABLE_VALUE_TYPE_NONE;
     }
 
-    @NonNull
-    private static TermMatchType.Code convertTermMatchTypeToProto(
+    private static JoinableConfig.DeletePropagationType.@NonNull Code
+            convertDeletePropagationTypeToProto(
+                    @AppSearchSchema.StringPropertyConfig.DeletePropagationType
+                            int deletePropagationType) {
+        switch (deletePropagationType) {
+            case AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_NONE:
+                return JoinableConfig.DeletePropagationType.Code.NONE;
+            case AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_PROPAGATE_FROM:
+                return JoinableConfig.DeletePropagationType.Code.PROPAGATE_FROM;
+            default:
+                throw new IllegalArgumentException(
+                        "Invalid deletePropagationType: " + deletePropagationType);
+        }
+    }
+
+    @AppSearchSchema.StringPropertyConfig.DeletePropagationType
+    private static int convertDeletePropagationTypeFromProto(
+            JoinableConfig.DeletePropagationType.@NonNull Code deletePropagationType) {
+        switch (deletePropagationType) {
+            case NONE:
+                return AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_NONE;
+            case PROPAGATE_FROM:
+                return AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_PROPAGATE_FROM;
+        }
+        // Avoid crashing in the 'read' path; we should try to interpret the schema to the
+        // extent possible.
+        Log.w(TAG, "Invalid deletePropagationType: " + deletePropagationType.getNumber());
+        return AppSearchSchema.StringPropertyConfig.DELETE_PROPAGATION_TYPE_NONE;
+    }
+
+    private static TermMatchType.@NonNull Code convertTermMatchTypeToProto(
             @AppSearchSchema.StringPropertyConfig.IndexingType int indexingType) {
         switch (indexingType) {
             case AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_NONE:
@@ -329,7 +393,7 @@ public final class SchemaToProtoConverter {
     }
 
     @AppSearchSchema.StringPropertyConfig.IndexingType
-    private static int convertTermMatchTypeFromProto(@NonNull TermMatchType.Code termMatchType) {
+    private static int convertTermMatchTypeFromProto(TermMatchType.@NonNull Code termMatchType) {
         switch (termMatchType) {
             case UNKNOWN:
                 return AppSearchSchema.StringPropertyConfig.INDEXING_TYPE_NONE;
@@ -345,8 +409,7 @@ public final class SchemaToProtoConverter {
         }
     }
 
-    @NonNull
-    private static StringIndexingConfig.TokenizerType.Code convertTokenizerTypeToProto(
+    private static StringIndexingConfig.TokenizerType.@NonNull Code convertTokenizerTypeToProto(
             @AppSearchSchema.StringPropertyConfig.TokenizerType int tokenizerType) {
         StringIndexingConfig.TokenizerType.Code tokenizerTypeProto =
                 StringIndexingConfig.TokenizerType.Code.forNumber(tokenizerType);
@@ -356,9 +419,9 @@ public final class SchemaToProtoConverter {
         return tokenizerTypeProto;
     }
 
-    @NonNull
-    private static IntegerIndexingConfig.NumericMatchType.Code convertNumericMatchTypeToProto(
-            @AppSearchSchema.LongPropertyConfig.IndexingType int indexingType) {
+    private static IntegerIndexingConfig.NumericMatchType.@NonNull Code
+            convertNumericMatchTypeToProto(
+                    @AppSearchSchema.LongPropertyConfig.IndexingType int indexingType) {
         switch (indexingType) {
             case AppSearchSchema.LongPropertyConfig.INDEXING_TYPE_NONE:
                 return IntegerIndexingConfig.NumericMatchType.Code.UNKNOWN;
@@ -371,7 +434,7 @@ public final class SchemaToProtoConverter {
 
     @AppSearchSchema.LongPropertyConfig.IndexingType
     private static int convertNumericMatchTypeFromProto(
-            @NonNull IntegerIndexingConfig.NumericMatchType.Code numericMatchType) {
+            IntegerIndexingConfig.NumericMatchType.@NonNull Code numericMatchType) {
         switch (numericMatchType) {
             case UNKNOWN:
                 return AppSearchSchema.LongPropertyConfig.INDEXING_TYPE_NONE;
@@ -385,8 +448,7 @@ public final class SchemaToProtoConverter {
         }
     }
 
-    @NonNull
-    private static EmbeddingIndexingConfig.EmbeddingIndexingType.Code
+    private static EmbeddingIndexingConfig.EmbeddingIndexingType.@NonNull Code
             convertEmbeddingIndexingTypeToProto(
                     @AppSearchSchema.EmbeddingPropertyConfig.IndexingType int indexingType) {
         switch (indexingType) {
@@ -401,7 +463,7 @@ public final class SchemaToProtoConverter {
 
     @AppSearchSchema.EmbeddingPropertyConfig.IndexingType
     private static int convertEmbeddingIndexingTypeFromProto(
-            @NonNull EmbeddingIndexingConfig.EmbeddingIndexingType.Code indexingType) {
+            EmbeddingIndexingConfig.EmbeddingIndexingType.@NonNull Code indexingType) {
         switch (indexingType) {
             case UNKNOWN:
                 return AppSearchSchema.EmbeddingPropertyConfig.INDEXING_TYPE_NONE;
@@ -412,6 +474,45 @@ public final class SchemaToProtoConverter {
                 // extent possible.
                 Log.w(TAG, "Invalid indexingType: " + indexingType.getNumber());
                 return AppSearchSchema.EmbeddingPropertyConfig.INDEXING_TYPE_NONE;
+        }
+    }
+
+    private static EmbeddingIndexingConfig.QuantizationType.@NonNull Code
+            convertEmbeddingQuantizationTypeToProto(
+                    @AppSearchSchema.EmbeddingPropertyConfig.QuantizationType
+                            int quantizationType) {
+        switch (quantizationType) {
+            case AppSearchSchema.EmbeddingPropertyConfig.QUANTIZATION_TYPE_NONE:
+                return EmbeddingIndexingConfig.QuantizationType.Code.NONE;
+            case AppSearchSchema.EmbeddingPropertyConfig.QUANTIZATION_TYPE_8_BIT:
+                return EmbeddingIndexingConfig.QuantizationType.Code.QUANTIZE_8_BIT;
+            default:
+                throw new IllegalArgumentException("Invalid quantizationType: " + quantizationType);
+        }
+    }
+
+    @AppSearchSchema.EmbeddingPropertyConfig.QuantizationType
+    private static int convertEmbeddingQuantizationTypeTypeFromProto(
+            EmbeddingIndexingConfig.QuantizationType.@NonNull Code quantizationType) {
+        switch (quantizationType) {
+            case NONE:
+                return AppSearchSchema.EmbeddingPropertyConfig.QUANTIZATION_TYPE_NONE;
+            case QUANTIZE_8_BIT:
+                return AppSearchSchema.EmbeddingPropertyConfig.QUANTIZATION_TYPE_8_BIT;
+            default:
+                // Avoid crashing in the 'read' path; we should try to interpret the document to the
+                // extent possible.
+                Log.w(TAG, "Invalid quantizationType: " + quantizationType.getNumber());
+                return AppSearchSchema.EmbeddingPropertyConfig.QUANTIZATION_TYPE_NONE;
+        }
+    }
+
+    private static PropertyConfigProto.ScorableType.Code toScorableTypeCode(
+            boolean isScoringEnabled) {
+        if (isScoringEnabled) {
+            return PropertyConfigProto.ScorableType.Code.ENABLED;
+        } else {
+            return PropertyConfigProto.ScorableType.Code.DISABLED;
         }
     }
 }
