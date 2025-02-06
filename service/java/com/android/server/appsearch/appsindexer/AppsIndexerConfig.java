@@ -39,7 +39,7 @@ public interface AppsIndexerConfig {
      * The default maximum number of app function schemas per package that the app indexer will
      * index.
      */
-    int DEFAULT_MAX_ALLOWED_APP_FUNCTION_SCHEMAS_PER_PACKAGE = 5;
+    int DEFAULT_MAX_ALLOWED_APP_FUNCTION_SCHEMAS_PER_PACKAGE = 20;
 
     /**
      * The default max allowed size of an app function document.
@@ -48,6 +48,12 @@ public interface AppsIndexerConfig {
      * developers from indexing additional properties in app function documents using this indexer.
      */
     int DEFAULT_MAX_ALLOWED_APP_FUNCTION_DOC_SIZE_IN_BYTES = 4 * 1024; // 4KiB
+
+    /**
+     * The default minimum time required to wait before attempting a firstRun sync after a previous
+     * firstRun sync.
+     */
+    long DEFAULT_MIN_TIME_BETWEEN_FIRST_SYNCS_MILLIS = TimeUnit.HOURS.toMillis(4);
 
     /** Returns whether Apps Indexer is enabled. */
     boolean isAppsIndexerEnabled();
@@ -63,4 +69,10 @@ public interface AppsIndexerConfig {
 
     /** Returns the max allowed document size of an app function document. */
     int getMaxAllowedAppFunctionDocSizeInBytes();
+
+    /**
+     * Returns the minimum time required to wait before attempting a firstRun sync after a previous
+     * firstRun sync in milliseconds.
+     */
+    long getMinTimeBetweenFirstSyncsMillis();
 }

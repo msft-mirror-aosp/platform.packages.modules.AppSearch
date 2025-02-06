@@ -343,3 +343,52 @@ flag {
         purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "enable_apps_indexer_check_prior_attempt"
+    namespace: "appsearch"
+    description: "Enables a check that prevents apps indexer running too soon after a prior sync."
+    bug: "385197463"
+    is_exported: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_check_contacts_indexer_update_job_params"
+    namespace: "appsearch"
+    description: "Enables checking Contacts Indexer update job params on boot and rescheduling if the job params do not match the expected."
+    bug: "384773430"
+    is_exported: true
+}
+
+flag {
+    name: "enable_app_open_events_indexer_check_prior_attempt"
+    namespace: "appsearch"
+    description: "Enables a check that prevents app open events indexer running too soon after a prior sync."
+    bug: "385197463"
+    is_exported: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_all_package_indexing_on_indexer_update"
+    namespace: "appsearch"
+    description: "Enables the all package indexing when app indexer is updated."
+    bug: "389034742"
+    is_exported: true
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "enable_isolated_storage"
+    namespace: "appsearch"
+    description: "Uses isolated storage for user data."
+    bug: "384768541"
+    is_exported: true
+}

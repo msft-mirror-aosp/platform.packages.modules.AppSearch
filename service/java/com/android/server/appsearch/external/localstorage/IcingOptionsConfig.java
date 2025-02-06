@@ -18,7 +18,11 @@ package com.android.server.appsearch.external.localstorage;
 
 import android.app.appsearch.SearchSpec;
 
+import com.android.appsearch.flags.Flags;
+
 import com.google.android.icing.proto.IcingSearchEngineOptions;
+
+import org.jspecify.annotations.NonNull;
 
 /**
  * An interface exposing the optional config flags in {@link IcingSearchEngineOptions} used to
@@ -40,6 +44,10 @@ public interface IcingOptionsConfig {
      * previously-hardcoded document compression level in Icing (which is 3).
      */
     int DEFAULT_COMPRESSION_LEVEL = 3;
+
+    boolean DEFAULT_ALLOW_CIRCULAR_SCHEMA_DEFINITIONS = false;
+
+    boolean DEFAULT_READ_ONLY_SEARCH = false;
 
     boolean DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR = false;
 
@@ -74,6 +82,8 @@ public interface IcingOptionsConfig {
 
     long DEFAULT_ORPHAN_BLOB_TIME_TO_LIVE_MS = 7 * 24 * 60 * 60 * 1000L; // 1 week.
 
+    String DEFAULT_ICU_DATA_FILE_ABSOLUTE_PATH = "";
+
     /**
      * The maximum allowable token length. All tokens in excess of this size will be truncated to
      * max_token_length before being indexed.
@@ -83,7 +93,9 @@ public interface IcingOptionsConfig {
      * user is unlikely to type that entire query. So only indexing the first n bytes may still
      * provide the desired behavior without wasting resources.
      */
-    int getMaxTokenLength();
+    default int getMaxTokenLength() {
+        return DEFAULT_MAX_TOKEN_LENGTH;
+    }
 
     /**
      * The size (measured in bytes) at which Icing's internal indices should be merged. Icing
@@ -98,13 +110,17 @@ public interface IcingOptionsConfig {
      * indexing-time latency and flash wear. Setting a high index_merge_size leads to larger
      * resource usage and higher query latency.
      */
-    int getIndexMergeSize();
+    default int getIndexMergeSize() {
+        return DEFAULT_INDEX_MERGE_SIZE;
+    }
 
     /**
      * Whether to use namespace id or namespace name to build up fingerprint for
      * document_key_mapper_ and corpus_mapper_ in document store.
      */
-    boolean getDocumentStoreNamespaceIdFingerprint();
+    default boolean getDocumentStoreNamespaceIdFingerprint() {
+        return DEFAULT_DOCUMENT_STORE_NAMESPACE_ID_FINGERPRINT;
+    }
 
     /**
      * The threshold of the percentage of invalid documents at which to rebuild index during
@@ -115,14 +131,18 @@ public interface IcingOptionsConfig {
      * <p>Rebuilding the index could be faster than optimizing the index if we have removed most of
      * the documents. Based on benchmarks, 85%~95% seems to be a good threshold for most cases.
      */
-    float getOptimizeRebuildIndexThreshold();
+    default float getOptimizeRebuildIndexThreshold() {
+        return DEFAULT_OPTIMIZE_REBUILD_INDEX_THRESHOLD;
+    }
 
     /**
      * The level of gzip compression for documents in the Icing document store.
      *
      * <p>NO_COMPRESSION = 0, BEST_SPEED = 1, BEST_COMPRESSION = 9
      */
-    int getCompressionLevel();
+    default int getCompressionLevel() {
+        return DEFAULT_COMPRESSION_LEVEL;
+    }
 
     /**
      * Whether to allow circular references between schema types for the schema definition.
@@ -131,7 +151,9 @@ public interface IcingOptionsConfig {
      * 1. All edges of a cycle have index_nested_properties=true 2. One of the types in the cycle
      * has a joinable property, or depends on a type with a joinable property.
      */
-    boolean getAllowCircularSchemaDefinitions();
+    default boolean getAllowCircularSchemaDefinitions() {
+        return DEFAULT_ALLOW_CIRCULAR_SCHEMA_DEFINITIONS;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.SearchSpecProto}.
@@ -142,7 +164,9 @@ public interface IcingOptionsConfig {
      * acquires the read lock at IcingSearchEngine's level. Finer-grained locks are implemented
      * around code paths that write changes to Icing during Search.
      */
-    boolean getUseReadOnlySearch();
+    default boolean getUseReadOnlySearch() {
+        return DEFAULT_READ_ONLY_SEARCH;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
@@ -151,7 +175,9 @@ public interface IcingOptionsConfig {
      * will avoid the need to re-map the mmapping used by PersistentHashMap whenever the underlying
      * storage grows.
      */
-    boolean getUsePreMappingWithFileBackedVector();
+    default boolean getUsePreMappingWithFileBackedVector() {
+        return DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
@@ -159,7 +185,9 @@ public interface IcingOptionsConfig {
      * <p>Whether or not to use the PersistentHashMap in the QualifiedIdTypeJoinableIndex. If false,
      * we will use the old IcingDynamicTrie to store key value pairs.
      */
-    boolean getUsePersistentHashMap();
+    default boolean getUsePersistentHashMap() {
+        return DEFAULT_USE_PERSISTENT_HASH_MAP;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.ResultSpecProto}.
@@ -170,7 +198,9 @@ public interface IcingOptionsConfig {
      * Therefore, AppSearch will always retrieve at least a single result, even if that result
      * exceeds this limit.
      */
-    int getMaxPageBytesLimit();
+    default int getMaxPageBytesLimit() {
+        return DEFAULT_MAX_PAGE_BYTES_LIMIT;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
@@ -183,7 +213,9 @@ public interface IcingOptionsConfig {
      * it back to 341 (the previous bucket split threshold, capacity of full max-sized posting
      * list).
      */
-    int getIntegerIndexBucketSplitThreshold();
+    default int getIntegerIndexBucketSplitThreshold() {
+        return DEFAULT_INTEGER_INDEX_BUCKET_SPLIT_THRESHOLD;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
@@ -195,7 +227,9 @@ public interface IcingOptionsConfig {
      * threshold. If false, the HifBuffer will be sorted at querying time, before the first query
      * after inserting new elements into the HitBuffer.
      */
-    boolean getLiteIndexSortAtIndexing();
+    default boolean getLiteIndexSortAtIndexing() {
+        return DEFAULT_LITE_INDEX_SORT_AT_INDEXING;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
@@ -206,14 +240,18 @@ public interface IcingOptionsConfig {
      *
      * <p>Setting a lower sort size reduces querying latency at the expense of indexing latency.
      */
-    int getLiteIndexSortSize();
+    default int getLiteIndexSortSize() {
+        return DEFAULT_LITE_INDEX_SORT_SIZE;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
      *
      * <p>Whether to use the new qualified Id join index.
      */
-    boolean getUseNewQualifiedIdJoinIndex();
+    default boolean getUseNewQualifiedIdJoinIndex() {
+        return DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX;
+    }
 
     /**
      * Flag for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
@@ -221,7 +259,9 @@ public interface IcingOptionsConfig {
      * <p>Whether to build the metadata hits used for property existence check, which is required to
      * support the hasProperty function in advanced query.
      */
-    boolean getBuildPropertyExistenceMetadataHits();
+    default boolean getBuildPropertyExistenceMetadataHits() {
+        return DEFAULT_BUILD_PROPERTY_EXISTENCE_METADATA_HITS;
+    }
 
     /**
      * Config for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
@@ -229,5 +269,50 @@ public interface IcingOptionsConfig {
      * <p>The maximum time in millisecond for a orphan blob to get recycled and deleted if there is
      * no reference document linked to it.
      */
-    long getOrphanBlobTimeToLiveMs();
+    default long getOrphanBlobTimeToLiveMs() {
+        return DEFAULT_ORPHAN_BLOB_TIME_TO_LIVE_MS;
+    }
+
+    /**
+     * Config for {@link com.google.android.icing.proto.IcingSearchEngineOptions}.
+     *
+     * <p>The absolute path to the ICU data file. If a valid path has been provided, it will be used
+     * to initialize ICU. The path is not available in Jetpack and Framework. This method is
+     * functionally no-op and returns an empty string.
+     */
+    default @NonNull String getIcuDataFileAbsolutePath() {
+        return DEFAULT_ICU_DATA_FILE_ABSOLUTE_PATH;
+    }
+
+    /**
+     * Converts to an {@link IcingSearchEngineOptions} instance.
+     *
+     * @param baseDir base directory of the icing instance.
+     */
+    default @NonNull IcingSearchEngineOptions toIcingSearchEngineOptions(@NonNull String baseDir) {
+        return IcingSearchEngineOptions.newBuilder()
+                .setBaseDir(baseDir)
+                .setMaxTokenLength(getMaxTokenLength())
+                .setIndexMergeSize(getIndexMergeSize())
+                .setDocumentStoreNamespaceIdFingerprint(getDocumentStoreNamespaceIdFingerprint())
+                .setOptimizeRebuildIndexThreshold(getOptimizeRebuildIndexThreshold())
+                .setCompressionLevel(getCompressionLevel())
+                .setAllowCircularSchemaDefinitions(getAllowCircularSchemaDefinitions())
+                .setPreMappingFbv(getUsePreMappingWithFileBackedVector())
+                .setUsePersistentHashMap(getUsePersistentHashMap())
+                .setIntegerIndexBucketSplitThreshold(getIntegerIndexBucketSplitThreshold())
+                .setLiteIndexSortAtIndexing(getLiteIndexSortAtIndexing())
+                .setLiteIndexSortSize(getLiteIndexSortSize())
+                .setUseNewQualifiedIdJoinIndex(getUseNewQualifiedIdJoinIndex())
+                .setBuildPropertyExistenceMetadataHits(getBuildPropertyExistenceMetadataHits())
+                .setEnableBlobStore(Flags.enableBlobStore())
+                .setOrphanBlobTimeToLiveMs(getOrphanBlobTimeToLiveMs())
+                .setEnableEmbeddingIndex(Flags.enableSchemaEmbeddingPropertyConfig())
+                .setEnableEmbeddingQuantization(Flags.enableSchemaEmbeddingQuantization())
+                .setEnableScorableProperties(Flags.enableScorableProperty())
+                .setEnableQualifiedIdJoinIndexV3AndDeletePropagateFrom(
+                        Flags.enableDeletePropagationType())
+                .setIcuDataFileAbsolutePath(getIcuDataFileAbsolutePath())
+                .build();
+    }
 }

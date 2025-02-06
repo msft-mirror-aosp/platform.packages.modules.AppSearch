@@ -372,6 +372,48 @@ public class AppsIndexerImplTest {
         }
     }
 
+    @Test
+    public void testAppsIndexerImpl_fullUpdateRequired_reIndexAllApps() throws Exception {
+        PackageManager pm1 = Mockito.mock(PackageManager.class);
+        List<PackageInfo> fakePackageInfos = createFakePackageInfos(3);
+        List<ResolveInfo> fakeResolveInfos = createFakeResolveInfos(3);
+        setupMockPackageManager(
+                pm1,
+                fakePackageInfos,
+                fakeResolveInfos,
+                /* appFunctionServices= */ ImmutableList.of());
+        Context context1 = createContextWithPackageManager(pm1);
+        // Perform the first update
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
+            AppsUpdateStats stats = new AppsUpdateStats();
+            appsIndexerImpl.doUpdate(
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")), stats);
+
+            // Check the stats object after the first update
+            assertThat(stats.mNumberOfAppsAdded).isEqualTo(3); // Three new apps added
+            assertThat(stats.mNumberOfAppsRemoved).isEqualTo(0); // No apps deleted
+            assertThat(stats.mNumberOfAppsUnchanged).isEqualTo(0); // No apps unchanged
+            assertThat(stats.mNumberOfAppsUpdated).isEqualTo(0); // No apps updated
+        }
+
+        // Update only 1 app and run the indexer with isFullUpdateRequired=true
+        fakePackageInfos.get(1).lastUpdateTime = 1000;
+
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
+            AppsUpdateStats stats = new AppsUpdateStats();
+            appsIndexerImpl.doUpdateIncrementalPut(
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
+                    stats,
+                    /* isFullUpdateRequired= */ true);
+
+            // Check the stats object after the first update
+            assertThat(stats.mNumberOfAppsAdded).isEqualTo(0);
+            assertThat(stats.mNumberOfAppsRemoved).isEqualTo(0);
+            assertThat(stats.mNumberOfAppsUnchanged).isEqualTo(0);
+            assertThat(stats.mNumberOfAppsUpdated).isEqualTo(3); // All 3 apps updated.
+        }
+    }
+
     // This does not have the @RequiresFlagEnabled annotation as it directly calls the "incremental
     // update" path.
     @Test
@@ -419,7 +461,9 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdateIncrementalPut(
-                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")), stats1);
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
 
             // Check the stats object after the first update
             assertThat(stats1.mNumberOfAppsAdded).isEqualTo(1);
@@ -462,7 +506,9 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdateIncrementalPut(
-                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")), stats1);
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
 
             // Check the stats object after the first update
             assertThat(stats1.mNumberOfAppsAdded).isEqualTo(0);
@@ -515,7 +561,9 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdateIncrementalPut(
-                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")), stats1);
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
         }
 
         // Simulate an update
@@ -531,7 +579,9 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdateIncrementalPut(
-                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")), stats1);
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
         }
 
         assertThat(mAppSearchHelper.getAppFunctionsFromAppSearch(packages).keySet()).isEmpty();
@@ -558,7 +608,6 @@ public class AppsIndexerImplTest {
                         + "  <AppFunctionStaticMetadata>\n"
                         + "    <id>com.dynamicSchemaApp/com.dynamicSchemaApp.utils#print</id>\n"
                         + "    <functionId>com.dynamicSchemaApp.utils#print</functionId>\n"
-                        + "    <packageName>com.fake.package0</packageName>\n"
                         + "  </AppFunctionStaticMetadata>\n"
                         + "</appfunctions>";
         when(assetManager.open(eq("app_functions.xml")))
@@ -604,7 +653,8 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             appsIndexerImpl.doUpdateIncrementalPut(
                     new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
-                    new AppsUpdateStats());
+                    new AppsUpdateStats(),
+                    /* isFullUpdateRequired= */ false);
 
             Map<String, Map<String, AppFunctionStaticMetadata>> indexedFunctions =
                     mAppSearchHelper.getAppFunctionsFromAppSearch(
@@ -640,7 +690,6 @@ public class AppsIndexerImplTest {
                         + "  <AppFunctionStaticMetadata>\n"
                         + "    <id>com.validSchemaApp/com.validSchemaApp.utils#print</id>\n"
                         + "    <functionId>com.validSchemaApp.utils#print</functionId>\n"
-                        + "    <packageName>com.fake.package0</packageName>\n"
                         + "  </AppFunctionStaticMetadata>\n"
                         + "</appfunctions>";
         when(assetManager.open(eq("app_functions.xml")))
@@ -674,7 +723,6 @@ public class AppsIndexerImplTest {
                         + "  <AppFunctionStaticMetadata>\n"
                         + "    <id>com.invalidSchemaApp/com.invalidSchemaApp.utils#print</id>\n"
                         + "    <functionId>com.invalidSchemaApp.utils#print</functionId>\n"
-                        + "    <packageName>com.fake.package1</packageName>\n"
                         + "  </AppFunctionStaticMetadata>\n"
                         + "</appfunctions>";
         when(assetManager2.open(eq("app_functions.xml")))
@@ -691,7 +739,8 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             appsIndexerImpl.doUpdateIncrementalPut(
                     new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
-                    new AppsUpdateStats());
+                    new AppsUpdateStats(),
+                    /* isFullUpdateRequired= */ false);
 
             Map<String, Map<String, AppFunctionStaticMetadata>> indexedFunctions =
                     mAppSearchHelper.getAppFunctionsFromAppSearch(
@@ -701,6 +750,90 @@ public class AppsIndexerImplTest {
             assertThat(indexedFunctions.get(validSchemaApp.packageName).keySet())
                     .containsExactly("com.validSchemaApp.utils#print");
             assertThat(indexedFunctions.keySet()).doesNotContain(invalidSchemaApp.packageName);
+        }
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_APP_FUNCTIONS_SCHEMA_PARSER)
+    public void testAppsIndexerImpl_indexesMultipleAppsWithDynamicSchema() throws Exception {
+        PackageManager pm1 = Mockito.mock(PackageManager.class);
+        PackageInfo schemaApp1 = createFakePackageInfo(0);
+        ResolveInfo schemaApp1ResolveInfo = createFakeLaunchResolveInfo(0);
+        ResolveInfo schemaApp1FunctionResolveInfo = createFakeAppFunctionResolveInfo(0);
+        setUpAppFunctionProperties(pm1, schemaApp1FunctionResolveInfo);
+        AssetManager assetManager = Mockito.mock(AssetManager.class);
+        String xsd =
+                "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">"
+                        + "    <xs:documentType name=\"AppFunctionStaticMetadata\">"
+                        + APP_FUNCTION_STATIC_METADATA_PARENT_PROPERTIES
+                        + "        <xs:element name=\"inner\" type=\"appfn:InnerType\" />"
+                        + "    </xs:documentType>"
+                        + "    <xs:documentType name=\"InnerType\">"
+                        + "        <xs:element name=\"value\" type=\"xs:string\" />"
+                        + "    </xs:documentType>"
+                        + "</xs:schema>";
+        when(assetManager.open(eq("app_function_schema.xml")))
+                .thenReturn(new ByteArrayInputStream(xsd.getBytes()));
+        String appFunctionsXml =
+                "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n"
+                        + "<appfunctions>\n"
+                        + "  <AppFunctionStaticMetadata>\n"
+                        + "    <id>com.schemaApp1/com.schemaApp1.utils#print</id>\n"
+                        + "    <functionId>com.schemaApp1.utils#print</functionId>\n"
+                        + "    <inner>\n"
+                        + "      <id>com.schemaApp1/com.schemaApp1.utils#print/inner</id>\n"
+                        + "      <value>test</value>\n"
+                        + "    </inner>\n"
+                        + "  </AppFunctionStaticMetadata>\n"
+                        + "</appfunctions>";
+        when(assetManager.open(eq("app_functions.xml")))
+                .thenReturn(new ByteArrayInputStream(appFunctionsXml.getBytes()));
+        setUpResourcesForApp(assetManager, pm1, schemaApp1.packageName);
+        PackageInfo schemaApp2 = createFakePackageInfo(1);
+        ResolveInfo schemaApp2ResolveInfo = createFakeLaunchResolveInfo(1);
+        ResolveInfo schemaApp2FunctionResolveInfo = createFakeAppFunctionResolveInfo(1);
+        setUpAppFunctionProperties(pm1, schemaApp2FunctionResolveInfo);
+        AssetManager assetManager2 = Mockito.mock(AssetManager.class);
+        when(assetManager2.open(eq("app_function_schema.xml")))
+                .thenReturn(new ByteArrayInputStream(xsd.getBytes()));
+        String appFunctionsXml2 =
+                "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>\n"
+                        + "<appfunctions>\n"
+                        + "  <AppFunctionStaticMetadata>\n"
+                        + "    <id>com.schemaApp2/com.schemaApp2.utils#print</id>\n"
+                        + "    <functionId>com.schemaApp2.utils#print</functionId>\n"
+                        + "    <inner>\n"
+                        + "      <id>com.schemaApp2/com.schemaApp1.utils#print/inner</id>\n"
+                        + "      <value>test</value>\n"
+                        + "    </inner>\n"
+                        + "  </AppFunctionStaticMetadata>\n"
+                        + "</appfunctions>";
+        when(assetManager2.open(eq("app_functions.xml")))
+                .thenReturn(new ByteArrayInputStream(appFunctionsXml2.getBytes()));
+        setUpResourcesForApp(assetManager2, pm1, schemaApp2.packageName);
+        setupMockPackageManager(
+                pm1,
+                ImmutableList.of(schemaApp1, schemaApp2),
+                ImmutableList.of(schemaApp1ResolveInfo, schemaApp2ResolveInfo),
+                ImmutableList.of(schemaApp1FunctionResolveInfo, schemaApp2FunctionResolveInfo));
+        Context context1 = createContextWithPackageManager(pm1);
+
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
+            appsIndexerImpl.doUpdateIncrementalPut(
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
+                    new AppsUpdateStats(),
+                    /* isFullUpdateRequired= */ false);
+
+            Map<String, Map<String, AppFunctionStaticMetadata>> indexedFunctions =
+                    mAppSearchHelper.getAppFunctionsFromAppSearch(
+                            ImmutableList.of(schemaApp1.packageName, schemaApp2.packageName));
+            // Verify functions from both apps are indexed successfully.
+            assertThat(indexedFunctions.keySet())
+                    .containsExactly(schemaApp1.packageName, schemaApp2.packageName);
+            assertThat(indexedFunctions.get(schemaApp1.packageName).keySet())
+                    .containsExactly("com.schemaApp1.utils#print");
+            assertThat(indexedFunctions.get(schemaApp2.packageName).keySet())
+                    .containsExactly("com.schemaApp2.utils#print");
         }
     }
 
@@ -733,7 +866,6 @@ public class AppsIndexerImplTest {
                         + "  <AppFunctionStaticMetadata>\n"
                         + "    <id>com.dynamicSchemaApp/com.dynamicSchemaApp.utils#print</id>\n"
                         + "    <functionId>com.dynamicSchemaApp.utils#print</functionId>\n"
-                        + "    <packageName>com.fake.package0</packageName>\n"
                         + "    <nested>\n"
                         + "     <id>com.dynamicSchemaApp.utils#print/nested0</id>\n"
                         + "     <value>innerProperty</value>\n"
@@ -754,7 +886,9 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdateIncrementalPut(
-                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")), stats1);
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
         }
         // Find first put timestamp of the AppSearch function document
         Map<String, Map<String, AppFunctionStaticMetadata>> indexedFunctions =
@@ -770,7 +904,6 @@ public class AppsIndexerImplTest {
                         + "  <AppFunctionStaticMetadata>\n"
                         + "    <id>com.dynamicSchemaApp/com.dynamicSchemaApp.utils#print</id>\n"
                         + "    <functionId>com.dynamicSchemaApp.utils#print</functionId>\n"
-                        + "    <packageName>com.fake.package0</packageName>\n"
                         + "    <nested>\n"
                         + "     <id>com.dynamicSchemaApp.utils#print/nested0</id>\n"
                         + "     <value>innerProperty</value>\n"
@@ -779,7 +912,6 @@ public class AppsIndexerImplTest {
                         + "  <AppFunctionStaticMetadata>\n"
                         + "    <id>com.dynamicSchemaApp/com.dynamicSchemaApp.utils#search</id>\n"
                         + "    <functionId>com.dynamicSchemaApp.utils#search</functionId>\n"
-                        + "    <packageName>com.fake.package0</packageName>\n"
                         + "    <nested>\n"
                         + "     <id>com.dynamicSchemaApp.utils#search/nested0</id>\n"
                         + "     <value>innerProperty</value>\n"
@@ -792,7 +924,9 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdateIncrementalPut(
-                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")), stats1);
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
 
             // Check the stats object after the first update
             assertThat(stats1.mNumberOfAppsAdded).isEqualTo(0);
@@ -834,7 +968,6 @@ public class AppsIndexerImplTest {
                         + "  <AppFunctionStaticMetadata>\n"
                         + "    <id>com.dynamicSchemaApp/com.dynamicSchemaApp.utils#print</id>\n"
                         + "    <functionId>com.dynamicSchemaApp.utils#print</functionId>\n"
-                        + "    <packageName>com.fake.package0</packageName>\n"
                         + "  </AppFunctionStaticMetadata>\n"
                         + "</appfunctions>";
         when(assetManager.open(eq("app_functions.xml")))
@@ -851,7 +984,9 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdateIncrementalPut(
-                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")), stats1);
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
         }
         // Simulate an update with new schema.
         fakePackages.getFirst().lastUpdateTime = 1000;
@@ -868,7 +1003,6 @@ public class AppsIndexerImplTest {
                         + "  <AppFunctionStaticMetadata>\n"
                         + "    <id>com.dynamicSchemaApp/com.dynamicSchemaApp.utils#print</id>\n"
                         + "    <functionId>com.dynamicSchemaApp.utils#print</functionId>\n"
-                        + "    <packageName>com.fake.package0</packageName>\n"
                         + "    <newProperty>test_new_property</newProperty>\n"
                         + "  </AppFunctionStaticMetadata>\n"
                         + "</appfunctions>";
@@ -880,7 +1014,9 @@ public class AppsIndexerImplTest {
         try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
             AppsUpdateStats stats1 = new AppsUpdateStats();
             appsIndexerImpl.doUpdateIncrementalPut(
-                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")), stats1);
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
 
             // Check the stats object after the first update
             assertThat(stats1.mNumberOfAppsAdded).isEqualTo(0);
@@ -893,6 +1029,68 @@ public class AppsIndexerImplTest {
         GenericDocument updatedFunction =
                 indexedFunctions.get("com.fake.package0").get("com.dynamicSchemaApp.utils#print");
         assertThat(updatedFunction.getPropertyString("newProperty")).isEqualTo("test_new_property");
+    }
+
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_ENABLE_APPS_INDEXER_INCREMENTAL_PUT)
+    public void testAppsIndexerImpl_incrementalPut_differentTimestamp_reindexes() throws Exception {
+        // Simulate the first update: no changes, just adding initial apps
+        PackageManager pm1 = Mockito.mock(PackageManager.class);
+        List<PackageInfo> fakePackages = new ArrayList<>(createFakePackageInfos(3));
+        List<ResolveInfo> fakeActivities = new ArrayList<>(createFakeResolveInfos(3));
+        fakePackages.get(1).lastUpdateTime = 1000;
+        fakePackages.get(2).lastUpdateTime = 1000;
+        setupMockPackageManager(
+                pm1, fakePackages, fakeActivities, /* appFunctionServices= */ ImmutableList.of());
+        Context context1 = createContextWithPackageManager(pm1);
+
+        // Perform the first update
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context1, mAppsIndexerConfig)) {
+            AppsUpdateStats stats1 = new AppsUpdateStats();
+            appsIndexerImpl.doUpdateIncrementalPut(
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp1")),
+                    stats1,
+                    /* isFullUpdateRequired= */ false);
+
+            // Check the stats object after the first update
+            assertThat(stats1.mNumberOfAppsAdded).isEqualTo(3); // Three new apps added
+            assertThat(stats1.mNumberOfAppsRemoved).isEqualTo(0); // No apps deleted
+            assertThat(stats1.mNumberOfAppsUnchanged).isEqualTo(0); // No apps unchanged
+            assertThat(stats1.mNumberOfAppsUpdated).isEqualTo(0); // No apps updated
+
+            // Verify the state of the indexed apps after the first update
+            assertThat(mAppSearchHelper.getAppsFromAppSearch().keySet())
+                    .containsExactly("com.fake.package0", "com.fake.package1", "com.fake.package2");
+        }
+
+        PackageManager pm2 = Mockito.mock(PackageManager.class);
+        // Simulate an update where last update time goes down due to an incorrect system clock for
+        // one package. It should still be re-indexed
+        fakePackages.get(1).lastUpdateTime = 999;
+        fakePackages.get(2).lastUpdateTime = 1001;
+
+        setupMockPackageManager(
+                pm2, fakePackages, fakeActivities, /* appFunctionServices= */ ImmutableList.of());
+        Context context2 = createContextWithPackageManager(pm2);
+
+        // Perform the second update
+        try (AppsIndexerImpl appsIndexerImpl = new AppsIndexerImpl(context2, mAppsIndexerConfig)) {
+            AppsUpdateStats stats2 = new AppsUpdateStats();
+            appsIndexerImpl.doUpdateIncrementalPut(
+                    new AppsIndexerSettings(temporaryFolder.newFolder("temp2")),
+                    stats2,
+                    /* isFullUpdateRequired= */ false);
+
+            // Check the stats object after the second update
+            assertThat(stats2.mNumberOfAppsAdded).isEqualTo(0); // No apps added
+            assertThat(stats2.mNumberOfAppsRemoved).isEqualTo(0); // No apps deleted
+            assertThat(stats2.mNumberOfAppsUnchanged).isEqualTo(1); // One app unchanged
+            assertThat(stats2.mNumberOfAppsUpdated).isEqualTo(2); // Two apps updated
+
+            // Verify the state of the indexed apps after the second update
+            assertThat(mAppSearchHelper.getAppsFromAppSearch().keySet())
+                    .containsExactly("com.fake.package0", "com.fake.package1", "com.fake.package2");
+        }
     }
 
     private static void setUpAppFunctionProperties(PackageManager pm, ResolveInfo resolveInfo)

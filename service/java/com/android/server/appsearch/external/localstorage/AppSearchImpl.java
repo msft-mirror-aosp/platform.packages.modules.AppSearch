@@ -80,6 +80,7 @@ import com.android.server.appsearch.external.localstorage.visibilitystore.Visibi
 import com.android.server.appsearch.external.localstorage.visibilitystore.VisibilityUtil;
 
 import com.google.android.icing.IcingSearchEngine;
+import com.google.android.icing.IcingSearchEngineInterface;
 import com.google.android.icing.proto.BlobProto;
 import com.google.android.icing.proto.DebugInfoProto;
 import com.google.android.icing.proto.DebugInfoResultProto;
@@ -196,7 +197,7 @@ public final class AppSearchImpl implements Closeable {
 
     @GuardedBy("mReadWriteLock")
     @VisibleForTesting
-    final IcingSearchEngine mIcingSearchEngineLocked;
+    final IcingSearchEngineInterface mIcingSearchEngineLocked;
 
     @GuardedBy("mReadWriteLock")
     private final SchemaCache mSchemaCacheLocked = new SchemaCache();
@@ -270,6 +271,8 @@ public final class AppSearchImpl implements Closeable {
      * @param visibilityChecker The {@link VisibilityChecker} that check whether the caller has
      *     access to aa specific schema. Pass null will lost that ability and global querier could
      *     only get their own data.
+     * @param icingSearchEngine the underlying icing instance to use. If not provided, a new {@link
+     *     IcingSearchEngine} instance will be created and used.
      */
     public static @NonNull AppSearchImpl create(
             @NonNull File icingDir,
@@ -277,6 +280,7 @@ public final class AppSearchImpl implements Closeable {
             InitializeStats.@Nullable Builder initStatsBuilder,
             @Nullable VisibilityChecker visibilityChecker,
             @Nullable RevocableFileDescriptorStore revocableFileDescriptorStore,
+            @Nullable IcingSearchEngineInterface icingSearchEngine,
             @NonNull OptimizeStrategy optimizeStrategy)
             throws AppSearchException {
         return new AppSearchImpl(
@@ -285,6 +289,7 @@ public final class AppSearchImpl implements Closeable {
                 initStatsBuilder,
                 visibilityChecker,
                 revocableFileDescriptorStore,
+                icingSearchEngine,
                 optimizeStrategy);
     }
 
@@ -297,6 +302,7 @@ public final class AppSearchImpl implements Closeable {
             InitializeStats.@Nullable Builder initStatsBuilder,
             @Nullable VisibilityChecker visibilityChecker,
             @Nullable RevocableFileDescriptorStore revocableFileDescriptorStore,
+            @Nullable IcingSearchEngineInterface icingSearchEngine,
             @NonNull OptimizeStrategy optimizeStrategy)
             throws AppSearchException {
         Objects.requireNonNull(icingDir);
@@ -309,42 +315,18 @@ public final class AppSearchImpl implements Closeable {
         try {
             // We synchronize here because we don't want to call IcingSearchEngine.initialize() more
             // than once. It's unnecessary and can be a costly operation.
-            IcingSearchEngineOptions options =
-                    IcingSearchEngineOptions.newBuilder()
-                            .setBaseDir(icingDir.getAbsolutePath())
-                            .setMaxTokenLength(mConfig.getMaxTokenLength())
-                            .setIndexMergeSize(mConfig.getIndexMergeSize())
-                            .setDocumentStoreNamespaceIdFingerprint(
-                                    mConfig.getDocumentStoreNamespaceIdFingerprint())
-                            .setOptimizeRebuildIndexThreshold(
-                                    mConfig.getOptimizeRebuildIndexThreshold())
-                            .setCompressionLevel(mConfig.getCompressionLevel())
-                            .setAllowCircularSchemaDefinitions(
-                                    mConfig.getAllowCircularSchemaDefinitions())
-                            .setPreMappingFbv(mConfig.getUsePreMappingWithFileBackedVector())
-                            .setUsePersistentHashMap(mConfig.getUsePersistentHashMap())
-                            .setIntegerIndexBucketSplitThreshold(
-                                    mConfig.getIntegerIndexBucketSplitThreshold())
-                            .setLiteIndexSortAtIndexing(mConfig.getLiteIndexSortAtIndexing())
-                            .setLiteIndexSortSize(mConfig.getLiteIndexSortSize())
-                            .setUseNewQualifiedIdJoinIndex(mConfig.getUseNewQualifiedIdJoinIndex())
-                            .setBuildPropertyExistenceMetadataHits(
-                                    mConfig.getBuildPropertyExistenceMetadataHits())
-                            .setEnableBlobStore(Flags.enableBlobStore())
-                            .setOrphanBlobTimeToLiveMs(mConfig.getOrphanBlobTimeToLiveMs())
-                            .setEnableEmbeddingIndex(Flags.enableSchemaEmbeddingPropertyConfig())
-                            .setEnableEmbeddingQuantization(
-                                    Flags.enableSchemaEmbeddingQuantization())
-                            .setEnableScorableProperties(Flags.enableScorableProperty())
-                            .setEnableQualifiedIdJoinIndexV3AndDeletePropagateFrom(
-                                    Flags.enableDeletePropagationType())
-                            .build();
-            LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
-            mIcingSearchEngineLocked = new IcingSearchEngine(options);
-            LogUtil.piiTrace(
-                    TAG,
-                    "Constructing IcingSearchEngine, response",
-                    Objects.hashCode(mIcingSearchEngineLocked));
+            if (icingSearchEngine == null) {
+                IcingSearchEngineOptions options =
+                        mConfig.toIcingSearchEngineOptions(icingDir.getAbsolutePath());
+                LogUtil.piiTrace(TAG, "Constructing IcingSearchEngine, request", options);
+                mIcingSearchEngineLocked = new IcingSearchEngine(options);
+                LogUtil.piiTrace(
+                        TAG,
+                        "Constructing IcingSearchEngine, response",
+                        Objects.hashCode(mIcingSearchEngineLocked));
+            } else {
+                mIcingSearchEngineLocked = icingSearchEngine;
+            }
 
             // The core initialization procedure. If any part of this fails, we bail into
             // resetLocked(), deleting all data (but hopefully allowing AppSearchImpl to come up).
@@ -514,6 +496,11 @@ public final class AppSearchImpl implements Closeable {
         } finally {
             mReadWriteLock.writeLock().unlock();
         }
+    }
+
+    /** Returns the instance of AppSearchConfig used by this instance of AppSearchImpl. */
+    public @NonNull AppSearchConfig getConfig() {
+        return mConfig;
     }
 
     /**
@@ -1164,6 +1151,10 @@ public final class AppSearchImpl implements Closeable {
      * Gets the {@link ParcelFileDescriptor} for write purpose of the given {@link
      * AppSearchBlobHandle}.
      *
+     * <p>Only one opened {@link ParcelFileDescriptor} is allowed for each {@link
+     * AppSearchBlobHandle}. The same {@link ParcelFileDescriptor} will be returned if it is not
+     * closed by caller.
+     *
      * @param packageName The package name that owns this blob.
      * @param databaseName The databaseName this blob resides in.
      * @param handle The {@link AppSearchBlobHandle} represent the blob.
@@ -1181,19 +1172,27 @@ public final class AppSearchImpl implements Closeable {
         try {
             throwIfClosedLocked();
             verifyCallingBlobHandle(packageName, databaseName, handle);
+            ParcelFileDescriptor pfd =
+                    mRevocableFileDescriptorStore.getOpenedRevocableFileDescriptorForWrite(
+                            packageName, handle);
+            if (pfd != null) {
+                // There is already an opened pfd for write with same blob handle, just return the
+                // already opened one.
+                return pfd;
+            }
             mRevocableFileDescriptorStore.checkBlobStoreLimit(packageName);
             PropertyProto.BlobHandleProto blobHandleProto =
                     BlobHandleToProtoConverter.toBlobHandleProto(handle);
             BlobProto result = mIcingSearchEngineLocked.openWriteBlob(blobHandleProto);
 
             checkSuccess(result.getStatus());
-            ParcelFileDescriptor pfd = ParcelFileDescriptor.adoptFd(result.getFileDescriptor());
+            pfd = ParcelFileDescriptor.adoptFd(result.getFileDescriptor());
 
             mNamespaceCacheLocked.addToBlobNamespaceMap(
                     createPrefix(packageName, databaseName), blobHandleProto.getNamespace());
 
             return mRevocableFileDescriptorStore.wrapToRevocableFileDescriptor(
-                    handle.getPackageName(), pfd);
+                    packageName, handle, pfd, ParcelFileDescriptor.MODE_READ_WRITE);
         } finally {
             mReadWriteLock.writeLock().unlock();
         }
@@ -1228,6 +1227,7 @@ public final class AppSearchImpl implements Closeable {
                             BlobHandleToProtoConverter.toBlobHandleProto(handle));
 
             checkSuccess(result.getStatus());
+            mRevocableFileDescriptorStore.revokeFdForWrite(packageName, handle);
         } finally {
             mReadWriteLock.writeLock().unlock();
         }
@@ -1247,7 +1247,7 @@ public final class AppSearchImpl implements Closeable {
             @NonNull String packageName,
             @NonNull String databaseName,
             @NonNull AppSearchBlobHandle handle)
-            throws AppSearchException {
+            throws AppSearchException, IOException {
         if (mRevocableFileDescriptorStore == null) {
             throw new UnsupportedOperationException(
                     "BLOB_STORAGE is not available on this AppSearch implementation.");
@@ -1261,6 +1261,8 @@ public final class AppSearchImpl implements Closeable {
                             BlobHandleToProtoConverter.toBlobHandleProto(handle));
 
             checkSuccess(result.getStatus());
+            // The blob is committed and sealed, revoke the sent pfd for writing.
+            mRevocableFileDescriptorStore.revokeFdForWrite(packageName, handle);
         } finally {
             mReadWriteLock.writeLock().unlock();
         }
@@ -1298,7 +1300,10 @@ public final class AppSearchImpl implements Closeable {
             checkSuccess(result.getStatus());
 
             ParcelFileDescriptor pfd = ParcelFileDescriptor.fromFd(result.getFileDescriptor());
-            return mRevocableFileDescriptorStore.wrapToRevocableFileDescriptor(packageName, pfd);
+            // We do NOT need to look up the revocable file descriptor for read, skip passing the
+            // blob handle key.
+            return mRevocableFileDescriptorStore.wrapToRevocableFileDescriptor(
+                    packageName, /* blobHandle= */ null, pfd, ParcelFileDescriptor.MODE_READ_ONLY);
         } finally {
             mReadWriteLock.readLock().unlock();
         }
@@ -1348,8 +1353,13 @@ public final class AppSearchImpl implements Closeable {
             checkSuccess(result.getStatus());
 
             ParcelFileDescriptor pfd = ParcelFileDescriptor.fromFd(result.getFileDescriptor());
+            // We do NOT need to look up the revocable file descriptor for read, skip passing the
+            // blob handle key.
             return mRevocableFileDescriptorStore.wrapToRevocableFileDescriptor(
-                    access.getCallingPackageName(), pfd);
+                    access.getCallingPackageName(),
+                    /* blobHandle= */ null,
+                    pfd,
+                    ParcelFileDescriptor.MODE_READ_ONLY);
         } finally {
             mReadWriteLock.readLock().unlock();
         }

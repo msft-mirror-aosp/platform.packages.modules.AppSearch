@@ -76,6 +76,7 @@ import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_RATE_L
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_RATE_LIMIT_TASK_QUEUE_TOTAL_CAPACITY;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_SAMPLING_INTERVAL;
 import static com.android.server.appsearch.ServiceAppSearchConfig.DEFAULT_TIME_OPTIMIZE_THRESHOLD_MILLIS;
+import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_ICU_DATA_FILE_ABSOLUTE_PATH;
 import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_ORPHAN_BLOB_TIME_TO_LIVE_MS;
 import static com.android.server.appsearch.external.localstorage.IcingOptionsConfig.DEFAULT_USE_NEW_QUALIFIED_ID_JOIN_INDEX;
 
@@ -88,6 +89,7 @@ import com.android.modules.utils.testing.TestableDeviceConfig;
 import com.android.server.appsearch.external.localstorage.AppSearchConfig;
 import com.android.server.appsearch.external.localstorage.IcingOptionsConfig;
 import com.android.server.appsearch.external.localstorage.stats.CallStats;
+import com.android.server.appsearch.isolated_storage_service.IsolatedStorageServiceManager;
 
 import org.junit.Assert;
 import org.junit.Rule;
@@ -166,8 +168,12 @@ public class ServiceAppSearchConfigTest {
                 IcingOptionsConfig.DEFAULT_USE_PREMAPPING_WITH_FILE_BACKED_VECTOR);
         assertThat(appSearchConfig.getUsePersistentHashMap()).isEqualTo(
                 IcingOptionsConfig.DEFAULT_USE_PERSISTENT_HASH_MAP);
-        assertThat(appSearchConfig.getMaxPageBytesLimit()).isEqualTo(
-                IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT);
+        // TODO: b/389105038 - remove this temporary workaround for binder transaction limit.
+        assertThat(appSearchConfig.getMaxPageBytesLimit())
+                .isAnyOf(
+                        IcingOptionsConfig.DEFAULT_MAX_PAGE_BYTES_LIMIT,
+                        IsolatedStorageServiceManager
+                                .DEFAULT_MAX_PAGE_BYTES_LIMIT_FOR_ISOLATED_STORAGE);
         assertThat(appSearchConfig.getCachedRateLimitEnabled()).isEqualTo(
                 DEFAULT_RATE_LIMIT_ENABLED);
         AppSearchRateLimitConfig rateLimitConfig = appSearchConfig.getCachedRateLimitConfig();
@@ -197,6 +203,8 @@ public class ServiceAppSearchConfigTest {
         assertThat(appSearchConfig.getMaxOpenBlobCount()).isEqualTo(DEFAULT_MAX_OPEN_BLOB_COUNT);
         assertThat(appSearchConfig.getOrphanBlobTimeToLiveMs())
                 .isEqualTo(DEFAULT_ORPHAN_BLOB_TIME_TO_LIVE_MS);
+        assertThat(appSearchConfig.getIcuDataFileAbsolutePath())
+                .isEqualTo(DEFAULT_ICU_DATA_FILE_ABSOLUTE_PATH);
     }
 
     @Test

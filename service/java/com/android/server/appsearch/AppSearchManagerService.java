@@ -16,7 +16,6 @@
 package com.android.server.appsearch;
 
 import static android.app.appsearch.AppSearchResult.RESULT_DENIED;
-import static android.app.appsearch.AppSearchResult.RESULT_INVALID_ARGUMENT;
 import static android.app.appsearch.AppSearchResult.RESULT_NOT_FOUND;
 import static android.app.appsearch.AppSearchResult.RESULT_OK;
 import static android.app.appsearch.AppSearchResult.RESULT_RATE_LIMITED;
@@ -1258,7 +1257,7 @@ public class AppSearchManagerService extends SystemService {
                                             callingDatabaseName,
                                             blobHandle);
                             resultBuilder.setSuccess(blobHandle, null);
-                        } catch (AppSearchException e) {
+                        } catch (AppSearchException | IOException e) {
                             AppSearchResult<Void> result =
                                     throwableToFailedResult(e);
                             resultBuilder.setResult(blobHandle, result);

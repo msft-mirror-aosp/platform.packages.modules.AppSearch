@@ -16,6 +16,7 @@
 
 package com.android.server.appsearch.appsindexer;
 
+import static com.android.server.appsearch.appsindexer.AppIndexerVersions.CURR_APP_INDEXER_VERSION;
 import static com.android.server.appsearch.indexer.IndexerMaintenanceConfig.APPS_INDEXER;
 
 import android.annotation.NonNull;
@@ -222,11 +223,39 @@ public final class AppsIndexerUserInstance {
         try {
             Objects.requireNonNull(appsUpdateStats);
             // Check if there was a prior run
-            if (firstRun && mSettings.getLastUpdateTimestampMillis() != 0) {
-                return;
+            boolean isAppIndexerUpdated =
+                    Flags.enableAllPackageIndexingOnIndexerUpdate()
+                            && checkAndUpdateIndexerVersion();
+            if (firstRun) {
+                if (Flags.enableAppsIndexerCheckPriorAttempt()) {
+                    // Special "firstRun" case.
+                    long now = System.currentTimeMillis();
+                    long lastRun = mSettings.getLastAttemptedUpdateTimestampMillis();
+                    long timeSinceLastRun = now - lastRun;
+
+                    // If timeSinceLastRun is somehow negative, it means that the system clock
+                    // must've turned back since the last run. We'll run the update in this case
+                    if (timeSinceLastRun >= 0
+                            && timeSinceLastRun
+                                    < mAppsIndexerConfig.getMinTimeBetweenFirstSyncsMillis()) {
+                        // Last firstRun was too recent, skip and leave timestamps alone
+                        return;
+                    }
+
+                    mSettings.setLastAttemptedUpdateTimestampMillis(now);
+                    mSettings.persist();
+                }
+
+                // Check if there was a previous successful run and AppSearch wasn't updated since.
+                if (mSettings.getLastUpdateTimestampMillis() != 0 && !isAppIndexerUpdated) {
+                    return;
+                }
             }
             if (Flags.enableAppsIndexerIncrementalPut()) {
-                mAppsIndexerImpl.doUpdateIncrementalPut(mSettings, appsUpdateStats);
+                mAppsIndexerImpl.doUpdateIncrementalPut(
+                        mSettings,
+                        appsUpdateStats,
+                        /* isFullUpdateRequired= */ isAppIndexerUpdated);
             } else {
                 // TODO(b/367410454): Remove this method and related code paths once
                 //  enable_apps_indexer_incremental_put flag is rolled out.
@@ -243,6 +272,21 @@ public final class AppsIndexerUserInstance {
             // This happens if no updates were scheduled during the update.
             mRunningOrScheduledSemaphore.release();
         }
+    }
+
+    /**
+     * Checks if the current App Indexer versionCode differs from the previously stored versionCode
+     * in {@link AppsIndexerSettings} and updates the stored versionCode if necessary.
+     *
+     * @return {@code true} if the versionCode has changed, {@code false} otherwise.
+     */
+    private boolean checkAndUpdateIndexerVersion() {
+        if (mSettings.getPreviousIndexerVersionCode() == CURR_APP_INDEXER_VERSION) {
+            return false;
+        }
+
+        mSettings.setPreviousIndexerVersionCode(CURR_APP_INDEXER_VERSION);
+        return true;
     }
 
     /**
