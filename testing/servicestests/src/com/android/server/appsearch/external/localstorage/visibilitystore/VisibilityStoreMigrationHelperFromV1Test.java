@@ -27,6 +27,7 @@ import android.app.appsearch.InternalVisibilityConfig;
 import android.app.appsearch.PackageIdentifier;
 import android.app.appsearch.SetSchemaRequest;
 
+import com.android.server.appsearch.external.localstorage.AppSearchConfig;
 import com.android.server.appsearch.external.localstorage.AppSearchConfigImpl;
 import com.android.server.appsearch.external.localstorage.AppSearchImpl;
 import com.android.server.appsearch.external.localstorage.LocalStorageIcingOptionsConfig;
@@ -54,6 +55,9 @@ public class VisibilityStoreMigrationHelperFromV1Test {
 
     @Rule public TemporaryFolder mTemporaryFolder = new TemporaryFolder();
     private File mFile;
+    private AppSearchConfig mConfig =
+            new AppSearchConfigImpl(
+                    new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig());
 
     @Before
     public void setUp() throws Exception {
@@ -79,15 +83,15 @@ public class VisibilityStoreMigrationHelperFromV1Test {
         AppSearchImpl appSearchImplInV1 =
                 AppSearchImpl.create(
                         mFile,
-                        new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
+                        mConfig,
                         /* initStatsBuilder= */ null,
                         /* visibilityChecker= */ null,
+                        /* revocableFileDescriptorStore= */ null,
                         ALWAYS_OPTIMIZE);
         InternalSetSchemaResponse internalSetSchemaResponse =
                 appSearchImplInV1.setSchema(
                         VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                        VisibilityStore.VISIBILITY_DATABASE_NAME,
+                        VisibilityStore.DOCUMENT_VISIBILITY_DATABASE_NAME,
                         ImmutableList.of(VisibilityDocumentV1.SCHEMA),
                         /* prefixedVisibilityBundles= */ Collections.emptyList(),
                         /* forceOverride= */ true, // force push the old version into disk
@@ -124,7 +128,7 @@ public class VisibilityStoreMigrationHelperFromV1Test {
         // Put deprecated visibility documents in version 0 to AppSearchImpl
         appSearchImplInV1.putDocument(
                 VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                VisibilityStore.VISIBILITY_DATABASE_NAME,
+                VisibilityStore.DOCUMENT_VISIBILITY_DATABASE_NAME,
                 visibilityDocumentV1,
                 /* sendChangeNotifications= */ false,
                 /* logger= */ null);
@@ -134,17 +138,17 @@ public class VisibilityStoreMigrationHelperFromV1Test {
         AppSearchImpl appSearchImpl =
                 AppSearchImpl.create(
                         mFile,
-                        new AppSearchConfigImpl(
-                                new UnlimitedLimitConfig(), new LocalStorageIcingOptionsConfig()),
+                        mConfig,
                         /* initStatsBuilder= */ null,
                         /* visibilityChecker= */ null,
+                        /* revocableFileDescriptorStore= */ null,
                         ALWAYS_OPTIMIZE);
 
         InternalVisibilityConfig actualConfig =
                 VisibilityToDocumentConverter.createInternalVisibilityConfig(
                         appSearchImpl.getDocument(
                                 VisibilityStore.VISIBILITY_PACKAGE_NAME,
-                                VisibilityStore.VISIBILITY_DATABASE_NAME,
+                                VisibilityStore.DOCUMENT_VISIBILITY_DATABASE_NAME,
                                 VisibilityToDocumentConverter.VISIBILITY_DOCUMENT_NAMESPACE,
                                 /* id= */ prefix + "Schema",
                                 /* typePropertyPaths= */ Collections.emptyMap()),
