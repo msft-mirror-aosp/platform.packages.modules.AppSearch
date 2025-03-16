@@ -44,6 +44,7 @@ import android.util.ArrayMap;
 import androidx.test.core.app.ApplicationProvider;
 
 import com.android.server.appsearch.appsindexer.appsearchtypes.AppFunctionStaticMetadata;
+import com.android.server.appsearch.appsindexer.appsearchtypes.AppOpenEvent;
 import com.android.server.appsearch.appsindexer.appsearchtypes.MobileApplication;
 
 import com.google.common.collect.ImmutableList;
@@ -135,14 +136,16 @@ public class AppsUtilTest {
         UsageEvents mockUsageEvents = createUsageEvents(events);
         when(mockUsageStatsManager.queryEvents(anyLong(), anyLong())).thenReturn(mockUsageEvents);
 
-        Map<String, List<Long>> appOpenTimestamps =
-                AppsUtil.getAppOpenTimestamps(
+        List<AppOpenEvent> appOpenTimestamps =
+                AppsUtil.getAppOpenEvents(
                         mockUsageStatsManager, 0, Calendar.getInstance().getTimeInMillis());
 
-        assertThat(appOpenTimestamps)
+        assertThat(appOpenTimestamps).hasSize(3);
+        assertThat(appOpenTimestamps.stream().map(AppOpenEvent::getId))
                 .containsExactly(
-                        "com.example.package", List.of(1000L, 2000L),
-                        "com.example.package2", List.of(3000L));
+                        "com.example.package1000",
+                        "com.example.package2000",
+                        "com.example.package23000");
     }
 
     @Test
